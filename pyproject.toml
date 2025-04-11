@@ -1,0 +1,26 @@
+[project]
+name = "analyze-ecosystem"
+version = "0.1.0"
+description = "Analyze Red Knot performance on ecosystem projects"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = ["gitpython>=3.1.44", "matplotlib>=3.10.1", "mypy-primer"]
+
+[tool.uv.sources]
+mypy-primer = { git = "https://github.com/astral-sh/mypy_primer", branch = "add-red-knot-support-v4" }
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle (error)
+    "F",   # pyflakes
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+    "I",   # isort
+    "UP",  # pyupgrade
+    "PIE", # flake8-pie
+    "RUF",
+]
+
+ignore = [
+    "E501", # line too long
+]

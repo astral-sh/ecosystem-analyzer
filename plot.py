@@ -1,0 +1,35 @@
+def read_from_json_and_plot(filename: str) -> None:
+    import json
+
+    import matplotlib.pyplot as plt
+
+    # Read from JSON file
+    with open(filename) as json_file:
+        statistics = json.load(json_file)
+
+    statistics = statistics[-19:]
+    # statistics = statistics[-30:]
+
+    messages = [stat["commit_message"] for stat in statistics]
+    counts = [stat["diagnostics_count"] for stat in statistics]
+
+    # Remove [red-knot] prefix from commit messages
+    messages = [msg.replace("[red-knot] ", "") for msg in messages]
+    # Limit messages
+    messages = [msg[:30] + "..." if len(msg) > 30 else msg for msg in messages]
+
+    # Generate a line plot which shows number of diagnostics per commit
+    plt.figure(figsize=(10, 10))
+    plt.plot(messages, counts, marker="o", color="#261230", lw=2)
+    plt.grid(axis="x")
+    plt.title("Total number of diagnostics on ecosystem projects")
+    plt.ylabel("Number of diagnostics")
+    plt.xlabel("Red Knot commit")
+    plt.xticks(rotation=45, ha="right")
+    # plt.ylim(0, 5000)
+    plt.tight_layout()
+    plt.savefig("diagnostics_per_commit.png")
+
+
+if __name__ == "__main__":
+    read_from_json_and_plot("statistics.json")
