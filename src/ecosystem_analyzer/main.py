@@ -1,6 +1,8 @@
 import json
+import logging
 import re
 from pathlib import Path
+from typing import TypedDict
 
 import click
 from mypy_primer.projects import get_projects
@@ -10,15 +12,32 @@ from .installed_project import InstalledProject
 from .red_knot_manager import RedKnotManager
 
 
-def write_statistics_to_json(statistics: list[tuple[str, int]], filename: str) -> None:
-    # Convert the list of tuples to a list of dictionaries
-    statistics_dict = [
-        {"commit_message": msg, "diagnostics_count": count} for msg, count in statistics
-    ]
+class ProjectStatistics(TypedDict):
+    name: str
+    diagnostics_count: int
 
+
+class CommitStatistics(TypedDict):
+    commit_message: str
+    total_diagnostics: int
+    projects: list[ProjectStatistics]
+
+
+def setup_logging(verbose: bool = False) -> None:
+    """Configure logging for the application."""
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+
+def write_statistics_to_json(statistics: list[CommitStatistics], filename: str) -> None:
     # Write to JSON file
     with open(filename, "w") as json_file:
-        json.dump(statistics_dict, json_file, indent=4)
+        json.dump(statistics, json_file, indent=4)
+    logging.info(f"Statistics written to {filename}")
 
 
 @click.command(context_settings={"help_option_names": ["-h", "--help"]})
@@ -35,15 +54,24 @@ def write_statistics_to_json(statistics: list[tuple[str, int]], filename: str) -
     default=PROJECT_PATTERN,
     help="Custom project pattern regex",
 )
-def cli(output: str, project_pattern: str) -> None:
+@click.option(
+    "--verbose",
+    "-v",
+    is_flag=True,
+    help="Enable verbose logging",
+)
+def cli(output: str, project_pattern: str, verbose: bool) -> None:
     """
     Analyze Python projects with Red Knot and generate statistics.
     """
+    setup_logging(verbose)
+    logging.info("Starting ecosystem analysis")
+
     installed_projects: list[InstalledProject] = []
 
     for project in get_projects():
         if re.search(project_pattern, project.location):
-            print(f"Processing project: {project.location}")
+            logging.info(f"Processing project: {project.location}")
             installed_project = InstalledProject(project)
             installed_project.install()
 
@@ -53,7 +81,6 @@ def cli(output: str, project_pattern: str) -> None:
     statistics = manager.run()
 
     write_statistics_to_json(statistics, output)
-    click.echo(f"Analysis complete. Results written to {output}")
 
 
 if __name__ == "__main__":

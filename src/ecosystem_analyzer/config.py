@@ -6,8 +6,7 @@ Configuration constants for the ecosystem analyzer.
 RUFF_REPO_PATH = "/home/shark/ruff3"
 
 # Project pattern for filtering projects
-#PROJECT_PATTERN = r"/(mypy_primer|black|pyp|git-revise|zipp|arrow|isort|itsdangerous|rich|packaging|pybind11|pyinstrument|typeshed-stats|scrapy|werkzeug|bidict|async-utils)$"
-PROJECT_PATTERN = r"/(zipp|arrow)$"
+PROJECT_PATTERN = r"/(mypy_primer|black|pyp|git-revise|zipp|arrow|isort|itsdangerous|rich|packaging|pybind11|pyinstrument|typeshed-stats|scrapy|werkzeug|bidict|async-utils)$"
 
 # Log file name
 LOG_FILE = "log.txt"

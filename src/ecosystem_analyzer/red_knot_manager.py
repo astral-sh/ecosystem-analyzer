@@ -1,3 +1,4 @@
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -15,6 +16,7 @@ class RedKnotManager:
 
     def _get_latest_red_knot_commits(self):
         repo = Repo(RUFF_REPO_PATH)
+        logging.debug(f"Executing: git checkout main")
         repo.git.checkout("main")
 
         commits = []
@@ -35,6 +37,7 @@ class RedKnotManager:
     def _compile_for_commit(self, commit: Commit) -> Path:
         # Checkout the commit
         repo = Repo(RUFF_REPO_PATH)
+        logging.debug(f"Executing: git checkout {commit.hexsha}")
         repo.git.checkout(commit)
 
         # Compile Red Knot
@@ -43,8 +46,11 @@ class RedKnotManager:
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = cargo_target_dir.as_posix()
 
+        logging.info(f"Compiling Red Knot for commit {commit.hexsha[:7]}")
+        cargo_cmd = ["cargo", "build", "--package", "red_knot"]
+        logging.debug(f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={cargo_target_dir})")
         subprocess.run(
-            ["cargo", "build", "--package", "red_knot"],
+            cargo_cmd,
             cwd=RUFF_REPO_PATH,
             capture_output=True,
             check=True,
@@ -59,17 +65,27 @@ class RedKnotManager:
         statistics = []
         for commit in self.last_commits:
             message = commit.message.splitlines()[0]
-            print(message)
+            logging.info(f"Analyzing commit: {message}")
 
             executable = self._compile_for_commit(commit)
 
             total_diagnostics = 0
+            project_stats = []
 
             for project in self.projects:
-                total_diagnostics += project.count_diagnostics(executable)
+                diagnostics = project.count_diagnostics(executable)
+                total_diagnostics += diagnostics
+                project_stats.append({
+                    "location": project.project.location,
+                    "diagnostics_count": diagnostics,
+                })
 
-            print(total_diagnostics)
+            logging.info(f"Total diagnostics: {total_diagnostics}")
 
-            statistics.append((message, total_diagnostics))
+            statistics.append({
+                "commit_message": message,
+                "total_diagnostics": total_diagnostics,
+                "projects": project_stats,
+            })
 
         return statistics 
