@@ -2,6 +2,7 @@ import json
 import re
 from pathlib import Path
 
+import click
 from mypy_primer.projects import get_projects
 
 from .config import PROJECT_PATTERN
@@ -20,11 +21,28 @@ def write_statistics_to_json(statistics: list[tuple[str, int]], filename: str) -
         json.dump(statistics_dict, json_file, indent=4)
 
 
-def main():
+@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "--output",
+    "-o",
+    default="statistics.json",
+    help="Output JSON file for statistics",
+    type=click.Path(),
+)
+@click.option(
+    "--project-pattern",
+    "-p",
+    default=PROJECT_PATTERN,
+    help="Custom project pattern regex",
+)
+def cli(output: str, project_pattern: str) -> None:
+    """
+    Analyze Python projects with Red Knot and generate statistics.
+    """
     installed_projects: list[InstalledProject] = []
 
     for project in get_projects():
-        if re.search(PROJECT_PATTERN, project.location):
+        if re.search(project_pattern, project.location):
             print(f"Processing project: {project.location}")
             installed_project = InstalledProject(project)
             installed_project.install()
@@ -34,8 +52,9 @@ def main():
     manager = RedKnotManager(installed_projects)
     statistics = manager.run()
 
-    write_statistics_to_json(statistics, "statistics.json")
+    write_statistics_to_json(statistics, output)
+    click.echo(f"Analysis complete. Results written to {output}")
 
 
 if __name__ == "__main__":
-    main() 
+    cli()

@@ -5,11 +5,12 @@ description = "A tool for analyzing Python projects with Red Knot"
 dependencies = [
     "gitpython",
     "mypy-primer",
+    "click>=8.0.0",
 ]
 requires-python = ">=3.13"
 
 [project.scripts]
-ecosystem-analyzer = "ecosystem_analyzer.main:main"
+ecosystem-analyzer = "ecosystem_analyzer.main:cli"
 
 [build-system]
 requires = ["hatchling"]
