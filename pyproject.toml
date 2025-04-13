@@ -1,26 +1,27 @@
 [project]
-name = "analyze-ecosystem"
+name = "ecosystem-analyzer"
 version = "0.1.0"
-description = "Analyze Red Knot performance on ecosystem projects"
-readme = "README.md"
+description = "A tool for analyzing Python projects with Red Knot"
+dependencies = [
+    "gitpython",
+    "mypy-primer",
+]
 requires-python = ">=3.13"
-dependencies = ["gitpython>=3.1.44", "matplotlib>=3.10.1", "mypy-primer"]
 
-[tool.uv.sources]
-mypy-primer = { git = "https://github.com/astral-sh/mypy_primer", branch = "add-red-knot-support-v4" }
+[project.scripts]
+ecosystem-analyzer = "ecosystem_analyzer.main:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [tool.ruff.lint]
 select = [
-    "E",   # pycodestyle (error)
-    "F",   # pyflakes
-    "C4",  # flake8-comprehensions
-    "SIM", # flake8-simplify
-    "I",   # isort
-    "UP",  # pyupgrade
-    "PIE", # flake8-pie
-    "RUF",
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # flake8-bugbear
 ]
 
-ignore = [
-    "E501", # line too long
-]
+[tool.uv.sources]
+mypy-primer = { git = "https://github.com/astral-sh/mypy_primer", branch = "add-red-knot-support-v4" }
