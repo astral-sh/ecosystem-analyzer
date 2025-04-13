@@ -4,11 +4,8 @@ from pathlib import Path
 
 from git import Commit, Repo
 
+from .config import COMMIT_BLACKLIST, NUM_COMMITS, RUFF_REPO_PATH
 from .installed_project import InstalledProject
-
-RUFF_REPO_PATH = "/home/shark/ruff3"
-COMMIT_BLACKLIST = ["907b6ed7b57d58dd6a26488e1393106dba78cb2d"]
-NUM_COMMITS = 1
 
 
 class RedKnotManager:
@@ -26,7 +23,7 @@ class RedKnotManager:
             if commit.hexsha in COMMIT_BLACKLIST:
                 continue
 
-            if commit.message.startswith("[red-knot] "):
+            if commit.message.startswith("[red-knot] "):  # type: ignore
                 commits.append(commit)
                 if len(commits) >= NUM_COMMITS:
                     break

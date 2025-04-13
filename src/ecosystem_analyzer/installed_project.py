@@ -4,6 +4,8 @@ from pathlib import Path
 
 from git import Repo
 
+from .config import LOG_FILE
+
 
 class InstalledProject:
     def __init__(self, project) -> None:
@@ -51,7 +53,7 @@ class InstalledProject:
         )
 
         # Append result.stdout to log file
-        with open("log.txt", "a") as log_file:
+        with open(LOG_FILE, "a") as log_file:
             log_file.write(result.stdout)
 
         return len(result.stdout.splitlines()) 

@@ -4,11 +4,9 @@ from pathlib import Path
 
 from mypy_primer.projects import get_projects
 
+from .config import PROJECT_PATTERN
 from .installed_project import InstalledProject
 from .red_knot_manager import RedKnotManager
-
-# PROJECT_PATTERN = r"/(mypy_primer|black|pyp|git-revise|zipp|arrow|isort|itsdangerous|rich|packaging|pybind11|pyinstrument|typeshed-stats|scrapy|werkzeug|bidict|async-utils)$"
-PROJECT_PATTERN = r"/(git-revise|zipp|arrow)$"
 
 
 def write_statistics_to_json(statistics: list[tuple[str, int]], filename: str) -> None:
