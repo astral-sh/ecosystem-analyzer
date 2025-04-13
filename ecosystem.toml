@@ -22,35 +22,36 @@ paths = ["zipp"]
 
 [projects.arrow]
 location = "https://github.com/arrow-py/arrow"
+deps=["python-dateutil"]
 paths = ["arrow"]
 
 [projects.isort]
 location = "https://github.com/PyCQA/isort"
 paths = ["isort"]
+deps = ["types-setuptools"]
 
 [projects.itsdangerous]
 location = "https://github.com/pallets/itsdangerous"
-paths = ["itsdangerous"]
+deps = ["pytest"]
 
 [projects.rich]
 location = "https://github.com/Textualize/rich"
-paths = ["rich"]
+deps = ["attrs"]
 
 [projects.packaging]
 location = "https://github.com/pypa/packaging"
-paths = ["packaging"]
+paths = ["src"]
 
 [projects.pybind11]
 location = "https://github.com/pybind/pybind11"
-paths = ["pybind11"]
+deps = ["nox", "rich"]
 
 [projects.pyinstrument]
 location = "https://github.com/joerick/pyinstrument"
-paths = ["pyinstrument"]
 
 [projects.typeshed_stats]
-location = "https://github.com/astral-sh/typeshed-stats"
-paths = ["typeshed_stats"]
+location = "https://github.com/AlexWaygood/typeshed-stats"
+deps=["attrs", "cattrs", "pytest", "aiohttp", "pathspec", "jinja2", "tomli"]
 
 [projects.scrapy]
 location = "https://github.com/scrapy/scrapy"
@@ -62,8 +63,6 @@ deps = ["types-setuptools", "pytest", "markupsafe"]
 
 [projects.bidict]
 location = "https://github.com/jab/bidict"
-paths = ["bidict"]
 
 [projects.async-utils]
-location = "https://github.com/astral-sh/async-utils"
-paths = ["async_utils"]
+location = "https://github.com/mikeshardmind/async-utils"

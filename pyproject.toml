@@ -2,11 +2,7 @@
 name = "ecosystem-analyzer"
 version = "0.1.0"
 description = "A tool for analyzing Python projects with Red Knot"
-dependencies = [
-    "gitpython",
-    "mypy-primer",
-    "click>=8.0.0",
-]
+dependencies = ["gitpython", "click>=8.0.0"]
 requires-python = ">=3.13"
 
 [project.scripts]
@@ -18,11 +14,8 @@ build-backend = "hatchling.build"
 
 [tool.ruff.lint]
 select = [
-    "E",  # pycodestyle errors
-    "F",  # pyflakes
-    "I",  # isort
-    "B",  # flake8-bugbear
+    "E", # pycodestyle errors
+    "F", # pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
 ]
-
-[tool.uv.sources]
-mypy-primer = { git = "https://github.com/astral-sh/mypy_primer", branch = "add-red-knot-support-v4" }
