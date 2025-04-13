@@ -5,7 +5,7 @@ from pathlib import Path
 
 from git import Repo
 
-from .config import LOG_FILE
+from .config import LOG_FILE, PYTHON_VERSION
 
 
 class InstalledProject:
@@ -22,14 +22,14 @@ class InstalledProject:
             return
 
     def _install_dependencies(self) -> None:
-        venv_cmd = ["uv", "venv", "--quiet"]
+        venv_cmd = ["uv", "venv", "--quiet", "--python", PYTHON_VERSION]
         logging.debug(f"Executing: {' '.join(venv_cmd)}")
         subprocess.run(venv_cmd, check=True, cwd=self.temp_dir.name)
 
         if self.project.deps:
             logging.info(f"Installing dependencies: {', '.join(self.project.deps)}")
 
-            pip_cmd = ["uv", "pip", "install", "--link-mode=copy", *self.project.deps]
+            pip_cmd = ["uv", "pip", "install", "--python", PYTHON_VERSION, "--link-mode=copy", *self.project.deps]
             logging.debug(f"Executing: {' '.join(pip_cmd)}")
             subprocess.run(
                 pip_cmd,
