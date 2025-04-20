@@ -29,7 +29,15 @@ class InstalledProject:
         if self.project.deps:
             logging.info(f"Installing dependencies: {', '.join(self.project.deps)}")
 
-            pip_cmd = ["uv", "pip", "install", "--python", PYTHON_VERSION, "--link-mode=copy", *self.project.deps]
+            pip_cmd = [
+                "uv",
+                "pip",
+                "install",
+                "--python",
+                PYTHON_VERSION,
+                "--link-mode=copy",
+                *self.project.deps,
+            ]
             logging.debug(f"Executing: {' '.join(pip_cmd)}")
             subprocess.run(
                 pip_cmd,
@@ -67,4 +75,4 @@ class InstalledProject:
         with open(LOG_FILE, "a") as log_file:
             log_file.write(result.stdout)
 
-        return len(result.stdout.splitlines()) 
+        return len(result.stdout.splitlines())

@@ -43,7 +43,9 @@ class RedKnotManager:
 
         logging.info(f"Compiling Red Knot for commit {commit.hexsha[:7]}")
         cargo_cmd = ["cargo", "build", "--package", "red_knot"]
-        logging.debug(f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={cargo_target_dir})")
+        logging.debug(
+            f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={cargo_target_dir})"
+        )
         subprocess.run(
             cargo_cmd,
             cwd=RUFF_REPO_PATH,
@@ -70,17 +72,21 @@ class RedKnotManager:
             for project in self.projects:
                 diagnostics = project.count_diagnostics(executable)
                 total_diagnostics += diagnostics
-                project_stats.append({
-                    "location": project.project.location,
-                    "diagnostics_count": diagnostics,
-                })
+                project_stats.append(
+                    {
+                        "location": project.project.location,
+                        "diagnostics_count": diagnostics,
+                    }
+                )
 
             logging.info(f"Total diagnostics: {total_diagnostics}")
 
-            statistics.append({
-                "commit_message": message,
-                "total_diagnostics": total_diagnostics,
-                "projects": project_stats,
-            })
+            statistics.append(
+                {
+                    "commit_message": message,
+                    "total_diagnostics": total_diagnostics,
+                    "projects": project_stats,
+                }
+            )
 
-        return statistics 
+        return statistics

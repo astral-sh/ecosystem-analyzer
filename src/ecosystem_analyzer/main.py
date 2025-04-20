@@ -1,12 +1,11 @@
 import json
 import logging
-import re
 from pathlib import Path
 from typing import TypedDict
 
 import click
-from mypy_primer.projects import get_projects
 from mypy_primer.model import Project
+from mypy_primer.projects import get_projects
 
 from .installed_project import InstalledProject
 from .red_knot_manager import RedKnotManager
@@ -74,27 +73,33 @@ def run(output: str, projects: str, verbose: bool) -> None:
     setup_logging(verbose)
     logging.info("Starting ecosystem analysis")
 
-    installed_projects: list[InstalledProject] = []
-
     selected_projects = Path(projects).read_text().splitlines()
 
     available_projects: dict[str, Project] = {}
     for project in get_projects():
-        project_name = project.name_override if project.name_override else project.location.split("/")[-1]
+        project_name = (
+            project.name_override
+            if project.name_override
+            else project.location.split("/")[-1]
+        )
 
         available_projects[project_name] = project
 
-    for project_name in selected_projects:
-        if project := available_projects.get(project_name):
-            logging.info(f"Processing project: {project.location}")
-            installed_project = InstalledProject(project)
-            installed_project.install()
+    unavailable_projects = set(selected_projects) - set(available_projects.keys())
+    if unavailable_projects:
+        raise RuntimeError(
+            f"Projects {', '.join(unavailable_projects)} not found in available projects. "
+        )
 
-            installed_projects.append(installed_project)
-        else:
-            raise RuntimeError(
-                f"Project {project_name} not found in available projects. "
-            )
+    installed_projects: list[InstalledProject] = []
+    for project_name in selected_projects:
+        project = available_projects[project_name]
+
+        logging.info(f"Processing project: {project.location}")
+        installed_project = InstalledProject(project)
+        installed_project.install()
+
+        installed_projects.append(installed_project)
 
     manager = RedKnotManager(installed_projects)
     statistics = manager.run()
