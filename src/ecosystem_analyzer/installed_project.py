@@ -6,11 +6,10 @@ from pathlib import Path
 from git import Repo
 
 from .config import LOG_FILE, PYTHON_VERSION
-from .ecosystem import Project
 
 
 class InstalledProject:
-    def __init__(self, project: Project) -> None:
+    def __init__(self, project) -> None:
         self.project = project
         self.temp_dir = tempfile.TemporaryDirectory()
 
@@ -46,7 +45,7 @@ class InstalledProject:
         self._install_dependencies()
 
     def count_diagnostics(self, red_knot: Path) -> int:
-        extra_args = self.project.paths if self.project.paths else []
+        extra_args = self.project.knot_paths if self.project.knot_paths else []
         cmd = [
             red_knot.as_posix(),
             "check",

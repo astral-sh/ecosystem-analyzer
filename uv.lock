@@ -30,12 +30,14 @@ source = { editable = "." }
 dependencies = [
     { name = "click" },
     { name = "gitpython" },
+    { name = "mypy-primer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
     { name = "gitpython" },
+    { name = "mypy-primer", git = "https://github.com/astral-sh/mypy_primer?branch=add-red-knot-support-v4" },
 ]
 
 [[package]]
@@ -61,6 +63,11 @@ sdist = { url = "https://files.pythonhosted.org/packages/c0/89/37df0b71473153574
 wheels = [
     { url = "https://files.pythonhosted.org/packages/1d/9a/4114a9057db2f1462d5c8f8390ab7383925fe1ac012eaa42402ad65c2963/GitPython-3.1.44-py3-none-any.whl", hash = "sha256:9e0e10cda9bed1ee64bc9a6de50e7e38a9c9943241cd7f585f6df3ed28011110", size = 207599 },
 ]
+
+[[package]]
+name = "mypy-primer"
+version = "0.1.0"
+source = { git = "https://github.com/astral-sh/mypy_primer?branch=add-red-knot-support-v4#c4ddaac9d176d63a05c1cc0f830e26168705b989" }
 
 [[package]]
 name = "smmap"

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import TypedDict
 
 import click
+from mypy_primer.projects import get_projects
 
 from .config import PROJECT_PATTERN
-from .ecosystem import load_ecosystem
 from .installed_project import InstalledProject
 from .red_knot_manager import RedKnotManager
 
@@ -69,7 +69,7 @@ def cli(output: str, project_pattern: str, verbose: bool) -> None:
 
     installed_projects: list[InstalledProject] = []
 
-    for project in load_ecosystem():
+    for project in get_projects():
         if re.search(project_pattern, project.location):
             logging.info(f"Processing project: {project.location}")
             installed_project = InstalledProject(project)
