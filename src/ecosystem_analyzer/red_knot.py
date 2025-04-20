@@ -6,6 +6,7 @@ from pathlib import Path
 from git import Commit, Repo
 
 from .config import LOG_FILE
+from .diagnostic import DiagnosticsParser
 from .installed_project import InstalledProject
 from .run_output import RunOutput
 
@@ -63,9 +64,16 @@ class RedKnot:
         with open(LOG_FILE, "a") as log_file:
             log_file.write(result.stdout)
 
-        diagnostics_count = len(result.stdout.splitlines())
+        parser = DiagnosticsParser(
+            repo_location=project.location,
+            repo_branch=project.default_branch,
+            repo_working_dir=project.root_directory,
+        )
+        diagnostics = parser.parse(result.stdout)
+
         return {
             "project": project.location,
             "red_knot_commit": self.repository.head.commit.hexsha,
-            "diagnostics_count": diagnostics_count,
+            "diagnostics_count": len(diagnostics),
+            "diagnostics": diagnostics,
         }

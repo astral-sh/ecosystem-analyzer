@@ -10,9 +10,14 @@ from .config import PYTHON_VERSION
 
 
 class InstalledProject:
+    _repo: Repo
+
     def __init__(self, project: Project) -> None:
         self._project = project
         self._temp_dir = tempfile.TemporaryDirectory()
+
+        self._clone()
+        self._install_dependencies()
 
     @property
     def root_directory(self) -> Path:
@@ -26,10 +31,16 @@ class InstalledProject:
     def location(self) -> str:
         return self._project.location
 
+    @property
+    def default_branch(self) -> str:
+        return self._repo.active_branch.name
+
     def _clone(self) -> None:
         try:
             logging.info(f"Cloning {self._project.location} into {self._temp_dir.name}")
-            Repo.clone_from(url=self._project.location, to_path=self._temp_dir.name)
+            self._repo = Repo.clone_from(
+                url=self._project.location, to_path=self._temp_dir.name
+            )
         except Exception as e:
             logging.error(f"Error cloning repository: {e}")
             return
@@ -60,7 +71,3 @@ class InstalledProject:
             )
         else:
             logging.info("No dependencies to install")
-
-    def install(self) -> None:
-        self._clone()
-        self._install_dependencies()

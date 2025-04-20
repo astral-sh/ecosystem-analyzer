@@ -82,10 +82,11 @@ def run(ctx, project_name: str, commit: str) -> None:
     try:
         project = projects[project_name]
     except KeyError as e:
-        raise RuntimeError(f"Project {project_name} not found in available projects.") from e
+        raise RuntimeError(
+            f"Project {project_name} not found in available projects."
+        ) from e
 
     installed_project = InstalledProject(project)
-    installed_project.install()
 
     repository = ctx.obj["repository"]
     red_knot = RedKnot(repository)
