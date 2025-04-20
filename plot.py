@@ -7,11 +7,10 @@ def read_from_json_and_plot(filename: str) -> None:
     with open(filename) as json_file:
         statistics = json.load(json_file)
 
-    statistics = statistics[-19:]
-    # statistics = statistics[-30:]
+    statistics = statistics[-18:]
 
     messages = [stat["commit_message"] for stat in statistics]
-    counts = [stat["diagnostics_count"] for stat in statistics]
+    counts = [stat["total_diagnostics"] for stat in statistics]
 
     # Remove [red-knot] prefix from commit messages
     messages = [msg.replace("[red-knot] ", "") for msg in messages]
