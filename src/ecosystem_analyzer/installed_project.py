@@ -28,6 +28,10 @@ class InstalledProject:
         return self._project.paths or []
 
     @property
+    def name(self) -> str:
+        return self._project.name_override or self._project.location.split("/")[-1]
+
+    @property
     def location(self) -> str:
         return self._project.location
 

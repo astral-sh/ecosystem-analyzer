@@ -72,7 +72,8 @@ class RedKnot:
         diagnostics = parser.parse(result.stdout)
 
         return {
-            "project": project.location,
+            "project": project.name,
+            "project_location": project.location,
             "red_knot_commit": self.repository.head.commit.hexsha,
             "diagnostics": diagnostics,
         }
