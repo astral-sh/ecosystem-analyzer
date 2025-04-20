@@ -5,7 +5,7 @@ from pathlib import Path
 
 from git import Commit, Repo
 
-from .config import COMMIT_BLACKLIST, NUM_COMMITS, RUFF_REPO_PATH
+from .config import NUM_COMMITS, RUFF_REPO_PATH
 from .installed_project import InstalledProject
 
 
@@ -16,15 +16,10 @@ class RedKnotManager:
 
     def _get_latest_red_knot_commits(self):
         repo = Repo(RUFF_REPO_PATH)
-        logging.debug(f"Executing: git checkout main")
-        repo.git.checkout("main")
+        repo.git.checkout("origin/main")
 
         commits = []
         for commit in repo.iter_commits():
-            # Check blacklist
-            if commit.hexsha in COMMIT_BLACKLIST:
-                continue
-
             if commit.message.startswith("[red-knot] "):  # type: ignore
                 commits.append(commit)
                 if len(commits) >= NUM_COMMITS:

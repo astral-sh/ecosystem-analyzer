@@ -45,7 +45,7 @@ class InstalledProject:
         self._install_dependencies()
 
     def count_diagnostics(self, red_knot: Path) -> int:
-        extra_args = self.project.knot_paths if self.project.knot_paths else []
+        extra_args = self.project.paths if self.project.paths else []
         cmd = [
             red_knot.as_posix(),
             "check",

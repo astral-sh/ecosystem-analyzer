@@ -6,8 +6,8 @@ from typing import TypedDict
 
 import click
 from mypy_primer.projects import get_projects
+from mypy_primer.model import Project
 
-from .config import PROJECT_PATTERN
 from .installed_project import InstalledProject
 from .red_knot_manager import RedKnotManager
 
@@ -40,7 +40,15 @@ def write_statistics_to_json(statistics: list[CommitStatistics], filename: str) 
     logging.info(f"Statistics written to {filename}")
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+def cli() -> None:
+    """
+    Ecosystem Analyzer CLI with subcommands.
+    """
+    pass
+
+
+@cli.command()
 @click.option(
     "--output",
     "-o",
@@ -49,10 +57,9 @@ def write_statistics_to_json(statistics: list[CommitStatistics], filename: str) 
     type=click.Path(),
 )
 @click.option(
-    "--project-pattern",
-    "-p",
-    default=PROJECT_PATTERN,
-    help="Custom project pattern regex",
+    "--projects",
+    help="List to a file with projects to analyze",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
 )
 @click.option(
     "--verbose",
@@ -60,7 +67,7 @@ def write_statistics_to_json(statistics: list[CommitStatistics], filename: str) 
     is_flag=True,
     help="Enable verbose logging",
 )
-def cli(output: str, project_pattern: str, verbose: bool) -> None:
+def run(output: str, projects: str, verbose: bool) -> None:
     """
     Analyze Python projects with Red Knot and generate statistics.
     """
@@ -69,13 +76,25 @@ def cli(output: str, project_pattern: str, verbose: bool) -> None:
 
     installed_projects: list[InstalledProject] = []
 
+    selected_projects = Path(projects).read_text().splitlines()
+
+    available_projects: dict[str, Project] = {}
     for project in get_projects():
-        if re.search(project_pattern, project.location):
+        project_name = project.name_override if project.name_override else project.location.split("/")[-1]
+
+        available_projects[project_name] = project
+
+    for project_name in selected_projects:
+        if project := available_projects.get(project_name):
             logging.info(f"Processing project: {project.location}")
             installed_project = InstalledProject(project)
             installed_project.install()
 
             installed_projects.append(installed_project)
+        else:
+            raise RuntimeError(
+                f"Project {project_name} not found in available projects. "
+            )
 
     manager = RedKnotManager(installed_projects)
     statistics = manager.run()

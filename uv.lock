@@ -37,7 +37,7 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
     { name = "gitpython" },
-    { name = "mypy-primer", git = "https://github.com/astral-sh/mypy_primer?branch=add-red-knot-support-v4" },
+    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?branch=upstreamknot" },
 ]
 
 [[package]]
@@ -67,7 +67,7 @@ wheels = [
 [[package]]
 name = "mypy-primer"
 version = "0.1.0"
-source = { git = "https://github.com/astral-sh/mypy_primer?branch=add-red-knot-support-v4#c4ddaac9d176d63a05c1cc0f830e26168705b989" }
+source = { git = "https://github.com/hauntsaninja/mypy_primer?branch=upstreamknot#a369fd7accb6359e986994d99c414fddb9dbfd70" }
 
 [[package]]
 name = "smmap"
