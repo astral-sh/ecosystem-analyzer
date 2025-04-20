@@ -25,7 +25,7 @@ class InstalledProject:
 
     @property
     def paths(self) -> list[str]:
-        return self._project.paths
+        return self._project.paths or []
 
     @property
     def location(self) -> str:

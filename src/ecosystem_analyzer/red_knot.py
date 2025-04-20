@@ -42,7 +42,7 @@ class RedKnot:
         self.executable = self.cargo_target_dir / "debug" / "red_knot"
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
-        extra_args = project.paths if project.paths else []
+        extra_args = project.paths
         cmd = [
             self.executable.as_posix(),
             "check",

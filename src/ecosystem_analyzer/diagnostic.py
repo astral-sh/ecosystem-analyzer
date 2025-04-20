@@ -13,6 +13,8 @@ class Diagnostic(TypedDict):
 
     message: str
 
+    github_ref: str
+
 
 class DiagnosticsParser:
     def __init__(
@@ -30,21 +32,19 @@ class DiagnosticsParser:
         )
 
         if match := re.match(pattern, line):
-            path = (
+            path: str = (
                 Path(match.group("path")).relative_to(self.repo_working_dir).as_posix()
             )
-            line = match.group("line")
-            github_ref = (
-                f"{self.repo_location}/blob/{self.repo_branch}/{path}#L{line}",
-            )
+            line = str(match.group("line"))
+            github_ref = f"{self.repo_location}/blob/{self.repo_branch}/{path}#L{line}"
 
             return {
-                "level": match.group("level"),
-                "lint_name": match.group("lint_name"),
+                "level": str(match.group("level")),
+                "lint_name": str(match.group("lint_name")),
                 "path": path,
                 "line": int(line),
                 "column": int(match.group("column")),
-                "message": match.group("message"),
+                "message": str(match.group("message")),
                 "github_ref": github_ref,
             }
         return None
