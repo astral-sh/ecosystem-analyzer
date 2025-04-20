@@ -9,7 +9,6 @@ from .diagnostic import Diagnostic
 class RunOutput(TypedDict):
     project: str
     red_knot_commit: str
-    diagnostics_count: int
     diagnostics: list[Diagnostic]
 
 

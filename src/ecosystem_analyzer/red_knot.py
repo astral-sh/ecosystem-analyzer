@@ -74,6 +74,5 @@ class RedKnot:
         return {
             "project": project.location,
             "red_knot_commit": self.repository.head.commit.hexsha,
-            "diagnostics_count": len(diagnostics),
             "diagnostics": diagnostics,
         }
