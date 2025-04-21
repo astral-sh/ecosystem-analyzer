@@ -40,11 +40,23 @@ def process_diagnostics(data):
     return all_diagnostics
 
 
-def generate_html_report(diagnostics, template_path, output_path):
+def generate_html_report(diagnostics, red_knot_commit, template_path, output_path):
     """Generate an HTML report using Jinja2 template."""
     projects = sorted(set(d["project"] for d in diagnostics))
     lints = sorted(set(d["lint_name"] for d in diagnostics))
     levels = sorted(set(d["level"] for d in diagnostics))
+
+    projects = [
+        (project, sum(1 for d in diagnostics if d["project"] == project))
+        for project in projects
+    ]
+    lints = [
+        (lint, sum(1 for d in diagnostics if d["lint_name"] == lint)) for lint in lints
+    ]
+    lints = sorted(lints, key=lambda x: x[1], reverse=True)
+    levels = [
+        (level, sum(1 for d in diagnostics if d["level"] == level)) for level in levels
+    ]
 
     env = Environment(loader=FileSystemLoader("templates"))
     template = env.get_template(template_path)
@@ -54,6 +66,7 @@ def generate_html_report(diagnostics, template_path, output_path):
         projects=projects,
         lints=lints,
         levels=levels,
+        red_knot_commit=red_knot_commit,
     )
 
     # Write output file
@@ -79,8 +92,17 @@ def main():
     data = load_json_data(args.input_file)
     diagnostics = process_diagnostics(data)
 
+    red_knot_commits = set(output["red_knot_commit"] for output in data["outputs"])
+    if len(red_knot_commits) != 1:
+        print(
+            "Error: The JSON file must contain diagnostics from a single Red Knot commit.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+    red_knot_commit = red_knot_commits.pop()
+
     output_file = generate_html_report(
-        diagnostics, "ecosystem_report.html", args.output
+        diagnostics, red_knot_commit, "ecosystem_report.html", args.output
     )
 
     print(f"Report generated successfully: {output_file}")

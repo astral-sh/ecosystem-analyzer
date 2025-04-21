@@ -95,15 +95,6 @@
 <body>
     <h1>Ecosystem Report</h1>
 
-    <p>
-        Projects: {{ projects | length }}
-        <br>
-        Total diagnostics: {{ diagnostics | length }}
-        <br>
-        Red Knot commit: {{ red_knot_commit }}
-    </p>
-
-
     <div class="controls">
         <label for="sort-select">Sort by:</label>
         <select id="sort-select">
@@ -114,27 +105,30 @@
 
         <label for="filter-project">Filter Project:</label>
         <select id="filter-project">
-            <option value="all">All Projects</option>
-            {% for project in projects %}
-            <option value="{{ project }}">{{ project }}</option>
+            <option value="all">All {{ projects | length }} projects</option>
+            {% for (project, count) in projects %}
+            <option value="{{ project }}">{{ project }} ({{ count }})</option>
             {% endfor %}
         </select>
 
         <label for="filter-lint">Filter Lint:</label>
         <select id="filter-lint">
-            <option value="all">All Lints</option>
-            {% for lint in lints %}
-            <option value="{{ lint }}">{{ lint }}</option>
+            <option value="all">All Lints ({{ diagnostics | length }})</option>
+            {% for (lint, count) in lints %}
+            <option value="{{ lint }}">{{ lint }} ({{ count }})</option>
             {% endfor %}
         </select>
 
         <label for="filter-level">Filter Level:</label>
         <select id="filter-level">
             <option value="all">All Levels</option>
-            {% for level in levels %}
-            <option value="{{ level }}">{{ level }}</option>
+            {% for (level, count) in levels %}
+            <option value="{{ level }}">{{ level }} ({{ count }})</option>
             {% endfor %}
         </select>
+
+        Red Knot @ <a href="https://github.com/astral-sh/ruff/commit/{{ red_knot_commit }}" target="_blank">{{
+            red_knot_commit[0:7] }}</a>
     </div>
 
     <table id="diagnostics-table">
