@@ -145,7 +145,7 @@
                 <td class="{{ diagnostic.level }}">{{ diagnostic.lint_name }}</td>
                 <td><a href="{{ diagnostic.github_ref }}"
                         target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a></td>
-                <td>{{ diagnostic.message }}</td>
+                <td>{{ diagnostic.message | e }}</td>
             </tr>
             {% endfor %}
         </tbody>

@@ -19,13 +19,23 @@ def process_diagnostics(data):
     """Process the JSON data to extract all diagnostics."""
     all_diagnostics = []
 
-    for output in data.get("outputs", []):
-        project = output.get("project", "")
+    total_diagnostics = 0
+    for output in data["outputs"]:
+        project = output["project"]
+
+        num_diagnostics = len(output["diagnostics"])
+        if num_diagnostics > 1000:
+            print(f"Skipping project '{project}' ({num_diagnostics} diagnostics)")
+            continue
+
+        total_diagnostics += num_diagnostics
 
         for diagnostic in output.get("diagnostics", []):
             # Add project to each diagnostic for easier sorting/filtering
             diagnostic["project"] = project
             all_diagnostics.append(diagnostic)
+
+    print(f"Total diagnostics included: {total_diagnostics}")
 
     return all_diagnostics
 
