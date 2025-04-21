@@ -31,8 +31,9 @@ def process_diagnostics(data):
         total_diagnostics += num_diagnostics
 
         for diagnostic in output.get("diagnostics", []):
-            # Add project to each diagnostic for easier sorting/filtering
+            # Add project metadata to each diagnostic for easier sorting/filtering
             diagnostic["project"] = project
+            diagnostic["project_location"] = output["project_location"]
             all_diagnostics.append(diagnostic)
 
     print(f"Total diagnostics included: {total_diagnostics}")
