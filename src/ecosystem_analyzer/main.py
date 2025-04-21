@@ -54,15 +54,22 @@ def cli(ctx: click.Context, repository: str, verbose: bool) -> None:
     type=str,
     default="origin/main",
 )
+@click.option(
+    "--output",
+    "-o",
+    default="project-diagnostics.json",
+    help="Output JSON file with collected diagnostics",
+    type=click.Path(),
+)
 @click.pass_context
-def run(ctx, project_name: str, commit: str) -> None:
+def run(ctx, project_name: str, commit: str, output: str) -> None:
     """
     Run Red Knot on a specific project.
     """
 
     manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=[project_name])
     manager.run_for_commit(commit)
-    manager.write_run_outputs(Path("output.json"))
+    manager.write_run_outputs(output)
 
 
 @cli.command()
@@ -80,17 +87,15 @@ def run(ctx, project_name: str, commit: str) -> None:
 @click.option(
     "--output",
     "-o",
-    default="output.json",
+    default="ecosystem-diagnostics.json",
     help="Output JSON file with collected diagnostics",
     type=click.Path(),
 )
 @click.pass_context
 def analyze(ctx, commit: str, projects: str, output: str) -> None:
     """
-    Analyze Python projects with Red Knot and generate statistics.
+    Analyze Python ecosystem projects with Red Knot and collect diagnostics.
     """
-
-    logging.info("Starting ecosystem analysis")
 
     project_names = Path(projects).read_text().splitlines()
 

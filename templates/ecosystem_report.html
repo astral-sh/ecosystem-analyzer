@@ -95,6 +95,15 @@
 <body>
     <h1>Ecosystem Report</h1>
 
+    <p>
+        Projects: {{ projects | length }}
+        <br>
+        Total diagnostics: {{ diagnostics | length }}
+        <br>
+        Red Knot commit: {{ red_knot_commit }}
+    </p>
+
+
     <div class="controls">
         <label for="sort-select">Sort by:</label>
         <select id="sort-select">
