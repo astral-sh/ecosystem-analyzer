@@ -37,7 +37,7 @@ dependencies = [
 requires-dist = [
     { name = "click", specifier = ">=8.0.0" },
     { name = "gitpython" },
-    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?branch=upstreamknot" },
+    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer" },
 ]
 
 [[package]]
@@ -67,7 +67,7 @@ wheels = [
 [[package]]
 name = "mypy-primer"
 version = "0.1.0"
-source = { git = "https://github.com/hauntsaninja/mypy_primer?branch=upstreamknot#a369fd7accb6359e986994d99c414fddb9dbfd70" }
+source = { git = "https://github.com/hauntsaninja/mypy_primer#4c22d192a456e27badf85b3ea0f830707375d2b7" }
 
 [[package]]
 name = "smmap"

@@ -24,4 +24,4 @@ ignore = [
 ]
 
 [tool.uv.sources]
-mypy-primer = { git = "https://github.com/hauntsaninja/mypy_primer", branch = "upstreamknot" }
+mypy-primer = { git = "https://github.com/hauntsaninja/mypy_primer" }
