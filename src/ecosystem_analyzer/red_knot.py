@@ -42,6 +42,8 @@ class RedKnot:
         self.executable = self.cargo_target_dir / "debug" / "red_knot"
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
+        logging.info(f"Running Red Knot on project '{project.name}'")
+
         extra_args = project.paths
         cmd = [
             self.executable.as_posix(),
@@ -60,7 +62,11 @@ class RedKnot:
             text=True,
         )
 
-        # Append result.stdout to log file
+        if result.returncode not in (0, 1):
+            logging.error(
+                f"Red Knot failed with error code {result.returncode} for project '{project.name}' ... panic?"
+            )
+
         with open(LOG_FILE, "a") as log_file:
             log_file.write(result.stdout)
 
