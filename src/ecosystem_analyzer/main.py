@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 from git import Repo
 
+from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_red_knot_commits
 from .manager import Manager
@@ -104,6 +105,43 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=project_names)
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
+
+
+@cli.command()
+@click.argument(
+    "old_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.argument(
+    "new_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
+    "--output-html",
+    type=click.Path(writable=True),
+    default="diff.html",
+    help="Path for the standalone HTML diff report",
+)
+@click.option(
+    "--output-json",
+    type=click.Path(writable=True),
+    help="Path to save the JSON diff data",
+)
+def diff(
+    old_file: str, new_file: str, output_html: str, output_json: str | None
+) -> None:
+    """
+    Generate a diff report of diagnostic data between two JSON files.
+
+    OLD_FILE: Path to the old JSON file.
+    NEW_FILE: Path to the new JSON file.
+    """
+    diff_tool = DiagnosticDiff(old_file, new_file)
+    diff_tool.generate_html_report(output_html)
+    if output_json:
+        diff_tool.save_json_diff(output_json)
 
 
 @cli.command()

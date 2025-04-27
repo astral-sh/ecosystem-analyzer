@@ -1,8 +1,6 @@
-import json
 import difflib
-import argparse
-from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple
+import json
+from typing import Any
 
 
 class DiagnosticDiff:
@@ -16,19 +14,19 @@ class DiagnosticDiff:
         self.new_data = self._load_json(new_file)
         self.diffs = self._compute_diffs()
 
-    def _load_json(self, file_path: str) -> Dict[str, Any]:
+    def _load_json(self, file_path: str) -> dict[str, Any]:
         """Load and parse a JSON file."""
-        with open(file_path, "r") as f:
+        with open(file_path) as f:
             return json.load(f)
 
-    def _format_diagnostic(self, diag: Dict[str, Any]) -> str:
+    def _format_diagnostic(self, diag: dict[str, Any]) -> str:
         """Format a diagnostic entry as a string for comparison."""
         return (
             f"[{diag['level']}] {diag['lint_name']} - "
             f"{diag['path']}:{diag['line']}:{diag['column']} - {diag['message']}"
         )
 
-    def _compute_diffs(self) -> Dict[str, Any]:
+    def _compute_diffs(self) -> dict[str, Any]:
         """Compute differences between the old and new diagnostic data."""
         result = {"added_projects": [], "removed_projects": [], "modified_projects": []}
 
@@ -95,8 +93,8 @@ class DiagnosticDiff:
         return result
 
     def _group_diagnostics_by_file(
-        self, diagnostics: List[Dict[str, Any]]
-    ) -> Dict[str, List[Dict[str, Any]]]:
+        self, diagnostics: list[dict[str, Any]]
+    ) -> dict[str, list[dict[str, Any]]]:
         """Group diagnostics by file path."""
         result = {}
         for diag in diagnostics:
@@ -108,9 +106,9 @@ class DiagnosticDiff:
 
     def _compare_files(
         self,
-        old_files: Dict[str, List[Dict[str, Any]]],
-        new_files: Dict[str, List[Dict[str, Any]]],
-    ) -> Dict[str, Any]:
+        old_files: dict[str, list[dict[str, Any]]],
+        new_files: dict[str, list[dict[str, Any]]],
+    ) -> dict[str, Any]:
         """Compare diagnostics across files."""
         result = {"added_files": [], "removed_files": [], "modified_files": []}
 
@@ -153,8 +151,8 @@ class DiagnosticDiff:
         return result
 
     def _group_diagnostics_by_line(
-        self, diagnostics: List[Dict[str, Any]]
-    ) -> Dict[int, List[Dict[str, Any]]]:
+        self, diagnostics: list[dict[str, Any]]
+    ) -> dict[int, list[dict[str, Any]]]:
         """Group diagnostics by line number."""
         result = {}
         for diag in diagnostics:
@@ -166,9 +164,9 @@ class DiagnosticDiff:
 
     def _compare_lines(
         self,
-        old_lines: Dict[int, List[Dict[str, Any]]],
-        new_lines: Dict[int, List[Dict[str, Any]]],
-    ) -> Dict[str, Any]:
+        old_lines: dict[int, list[dict[str, Any]]],
+        new_lines: dict[int, list[dict[str, Any]]],
+    ) -> dict[str, Any]:
         """Compare diagnostics across lines."""
         result = {"added_lines": [], "removed_lines": [], "modified_lines": []}
 
@@ -240,7 +238,7 @@ class DiagnosticDiff:
         return result
 
     def _similar_diagnostics(
-        self, diag1: Dict[str, Any], diag2: Dict[str, Any]
+        self, diag1: dict[str, Any], diag2: dict[str, Any]
     ) -> bool:
         """Check if two diagnostics are similar (same lint name and position)."""
         return (
@@ -248,7 +246,7 @@ class DiagnosticDiff:
             and diag1["column"] == diag2["column"]
         )
 
-    def _generate_text_diff(self, old_text: str, new_text: str) -> List[str]:
+    def _generate_text_diff(self, old_text: str, new_text: str) -> list[str]:
         """Generate a text diff between two strings."""
         diff = difflib.ndiff(old_text.splitlines(), new_text.splitlines())
         return list(diff)
@@ -464,7 +462,7 @@ class DiagnosticDiff:
 
         return html
 
-    def _render_project(self, project: Dict[str, Any], status: str) -> str:
+    def _render_project(self, project: dict[str, Any], status: str) -> str:
         """Render a project section for the HTML report."""
         project_id = f"{status}-{project['project'].replace(' ', '-')}"
 
@@ -496,7 +494,7 @@ class DiagnosticDiff:
             # Group diagnostics by line
             diagnostics_by_line = self._group_diagnostics_by_line(diagnostics)
 
-            for line_num, line_diagnostics in sorted(diagnostics_by_line.items()):
+            for _line_num, line_diagnostics in sorted(diagnostics_by_line.items()):
                 html += """
                 <div class="line">
                 """
@@ -525,7 +523,7 @@ class DiagnosticDiff:
 
         return html
 
-    def _render_modified_project(self, project: Dict[str, Any]) -> str:
+    def _render_modified_project(self, project: dict[str, Any]) -> str:
         """Render a modified project section for the HTML report."""
         project_id = f"modified-{project['project'].replace(' ', '-')}"
 
@@ -557,7 +555,7 @@ class DiagnosticDiff:
                     file_data["diagnostics"]
                 )
 
-                for line_num, diagnostics in sorted(diagnostics_by_line.items()):
+                for _line_num, diagnostics in sorted(diagnostics_by_line.items()):
                     html += """
                     <div class="line">
                     """
@@ -596,7 +594,7 @@ class DiagnosticDiff:
                     file_data["diagnostics"]
                 )
 
-                for line_num, diagnostics in sorted(diagnostics_by_line.items()):
+                for _line_num, diagnostics in sorted(diagnostics_by_line.items()):
                     html += """
                     <div class="line">
                     """
@@ -742,30 +740,3 @@ class DiagnosticDiff:
             json.dump(self.diffs, f, indent=2)
 
         print(f"JSON diff saved to: {output_path}")
-
-
-def main():
-    """Main function to parse arguments and run the diff tool."""
-    parser = argparse.ArgumentParser(
-        description="Generate a diff report of diagnostic data between two JSON files."
-    )
-    parser.add_argument("old_file", help="Path to the old JSON file")
-    parser.add_argument("new_file", help="Path to the new JSON file")
-    parser.add_argument(
-        "--html",
-        help="Path to save the HTML report",
-        default="diagnostic_diff_report.html",
-    )
-    parser.add_argument(
-        "--json", help="Path to save the JSON diff data", default="diagnostic_diff.json"
-    )
-
-    args = parser.parse_args()
-
-    diff_tool = DiagnosticDiff(args.old_file, args.new_file)
-    diff_tool.generate_html_report(args.html)
-    diff_tool.save_json_diff(args.json)
-
-
-if __name__ == "__main__":
-    main()
