@@ -31,8 +31,6 @@ class Manager:
 
     _red_knot: RedKnot
 
-    _run_outputs: list[RunOutput] = []
-
     def __init__(
         self,
         *,
@@ -59,16 +57,20 @@ class Manager:
             project = self._ecosystem_projects[project_name]
             self._installed_projects.append(InstalledProject(project))
 
-    def run_for_commit(self, commit: str) -> None:
+    def run_for_commit(self, commit: str) -> list[RunOutput]:
         self._red_knot.compile_for_commit(commit)
 
-        self._run_outputs = []
+        run_outputs = []
         for project in self._installed_projects:
             output = self._red_knot.run_on_project(project)
-            self._run_outputs.append(output)
+            run_outputs.append(output)
 
-    def write_run_outputs(self, output_path: str | Path) -> None:
+        return run_outputs
+
+    def write_run_outputs(
+        self, run_outputs: list[RunOutput], output_path: str | Path
+    ) -> None:
         output_path = Path(output_path)
         with output_path.open("w") as json_file:
-            json.dump({"outputs": self._run_outputs}, json_file, indent=4)
+            json.dump({"outputs": run_outputs}, json_file, indent=4)
         logging.info(f"Output written to {output_path}")

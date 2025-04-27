@@ -5,9 +5,9 @@ def read_from_json_and_plot(filename: str) -> None:
 
     # Read from JSON file
     with open(filename) as json_file:
-        statistics = json.load(json_file)
+        data = json.load(json_file)
 
-    statistics = statistics[-18:]
+    statistics = data["statistics"]
 
     messages = [stat["commit_message"] for stat in statistics]
     counts = [stat["total_diagnostics"] for stat in statistics]
@@ -31,4 +31,4 @@ def read_from_json_and_plot(filename: str) -> None:
 
 
 if __name__ == "__main__":
-    read_from_json_and_plot("statistics.json")
+    read_from_json_and_plot("history-statistics.json")
