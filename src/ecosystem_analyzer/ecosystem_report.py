@@ -1,18 +1,8 @@
-import argparse
 import json
-import sys
+import logging
+from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
-
-
-def load_json_data(file_path):
-    """Load diagnostic data from a JSON file."""
-    try:
-        with open(file_path, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        print(f"Error loading JSON file: {e}", file=sys.stderr)
-        sys.exit(1)
 
 
 def process_diagnostics(data):
@@ -25,7 +15,9 @@ def process_diagnostics(data):
 
         num_diagnostics = len(output["diagnostics"])
         if num_diagnostics > 1000:
-            print(f"Skipping project '{project}' ({num_diagnostics} diagnostics)")
+            logging.info(
+                f"Skipping project '{project}' ({num_diagnostics} diagnostics)"
+            )
             continue
 
         total_diagnostics += num_diagnostics
@@ -36,12 +28,12 @@ def process_diagnostics(data):
             diagnostic["project_location"] = output["project_location"]
             all_diagnostics.append(diagnostic)
 
-    print(f"Total diagnostics included: {total_diagnostics}")
+    logging.info(f"Total diagnostics included: {total_diagnostics}")
 
     return all_diagnostics
 
 
-def generate_html_report(diagnostics, red_knot_commit, template_path, output_path):
+def generate_html_report(diagnostics, red_knot_commit, output_path):
     """Generate an HTML report using Jinja2 template."""
     projects = sorted(set(d["project"] for d in diagnostics))
     lints = sorted(set(d["lint_name"] for d in diagnostics))
@@ -60,7 +52,7 @@ def generate_html_report(diagnostics, red_knot_commit, template_path, output_pat
     ]
 
     env = Environment(loader=FileSystemLoader("templates"))
-    template = env.get_template(template_path)
+    template = env.get_template("ecosystem_report.html")
 
     html_content = template.render(
         diagnostics=diagnostics,
@@ -77,37 +69,23 @@ def generate_html_report(diagnostics, red_knot_commit, template_path, output_pat
     return output_path
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Generate HTML report from diagnostic JSON data"
-    )
-    parser.add_argument("input_file", help="Path to input JSON file")
-    parser.add_argument(
-        "-o",
-        "--output",
-        default="ecosystem_report.html",
-        help="Output HTML file path",
-    )
-    args = parser.parse_args()
+def generate_ecosystem_report(
+    diagnostics_path: str | Path, output_path: str | Path
+) -> str:
+    diagnostics_path = Path(diagnostics_path)
+    output_path = Path(output_path)
 
-    data = load_json_data(args.input_file)
+    with open(diagnostics_path, "r") as f:
+        data = json.load(f)
     diagnostics = process_diagnostics(data)
 
     red_knot_commits = set(output["red_knot_commit"] for output in data["outputs"])
     if len(red_knot_commits) != 1:
-        print(
-            "Error: The JSON file must contain diagnostics from a single Red Knot commit.",
-            file=sys.stderr,
+        raise RuntimeError(
+            "Error: The JSON file must contain diagnostics from a single Red Knot commit."
         )
-        sys.exit(1)
     red_knot_commit = red_knot_commits.pop()
 
-    output_file = generate_html_report(
-        diagnostics, red_knot_commit, "ecosystem_report.html", args.output
-    )
+    output_file = generate_html_report(diagnostics, red_knot_commit, output_path)
 
-    print(f"Report generated successfully: {output_file}")
-
-
-if __name__ == "__main__":
-    main()
+    logging.info(f"Report generated successfully: {output_file}")

@@ -24,7 +24,6 @@ def setup_logging(verbose: bool = False) -> None:
     "--repository",
     help="Path to the Red Knot repository",
     type=click.Path(exists=True, dir_okay=True, readable=True),
-    required=True,
 )
 @click.option(
     "--verbose",
@@ -167,6 +166,29 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
     with Path(output).open("w") as json_file:
         json.dump({"statistics": statistics}, json_file)
+
+
+@cli.command()
+@click.option(
+    "--diagnostics",
+    help="Path to the JSON file with diagnostics",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
+    "--output",
+    help="Path to the output HTML file",
+    type=click.Path(),
+    default="ecosystem-report.html",
+)
+def ecosystem_report(diagnostics: str, output: str) -> None:
+    """
+    Generate an HTML report from the diagnostics JSON file.
+    """
+
+    from .ecosystem_report import generate_ecosystem_report
+
+    generate_ecosystem_report(diagnostics, output)
 
 
 if __name__ == "__main__":
