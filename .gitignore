@@ -3,7 +3,7 @@
 /log.txt
 /ecosystem-diagnostics*.json
 /history-statistics*.json
-
+/diff.html
 
 
 # Python-generated files
