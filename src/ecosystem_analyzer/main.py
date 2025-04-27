@@ -5,6 +5,7 @@ from pathlib import Path
 import click
 from git import Repo
 
+from .ecosystem_report import generate
 from .git import get_latest_red_knot_commits
 from .manager import Manager
 
@@ -181,14 +182,12 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
     type=click.Path(),
     default="ecosystem-report.html",
 )
-def ecosystem_report(diagnostics: str, output: str) -> None:
+def generate_report(diagnostics: str, output: str) -> None:
     """
     Generate an HTML report from the diagnostics JSON file.
     """
 
-    from .ecosystem_report import generate_ecosystem_report
-
-    generate_ecosystem_report(diagnostics, output)
+    generate(diagnostics, output)
 
 
 if __name__ == "__main__":

@@ -69,9 +69,7 @@ def generate_html_report(diagnostics, red_knot_commit, output_path):
     return output_path
 
 
-def generate_ecosystem_report(
-    diagnostics_path: str | Path, output_path: str | Path
-) -> str:
+def generate(diagnostics_path: str | Path, output_path: str | Path) -> str:
     diagnostics_path = Path(diagnostics_path)
     output_path = Path(output_path)
 

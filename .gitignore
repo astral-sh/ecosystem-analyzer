@@ -1,6 +1,10 @@
 /ecosystem-diagnostics.json
 /ecosystem-report.html
 /log.txt
+/ecosystem-diagnostics*.json
+/history-statistics*.json
+
+
 
 # Python-generated files
 __pycache__/
