@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -11,20 +12,27 @@
             padding: 20px;
             color: #333;
         }
+
         .container {
             max-width: 2000px;
             margin: 0 auto;
         }
-        h1, h2, h3, h4 {
+
+        h1,
+        h2,
+        h3,
+        h4 {
             margin-top: 20px;
             margin-bottom: 10px;
         }
+
         .project {
             margin-bottom: 30px;
             border: 1px solid #ddd;
             border-radius: 5px;
             padding: 15px;
         }
+
         .project-header {
             background-color: #f7f7f7;
             padding: 10px;
@@ -32,12 +40,14 @@
             border-bottom: 1px solid #ddd;
             border-radius: 5px 5px 0 0;
         }
+
         .file {
             margin-bottom: 20px;
             border: 1px solid #eee;
             border-radius: 3px;
             padding: 10px;
         }
+
         .file-header {
             background-color: #f3f3f3;
             padding: 5px 10px;
@@ -46,62 +56,76 @@
             border-radius: 3px 3px 0 0;
             font-family: monospace;
         }
+
         .line {
             margin-bottom: 15px;
             padding: 5px;
             background-color: #f9f9f9;
             border-radius: 3px;
         }
+
         .diagnostic {
             font-family: monospace;
             margin: 5px 0;
             padding: 3px;
         }
+
         .added {
             background-color: #e6ffed;
             border-left: 3px solid #2cbe4e;
         }
+
         .removed {
             background-color: #ffeef0;
             border-left: 3px solid #cb2431;
         }
+
         .modified {
             background-color: #f9f9f9;
             border-left: 3px solid #0366d6;
         }
+
         .diff-line {
             font-family: monospace;
             white-space: pre-wrap;
             margin: 0;
             padding: 2px 5px;
         }
+
         .diff-added {
             background-color: #e6ffed;
         }
+
         .diff-removed {
             background-color: #ffeef0;
         }
+
         .error {
             color: #cb2431;
             font-weight: bold;
         }
+
         .warning {
             color: #b08800;
             font-weight: bold;
         }
+
         .summary {
             margin-bottom: 20px;
             padding: 10px;
             background-color: #f3f3f3;
             border-radius: 5px;
         }
+
         .collapsible {
             cursor: pointer;
         }
+
         .content {
             display: block;
             overflow: hidden;
         }
+
         .expand-all {
             margin-bottom: 10px;
             cursor: pointer;
@@ -112,6 +136,7 @@
         }
     </style>
 </head>
+
 <body>
     <div class="container">
         <h1>Diagnostic Diff Report</h1>
@@ -135,8 +160,10 @@
         {% for project in diffs.added_projects %}
         <div class="project added">
             <div class="project-header">
-                <h3 class="collapsible" onclick="toggleContent('added-{{ project.project|replace(' ', '-') }}')">{{ project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></p>
+                <h3 class="collapsible" onclick="toggleContent('added-{{ project.project|replace(' ', '-') }}')">{{
+                    project.project }}</h3>
+                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
+                </p>
             </div>
             <div id="added-{{ project.project|replace(' ', '-') }}" class="content">
                 <h4>Diagnostics</h4>
@@ -144,16 +171,21 @@
                 {% for path, diagnostics in file_groups %}
                 <div class="file">
                     <div class="file-header">
-                        <h4 class="collapsible" onclick="toggleContent('added-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}')">{{ path }}</h4>
+                        <h4 class="collapsible"
+                            onclick="toggleContent('added-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}')">
+                            {{ path }}</h4>
                     </div>
-                    <div id="added-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}" class="content">
+                    <div id="added-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}"
+                        class="content">
                         {% set line_groups = diagnostics|groupby('line') %}
                         {% for line, line_diagnostics in line_groups %}
                         <div class="line">
                             {% for diag in line_diagnostics %}
                             <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line
+                                    }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -172,8 +204,10 @@
         {% for project in diffs.removed_projects %}
         <div class="project removed">
             <div class="project-header">
-                <h3 class="collapsible" onclick="toggleContent('removed-{{ project.project|replace(' ', '-') }}')">{{ project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></p>
+                <h3 class="collapsible" onclick="toggleContent('removed-{{ project.project|replace(' ', '-') }}')">{{
+                    project.project }}</h3>
+                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
+                </p>
             </div>
             <div id="removed-{{ project.project|replace(' ', '-') }}" class="content">
                 <h4>Diagnostics</h4>
@@ -181,16 +215,21 @@
                 {% for path, diagnostics in file_groups %}
                 <div class="file">
                     <div class="file-header">
-                        <h4 class="collapsible" onclick="toggleContent('removed-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}')">{{ path }}</h4>
+                        <h4 class="collapsible"
+                            onclick="toggleContent('removed-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}')">
+                            {{ path }}</h4>
                     </div>
-                    <div id="removed-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}" class="content">
+                    <div id="removed-{{ project.project|replace(' ', '-') }}-{{ path|replace('/', '-') }}"
+                        class="content">
                         {% set line_groups = diagnostics|groupby('line') %}
                         {% for line, line_diagnostics in line_groups %}
                         <div class="line">
                             {% for diag in line_diagnostics %}
                             <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line
+                                    }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -209,24 +248,31 @@
         {% for project in diffs.modified_projects %}
         <div class="project modified">
             <div class="project-header">
-                <h3 class="collapsible" onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}')">{{ project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></p>
+                <h3 class="collapsible" onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}')">{{
+                    project.project }}</h3>
+                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
+                </p>
             </div>
             <div id="modified-{{ project.project|replace(' ', '-') }}" class="content">
                 {% if project.diffs.added_files %}
                 {% for file_data in project.diffs.added_files %}
                 <div class="file added">
                     <div class="file-header">
-                        <h4 class="collapsible" onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-added-{{ file_data.path|replace('/', '-') }}')">{{ file_data.path }}</h4>
+                        <h4 class="collapsible"
+                            onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-added-{{ file_data.path|replace('/', '-') }}')">
+                            {{ file_data.path }}</h4>
                     </div>
-                    <div id="modified-{{ project.project|replace(' ', '-') }}-added-{{ file_data.path|replace('/', '-') }}" class="content">
+                    <div id="modified-{{ project.project|replace(' ', '-') }}-added-{{ file_data.path|replace('/', '-') }}"
+                        class="content">
                         {% set line_groups = file_data.diagnostics|groupby('line') %}
                         {% for line, diagnostics in line_groups %}
                         <div class="line">
                             {% for diag in diagnostics %}
                             <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -241,16 +287,21 @@
                 {% for file_data in project.diffs.removed_files %}
                 <div class="file removed">
                     <div class="file-header">
-                        <h4 class="collapsible" onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-removed-{{ file_data.path|replace('/', '-') }}')">{{ file_data.path }}</h4>
+                        <h4 class="collapsible"
+                            onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-removed-{{ file_data.path|replace('/', '-') }}')">
+                            {{ file_data.path }}</h4>
                     </div>
-                    <div id="modified-{{ project.project|replace(' ', '-') }}-removed-{{ file_data.path|replace('/', '-') }}" class="content">
+                    <div id="modified-{{ project.project|replace(' ', '-') }}-removed-{{ file_data.path|replace('/', '-') }}"
+                        class="content">
                         {% set line_groups = file_data.diagnostics|groupby('line') %}
                         {% for line, diagnostics in line_groups %}
                         <div class="line">
                             {% for diag in diagnostics %}
                             <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -265,16 +316,21 @@
                 {% for file_data in project.diffs.modified_files %}
                 <div class="file modified">
                     <div class="file-header">
-                        <h4 class="collapsible" onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-modified-{{ file_data.path|replace('/', '-') }}')">{{ file_data.path }}</h4>
+                        <h4 class="collapsible"
+                            onclick="toggleContent('modified-{{ project.project|replace(' ', '-') }}-modified-{{ file_data.path|replace('/', '-') }}')">
+                            {{ file_data.path }}</h4>
                     </div>
-                    <div id="modified-{{ project.project|replace(' ', '-') }}-modified-{{ file_data.path|replace('/', '-') }}" class="content">
+                    <div id="modified-{{ project.project|replace(' ', '-') }}-modified-{{ file_data.path|replace('/', '-') }}"
+                        class="content">
                         {% if file_data.diffs.added_lines %}
                         {% for line_data in file_data.diffs.added_lines %}
                         <div class="line added">
                             {% for diag in line_data.diagnostics %}
                             <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -287,8 +343,10 @@
                         <div class="line removed">
                             {% for diag in line_data.diagnostics %}
                             <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -301,16 +359,20 @@
                         <div class="line modified">
                             {% for diag in line_data.removed %}
                             <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
 
                             {% for diag in line_data.added %}
                             <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - 
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{ diag.line }}:{{ diag.column }}</a> - 
+                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
+                                    }}]</span> {{ diag.lint_name }} -
+                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
+                                    diag.line }}:{{ diag.column }}</a> -
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
@@ -320,7 +382,8 @@
                             {% for diff_data in line_data.text_diffs %}
                             <div class="text-diff">
                                 {% for diff_line in diff_data.diff %}
-                                <pre class="diff-line {{ 'diff-removed' if diff_line.startswith('- ') else ('diff-added' if diff_line.startswith('+ ') else '') }}">{{ diff_line }}</pre>
+                                <pre
+                                    class="diff-line {{ 'diff-removed' if diff_line.startswith('- ') else ('diff-added' if diff_line.startswith('+ ') else '') }}">{{ diff_line }}</pre>
                                 {% endfor %}
                             </div>
                             {% endfor %}
@@ -350,24 +413,25 @@
             function toggleAll() {
                 var contents = document.getElementsByClassName("content");
                 var expandAllButton = document.getElementsByClassName("expand-all")[0];
-                
+
                 // Check if at least one is hidden
                 var anyHidden = false;
                 for (var i = 0; i < contents.length; i++) {
-                    if (contents[i].style.display !== "block") {
+                    if (contents[i].style.display === "none") {
                         anyHidden = true;
                         break;
                     }
                 }
-                
+
                 // Toggle based on state
                 for (var i = 0; i < contents.length; i++) {
                     contents[i].style.display = anyHidden ? "block" : "none";
                 }
-                
+
                 expandAllButton.textContent = anyHidden ? "Collapse All" : "Expand All";
             }
         </script>
     </div>
 </body>
+
 </html>
