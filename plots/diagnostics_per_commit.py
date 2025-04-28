@@ -15,7 +15,10 @@ def read_from_json_and_plot(filename: str) -> None:
     # Remove [red-knot] prefix from commit messages
     messages = [msg.replace("[red-knot] ", "") for msg in messages]
     # Limit messages
-    messages = [msg[:30] + "..." if len(msg) > 30 else msg for msg in messages]
+    max_length = 50
+    messages = [
+        msg[:max_length] + "..." if len(msg) > max_length else msg for msg in messages
+    ]
 
     # Generate a line plot which shows number of diagnostics per commit
     plt.figure(figsize=(10, 10))
