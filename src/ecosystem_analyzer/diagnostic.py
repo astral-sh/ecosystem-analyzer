@@ -32,9 +32,7 @@ class DiagnosticsParser:
         )
 
         if match := re.match(pattern, line):
-            path: str = (
-                Path(match.group("path")).relative_to(self.repo_working_dir).as_posix()
-            )
+            path = str(match.group("path"))
             line = str(match.group("line"))
             github_ref = f"{self.repo_location}/blob/{self.repo_branch}/{path}#L{line}"
 
