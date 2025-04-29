@@ -3,6 +3,7 @@
 /log.txt
 /ecosystem-diagnostics*.json
 /history-statistics*.json
+/history-diagnostics*.json
 /diff.html
 
 
