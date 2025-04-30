@@ -15,12 +15,36 @@ class DiagnosticDiff:
         self.new_file = new_file
         self.old_data = self._load_json(old_file)
         self.new_data = self._load_json(new_file)
+
+        self.old_commit = self._get_commit(self.old_data)
+        self.new_commit = self._get_commit(self.new_data)
+
+        self.old_diagnostics = self._count_diagnostics(self.old_data)
+        self.new_diagnostics = self._count_diagnostics(self.new_data)
+
         self.diffs = self._compute_diffs()
 
     def _load_json(self, file_path: str) -> dict[str, Any]:
         """Load and parse a JSON file."""
         with open(file_path) as f:
-            return json.load(f)
+            data = json.load(f)
+
+        return data
+
+    def _get_commit(self, data) -> str:
+        red_knot_commits = set(output["red_knot_commit"] for output in data["outputs"])
+        if len(red_knot_commits) != 1:
+            raise RuntimeError(
+                "Error: The JSON file must contain diagnostics from a single Red Knot commit."
+            )
+        return red_knot_commits.pop()
+
+    def _count_diagnostics(self, data) -> int:
+        """Count the total number of diagnostics in the data."""
+        total_diagnostics = 0
+        for output in data["outputs"]:
+            total_diagnostics += len(output.get("diagnostics", []))
+        return total_diagnostics
 
     def _format_diagnostic(self, diag: dict[str, Any]) -> str:
         """Format a diagnostic entry as a string for comparison."""
@@ -262,8 +286,10 @@ class DiagnosticDiff:
 
         # Create template context
         context = {
-            "old_file": self.old_file,
-            "new_file": self.new_file,
+            "old_commit": self.old_commit,
+            "new_commit": self.new_commit,
+            "old_diagnostics": self.old_diagnostics,
+            "new_diagnostics": self.new_diagnostics,
             "diffs": self.diffs,
         }
 

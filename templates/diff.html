@@ -140,18 +140,18 @@
 <body>
     <div class="container">
         <h1>Diagnostic Diff Report</h1>
-        <p>Comparing:</p>
-        <ul>
-            <li><strong>Old:</strong> {{ old_file }}</li>
-            <li><strong>New:</strong> {{ new_file }}</li>
-        </ul>
-
+        <!--
         <div class="summary">
-            <h2>Summary</h2>
-            <p><strong>Added Projects:</strong> {{ diffs.added_projects|length }}</p>
-            <p><strong>Removed Projects:</strong> {{ diffs.removed_projects|length }}</p>
-            <p><strong>Modified Projects:</strong> {{ diffs.modified_projects|length }}</p>
+            <ul>
+                <li><strong>Old:</strong> <a href="https://github.com/astral-sh/ruff/commit/{{ old_commit }}">{{
+                        old_commit
+                        | truncate(10) }}</a> ({{ old_diagnostics }} diagnostics)</li>
+                <li><strong>New:</strong> <a href="https://github.com/astral-sh/ruff/commit/{{ new_commit }}">{{
+                        new_commit
+                        | truncate(10) }}</a> ({{ new_diagnostics }} diagnostics)</li>
+            </ul>
         </div>
+        -->
 
         <button class="expand-all" onclick="toggleAll()">Collapse All</button>
 
@@ -376,7 +376,7 @@
                                 {{ diag.message }}
                             </div>
                             {% endfor %}
-
+                            <!--
                             {% if line_data.text_diffs %}
                             <h6>Detailed Diffs</h6>
                             {% for diff_data in line_data.text_diffs %}
@@ -388,6 +388,7 @@
                             </div>
                             {% endfor %}
                             {% endif %}
+                            -->
                         </div>
                         {% endfor %}
                         {% endif %}
@@ -403,10 +404,10 @@
         <script>
             function toggleContent(elementId) {
                 var content = document.getElementById(elementId);
-                if (content.style.display === "block") {
-                    content.style.display = "none";
-                } else {
+                if (content.style.display === "none") {
                     content.style.display = "block";
+                } else {
+                    content.style.display = "none";
                 }
             }
 
