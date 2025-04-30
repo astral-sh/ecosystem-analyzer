@@ -9,28 +9,30 @@ def read_from_json_and_plot(filename: str) -> None:
 
     statistics = data["statistics"]
 
-    messages = [stat["commit_message"] for stat in statistics]
-    counts = [stat["total_diagnostics"] for stat in statistics]
+    messages = [stat["commit_message"] for stat in statistics][::-1]
+    counts = [stat["total_diagnostics"] for stat in statistics][::-1]
 
     # Remove [red-knot] prefix from commit messages
     messages = [msg.replace("[red-knot] ", "") for msg in messages]
-    # Limit messages
-    max_length = 50
+
+    # Limit messages length for better display
+    max_length = 70
     messages = [
         msg[:max_length] + "..." if len(msg) > max_length else msg for msg in messages
     ]
 
-    # Generate a line plot which shows number of diagnostics per commit
-    plt.figure(figsize=(10, 10))
-    plt.plot(messages, counts, marker="o", color="#261230", lw=2)
-    plt.grid(axis="x")
+    plt.figure(figsize=(16, 10))
+
+    plt.plot(counts, messages, color="#261230")
+
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.title("Total number of diagnostics on ecosystem projects")
-    plt.ylabel("Number of diagnostics")
-    plt.xlabel("Red Knot commit")
-    plt.xticks(rotation=45, ha="right")
-    # plt.ylim(0, 5000)
+    plt.xlabel("Number of diagnostics")
+    plt.ylabel("Red Knot commit")
+
+    # Adjust layout to prevent message cutoff
     plt.tight_layout()
-    plt.savefig("diagnostics_per_commit.png")
+    plt.savefig("diagnostics_per_commit.png", dpi=300)
 
 
 if __name__ == "__main__":
