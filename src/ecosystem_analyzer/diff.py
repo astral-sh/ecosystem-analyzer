@@ -42,12 +42,12 @@ class DiagnosticDiff:
         return data
 
     def _get_commit(self, data) -> str:
-        red_knot_commits = set(output["red_knot_commit"] for output in data["outputs"])
-        if len(red_knot_commits) != 1:
+        ty_commits = set(output["ty_commit"] for output in data["outputs"])
+        if len(ty_commits) != 1:
             raise RuntimeError(
-                "Error: The JSON file must contain diagnostics from a single Red Knot commit."
+                "Error: The JSON file must contain diagnostics from a single ty commit."
             )
-        return red_knot_commits.pop()
+        return ty_commits.pop()
 
     def _count_diagnostics(self, data) -> int:
         """Count the total number of diagnostics in the data."""

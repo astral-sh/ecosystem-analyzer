@@ -11,7 +11,7 @@ from .installed_project import InstalledProject
 from .run_output import RunOutput
 
 
-class RedKnot:
+class Ty:
     def __init__(self, repository: Repo) -> None:
         self.repository: Repo = repository
         self.working_dir: Path = Path(self.repository.working_dir)
@@ -19,15 +19,15 @@ class RedKnot:
 
     def compile_for_commit(self, commit: str | Commit):
         # Checkout the commit
-        logging.debug(f"Checking out Red Knot commit '{commit}'")
+        logging.debug(f"Checking out ty commit '{commit}'")
         self.repository.git.checkout(commit)
 
-        # Compile Red Knot
+        # Compile ty
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = self.cargo_target_dir.as_posix()
 
-        logging.info("Compiling Red Knot")
-        cargo_cmd = ["cargo", "build", "--package", "red_knot"]
+        logging.info("Compiling ty")
+        cargo_cmd = ["cargo", "build", "--package", "ty"]
         logging.debug(
             f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={self.cargo_target_dir})"
         )
@@ -39,10 +39,10 @@ class RedKnot:
             env=env,
         )
 
-        self.executable = self.cargo_target_dir / "debug" / "red_knot"
+        self.executable = self.cargo_target_dir / "debug" / "ty"
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
-        logging.info(f"Running Red Knot on project '{project.name}'")
+        logging.info(f"Running ty on project '{project.name}'")
 
         extra_args = project.paths
         cmd = [
@@ -64,7 +64,7 @@ class RedKnot:
 
         if result.returncode not in (0, 1):
             logging.error(
-                f"Red Knot failed with error code {result.returncode} for project '{project.name}' ... panic?"
+                f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
             )
 
         with open(LOG_FILE, "a") as log_file:
@@ -80,6 +80,6 @@ class RedKnot:
         return {
             "project": project.name,
             "project_location": project.location,
-            "red_knot_commit": self.repository.head.commit.hexsha,
+            "ty_commit": self.repository.head.commit.hexsha,
             "diagnostics": diagnostics,
         }

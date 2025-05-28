@@ -12,8 +12,8 @@ def read_from_json_and_plot(filename: str) -> None:
     messages = [stat["commit_message"] for stat in statistics][::-1]
     counts = [stat["total_diagnostics"] for stat in statistics][::-1]
 
-    # Remove [red-knot] prefix from commit messages
-    messages = [msg.replace("[red-knot] ", "") for msg in messages]
+    # Remove [ty] prefix from commit messages
+    messages = [msg.replace("[ty] ", "") for msg in messages]
 
     # Limit messages length for better display
     max_length = 70
@@ -28,7 +28,7 @@ def read_from_json_and_plot(filename: str) -> None:
     plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.title("Total number of diagnostics on ecosystem projects")
     plt.xlabel("Number of diagnostics")
-    plt.ylabel("Red Knot commit")
+    plt.ylabel("ty commit")
 
     # Adjust layout to prevent message cutoff
     plt.tight_layout()

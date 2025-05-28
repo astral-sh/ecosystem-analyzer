@@ -33,7 +33,7 @@ def process_diagnostics(data):
     return all_diagnostics
 
 
-def generate_html_report(diagnostics, red_knot_commit, output_path):
+def generate_html_report(diagnostics, ty_commit, output_path):
     """Generate an HTML report using Jinja2 template."""
     projects = sorted(set(d["project"] for d in diagnostics))
     lints = sorted(set(d["lint_name"] for d in diagnostics))
@@ -59,7 +59,7 @@ def generate_html_report(diagnostics, red_knot_commit, output_path):
         projects=projects,
         lints=lints,
         levels=levels,
-        red_knot_commit=red_knot_commit,
+        ty_commit=ty_commit,
     )
 
     # Write output file
@@ -77,13 +77,13 @@ def generate(diagnostics_path: str | Path, output_path: str | Path) -> str:
         data = json.load(f)
     diagnostics = process_diagnostics(data)
 
-    red_knot_commits = set(output["red_knot_commit"] for output in data["outputs"])
-    if len(red_knot_commits) != 1:
+    ty_commits = set(output["ty_commit"] for output in data["outputs"])
+    if len(ty_commits) != 1:
         raise RuntimeError(
-            "Error: The JSON file must contain diagnostics from a single Red Knot commit."
+            "Error: The JSON file must contain diagnostics from a single ty commit."
         )
-    red_knot_commit = red_knot_commits.pop()
+    ty_commit = ty_commits.pop()
 
-    output_file = generate_html_report(diagnostics, red_knot_commit, output_path)
+    output_file = generate_html_report(diagnostics, ty_commit, output_path)
 
     logging.info(f"Report generated successfully: {output_file}")

@@ -7,7 +7,7 @@ from git import Repo
 
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
-from .git import get_latest_red_knot_commits
+from .git import get_latest_ty_commits
 from .manager import Manager
 
 
@@ -24,7 +24,7 @@ def setup_logging(verbose: bool = False) -> None:
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--repository",
-    help="Path to the Red Knot repository",
+    help="Path to the ty repository",
     type=click.Path(exists=True, dir_okay=True, readable=True),
 )
 @click.option(
@@ -36,7 +36,7 @@ def setup_logging(verbose: bool = False) -> None:
 @click.pass_context
 def cli(ctx: click.Context, repository: str, verbose: bool) -> None:
     """
-    Command-line interface for analyzing Python projects with Red Knot.
+    Command-line interface for analyzing Python projects with ty.
     """
     ctx.ensure_object(dict)
     ctx.obj["repository"] = Repo(repository)
@@ -53,7 +53,7 @@ def cli(ctx: click.Context, repository: str, verbose: bool) -> None:
 )
 @click.option(
     "--commit",
-    help="Red Knot commit",
+    help="ty commit",
     type=str,
     default="origin/main",
 )
@@ -67,10 +67,10 @@ def cli(ctx: click.Context, repository: str, verbose: bool) -> None:
 @click.pass_context
 def run(ctx, project_name: str, commit: str, output: str) -> None:
     """
-    Run Red Knot on a specific project.
+    Run ty on a specific project.
     """
 
-    manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=[project_name])
+    manager = Manager(ty_repo=ctx.obj["repository"], project_names=[project_name])
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
 
@@ -78,7 +78,7 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
 @cli.command()
 @click.option(
     "--commit",
-    help="Red Knot commit",
+    help="ty commit",
     type=str,
     default="origin/main",
 )
@@ -97,12 +97,12 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
 @click.pass_context
 def analyze(ctx, commit: str, projects: str, output: str) -> None:
     """
-    Analyze Python ecosystem projects with Red Knot and collect diagnostics.
+    Analyze Python ecosystem projects with ty and collect diagnostics.
     """
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=project_names)
+    manager = Manager(ty_repo=ctx.obj["repository"], project_names=project_names)
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
 
@@ -134,7 +134,7 @@ def diff(ctx, projects: str, old: str, new: str) -> None:
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=project_names)
+    manager = Manager(ty_repo=ctx.obj["repository"], project_names=project_names)
 
     run_outputs_old = manager.run_for_commit(old)
     manager.write_run_outputs(
@@ -211,7 +211,7 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
     repository = ctx.obj["repository"]
 
-    last_commits = get_latest_red_knot_commits(repository, num_commits)
+    last_commits = get_latest_ty_commits(repository, num_commits)
 
     for commit in last_commits:
         message = commit.message.splitlines()[0]
@@ -219,7 +219,7 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(red_knot_repo=repository, project_names=project_names)
+    manager = Manager(ty_repo=repository, project_names=project_names)
 
     statistics = []
 

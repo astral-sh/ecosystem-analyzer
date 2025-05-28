@@ -7,8 +7,8 @@ from mypy_primer.model import Project
 from mypy_primer.projects import get_projects
 
 from .installed_project import InstalledProject
-from .red_knot import RedKnot
 from .run_output import RunOutput
+from .ty import Ty
 
 
 def _get_ecosystem_projects() -> dict[str, Project]:
@@ -29,15 +29,15 @@ class Manager:
     _project_names: list[str]
     _installed_projects: list[InstalledProject] = []
 
-    _red_knot: RedKnot
+    _ty: Ty
 
     def __init__(
         self,
         *,
-        red_knot_repo: Repo,
+        ty_repo: Repo,
         project_names: list[str],
     ) -> None:
-        self._red_knot = RedKnot(red_knot_repo)
+        self._ty = Ty(ty_repo)
 
         self._ecosystem_projects = _get_ecosystem_projects()
 
@@ -58,11 +58,11 @@ class Manager:
             self._installed_projects.append(InstalledProject(project))
 
     def run_for_commit(self, commit: str) -> list[RunOutput]:
-        self._red_knot.compile_for_commit(commit)
+        self._ty.compile_for_commit(commit)
 
         run_outputs = []
         for project in self._installed_projects:
-            output = self._red_knot.run_on_project(project)
+            output = self._ty.run_on_project(project)
             run_outputs.append(output)
 
         return run_outputs
