@@ -26,7 +26,7 @@ class DiagnosticsParser:
 
     def _parse_diagnostic_message(self, line: str) -> Diagnostic | None:
         pattern = (
-            r"^(?P<level>error|warning)\[lint:(?P<lint_name>.+?)\] "
+            r"^(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
             r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
             r"(?P<message>.+)$"
         )
