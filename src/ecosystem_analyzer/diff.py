@@ -29,6 +29,16 @@ class DiagnosticDiff:
         with open(file_path) as f:
             data = json.load(f)
 
+        # Filter out diagnostics with specific message:
+        message_filter = "No overload of bound method `__init__` matches arguments"
+        for output in data["outputs"]:
+            if "diagnostics" in output:
+                output["diagnostics"] = [
+                    diag
+                    for diag in output["diagnostics"]
+                    if message_filter not in diag.get("message", "")
+                ]
+
         return data
 
     def _get_commit(self, data) -> str:

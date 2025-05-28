@@ -108,6 +108,46 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
 
 
 @cli.command()
+@click.option(
+    "--projects",
+    help="List to a file with projects to analyze",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
+    "--old",
+    help="The old commit",
+    type=str,
+    required=True,
+)
+@click.option(
+    "--new",
+    help="The new commit",
+    type=str,
+    required=True,
+)
+@click.pass_context
+def diff(ctx, projects: str, old: str, new: str) -> None:
+    """
+    Compare diagnostics between two commits.
+    """
+
+    project_names = Path(projects).read_text().splitlines()
+
+    manager = Manager(red_knot_repo=ctx.obj["repository"], project_names=project_names)
+
+    run_outputs_old = manager.run_for_commit(old)
+    manager.write_run_outputs(
+        run_outputs_old, f"diagnostics-old-{old.replace('/', '-')}.json"
+    )
+
+    run_outputs_new = manager.run_for_commit(new)
+    manager.write_run_outputs(
+        run_outputs_new, f"diagnostics-new-{new.replace('/', '-')}.json"
+    )
+
+
+@cli.command()
 @click.argument(
     "old_file",
     type=click.Path(exists=True, dir_okay=False, readable=True),
@@ -129,7 +169,7 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     type=click.Path(writable=True),
     help="Path to save the JSON diff data",
 )
-def diff(
+def generate_diff(
     old_file: str, new_file: str, output_html: str, output_json: str | None
 ) -> None:
     """
