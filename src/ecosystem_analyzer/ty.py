@@ -72,7 +72,7 @@ class Ty:
 
         parser = DiagnosticsParser(
             repo_location=project.location,
-            repo_branch=project.default_branch,
+            repo_commit=project.current_commit,
             repo_working_dir=project.root_directory,
         )
         diagnostics = parser.parse(result.stdout)

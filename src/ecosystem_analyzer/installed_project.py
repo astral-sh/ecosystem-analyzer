@@ -13,12 +13,12 @@ from .config import PYTHON_VERSION
 
 def _get_cache_dir() -> Path:
     """Get the XDG cache directory for ecosystem-analyzer."""
-    cache_home = os.environ.get('XDG_CACHE_HOME')
+    cache_home = os.environ.get("XDG_CACHE_HOME")
     if cache_home:
-        cache_dir = Path(cache_home) / 'ecosystem-analyzer'
+        cache_dir = Path(cache_home) / "ecosystem-analyzer"
     else:
-        cache_dir = Path.home() / '.cache' / 'ecosystem-analyzer'
-    
+        cache_dir = Path.home() / ".cache" / "ecosystem-analyzer"
+
     cache_dir.mkdir(parents=True, exist_ok=True)
     return cache_dir
 
@@ -67,6 +67,10 @@ class InstalledProject:
     def venv_path(self) -> Path:
         return Path(self._temp_dir.name) / ".venv"
 
+    @property
+    def current_commit(self) -> str:
+        return self._repo.head.commit.hexsha
+
     def _clone_or_update(self) -> None:
         try:
             if self._cache_path.exists():
@@ -75,12 +79,14 @@ class InstalledProject:
                 # Update the repository to latest
                 logging.debug("Updating cached repository")
                 self._repo.remote().fetch()
-                self._repo.git.reset('--hard', 'origin/HEAD')
+                self._repo.git.reset("--hard", "origin/HEAD")
                 # Update submodules
                 for submodule in self._repo.submodules:
                     submodule.update(recursive=True)
             else:
-                logging.info(f"Cloning {self._project.location} into {self._cache_path}")
+                logging.info(
+                    f"Cloning {self._project.location} into {self._cache_path}"
+                )
                 self._repo = Repo.clone_from(
                     url=self._project.location,
                     to_path=self._cache_path,

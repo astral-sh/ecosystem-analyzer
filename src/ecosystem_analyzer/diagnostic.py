@@ -18,10 +18,10 @@ class Diagnostic(TypedDict):
 
 class DiagnosticsParser:
     def __init__(
-        self, repo_location: str, repo_branch: str, repo_working_dir: Path
+        self, repo_location: str, repo_commit: str, repo_working_dir: Path
     ) -> None:
         self.repo_location = repo_location
-        self.repo_branch = repo_branch
+        self.repo_commit = repo_commit
         self.repo_working_dir = repo_working_dir
 
     def _parse_diagnostic_message(self, line: str) -> Diagnostic | None:
@@ -34,7 +34,7 @@ class DiagnosticsParser:
         if match := re.match(pattern, line):
             path = str(match.group("path"))
             line = str(match.group("line"))
-            github_ref = f"{self.repo_location}/blob/{self.repo_branch}/{path}#L{line}"
+            github_ref = f"{self.repo_location}/blob/{self.repo_commit}/{path}#L{line}"
 
             return {
                 "level": str(match.group("level")),
