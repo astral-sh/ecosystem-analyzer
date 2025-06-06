@@ -219,7 +219,7 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(ty_repo=repository, project_names=project_names)
+    manager = Manager(ty_repo=repository, project_names=project_names, release=True)
 
     statistics = []
 

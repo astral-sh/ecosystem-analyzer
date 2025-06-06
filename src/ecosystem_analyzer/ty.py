@@ -12,10 +12,11 @@ from .run_output import RunOutput
 
 
 class Ty:
-    def __init__(self, repository: Repo) -> None:
+    def __init__(self, repository: Repo, release: bool = False) -> None:
         self.repository: Repo = repository
         self.working_dir: Path = Path(self.repository.working_dir)
         self.cargo_target_dir: Path = self.working_dir / "target"
+        self.release: bool = release
 
     def compile_for_commit(self, commit: str | Commit):
         # Checkout the commit
@@ -26,8 +27,11 @@ class Ty:
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = self.cargo_target_dir.as_posix()
 
-        logging.info("Compiling ty")
+        build_type = "release" if self.release else "debug"
+        logging.info(f"Compiling ty ({build_type})")
         cargo_cmd = ["cargo", "build", "--package", "ty"]
+        if self.release:
+            cargo_cmd.append("--release")
         logging.debug(
             f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={self.cargo_target_dir})"
         )
@@ -39,7 +43,7 @@ class Ty:
             env=env,
         )
 
-        self.executable = self.cargo_target_dir / "debug" / "ty"
+        self.executable = self.cargo_target_dir / build_type / "ty"
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
         logging.info(f"Running ty on project '{project.name}'")

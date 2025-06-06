@@ -37,8 +37,9 @@ class Manager:
         *,
         ty_repo: Repo,
         project_names: list[str],
+        release: bool = False,
     ) -> None:
-        self._ty = Ty(ty_repo)
+        self._ty = Ty(ty_repo, release=release)
 
         self._ecosystem_projects = _get_ecosystem_projects()
 
