@@ -6,76 +6,149 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ty ecosystem report</title>
     <style>
+        /* Import Fira Code font */
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
+
+        :root {
+            /* Astral Brand Colors */
+            --radiate: #D7FF64;
+            --galaxy: #261230;
+            --space: #30173D;
+            --starlight: #F4F4F1;
+            --rock: #78876E;
+            --crater: #F0DFDF;
+            --lunar: #FBF2FC;
+            --nebula: #CDCBFB;
+            --flare: #6340AC;
+            --electron: #46EBE1;
+            --cosmic: #DE5FE9;
+            --sandstone: #E1DF99;
+            --comet: #6F5D6F;
+        }
+
         body {
             font-family: 'Fira Code', monospace;
             margin: 20px;
-            background-color: #f5f5f5;
+            background: linear-gradient(135deg, var(--starlight) 0%, var(--lunar) 100%);
+            min-height: 100vh;
+            color: var(--galaxy);
+        }
+
+        h1 {
+            color: var(--galaxy);
+            margin-bottom: 10px;
+            font-weight: 600;
         }
 
         .controls {
             margin-bottom: 20px;
-            padding: 15px;
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(38, 18, 48, 0.1);
+            border: 1px solid rgba(99, 64, 172, 0.1);
+            backdrop-filter: blur(10px);
         }
 
         label {
             margin-right: 10px;
+            color: var(--galaxy);
+            font-weight: 500;
         }
 
-        select {
+        select, input[type="text"] {
             font-family: 'Fira Code', monospace;
-            padding: 5px;
-            margin-right: 20px;
+            padding: 8px 12px;
+            margin-right: 15px;
+            border: 2px solid var(--nebula);
+            border-radius: 8px;
+            background: white;
+            color: var(--galaxy);
+            transition: all 0.2s ease;
+        }
+
+        select:focus, input[type="text"]:focus {
+            outline: none;
+            border-color: var(--flare);
+            box-shadow: 0 0 0 3px rgba(99, 64, 172, 0.1);
+        }
+
+        select:hover, input[type="text"]:hover {
+            border-color: var(--flare);
         }
 
         table {
             width: 100%;
             border-collapse: collapse;
-            background-color: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(38, 18, 48, 0.1);
             table-layout: fixed;
+            overflow: hidden;
         }
 
         th,
         td {
             text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--nebula);
             word-wrap: break-word;
         }
 
         th {
-            background-color: #f2f2f2;
+            background: var(--galaxy);
+            color: var(--radiate);
             cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+            position: sticky;
+            top: 0;
+            z-index: 10;
         }
 
         th:hover {
-            background-color: #e5e5e5;
+            background: var(--flare);
+            transform: translateY(-1px);
+            transition: all 0.2s ease;
+        }
+
+        tr:nth-child(even) {
+            background: rgba(205, 203, 251, 0.05);
         }
 
         tr:hover {
-            background-color: #f9f9f9;
+            background: rgba(99, 64, 172, 0.08);
+            transform: translateX(2px);
+            transition: all 0.2s ease;
         }
 
         .error {
-            color: #d32f2f;
-            font-weight: bold;
+            color: var(--cosmic);
+            font-weight: 600;
+            background: rgba(222, 95, 233, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
         }
 
         .warning {
-            color: #f57c00;
-            font-weight: bold;
+            color: var(--sandstone);
+            font-weight: 600;
+            background: rgba(225, 223, 153, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
+            color: #B8860B;
         }
 
         a {
-            color: #0366d6;
+            color: var(--flare);
             text-decoration: none;
+            transition: color 0.2s ease;
         }
 
         a:hover {
+            color: var(--cosmic);
             text-decoration: underline;
         }
 
@@ -87,8 +160,26 @@
             width: 60%;
         }
 
-        /* Import Fira Code font */
-        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
+        /* Diagnostic count styling */
+        .controls span {
+            color: var(--rock);
+            font-size: 12px;
+        }
+
+        /* Commit link styling */
+        body > div:first-of-type {
+            color: var(--rock);
+        }
+
+        body > div:first-of-type a {
+            color: var(--flare);
+            font-weight: 500;
+        }
+
+        /* Add subtle animations */
+        * {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
     </style>
 </head>
 
