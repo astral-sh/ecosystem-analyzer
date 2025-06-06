@@ -50,7 +50,7 @@ class Ty:
             "check",
             "--output-format=concise",
             "--python",
-            ".venv",
+            str(project.venv_path),
             *extra_args,
         ]
         logging.debug(f"Executing: {' '.join(cmd)}")
