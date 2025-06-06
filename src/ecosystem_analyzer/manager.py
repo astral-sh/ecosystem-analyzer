@@ -1,5 +1,6 @@
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from git import Repo
@@ -51,11 +52,30 @@ class Manager:
         self._install_projects()
 
     def _install_projects(self) -> None:
-        for project_name in self._project_names:
+        def install_single_project(project_name: str) -> InstalledProject:
             logging.info(f"Processing project: {project_name}")
-
             project = self._ecosystem_projects[project_name]
-            self._installed_projects.append(InstalledProject(project))
+            return InstalledProject(project)
+
+        max_workers = min(len(self._project_names), 8)
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all installation tasks
+            future_to_project = {
+                executor.submit(install_single_project, project_name): project_name
+                for project_name in self._project_names
+            }
+
+            # Collect results as they complete
+            for future in as_completed(future_to_project):
+                project_name = future_to_project[future]
+                try:
+                    installed_project = future.result()
+                    self._installed_projects.append(installed_project)
+                    logging.debug(f"Successfully installed project: {project_name}")
+                except Exception as e:
+                    logging.error(f"Failed to install project {project_name}: {e}")
+                    raise
 
     def run_for_commit(self, commit: str) -> list[RunOutput]:
         self._ty.compile_for_commit(commit)
