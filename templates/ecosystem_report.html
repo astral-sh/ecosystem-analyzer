@@ -106,6 +106,7 @@
             <option value="project">Project</option>
             <option value="lint_name">Lint Name</option>
             <option value="path">File Path</option>
+            <option value="message">Message</option>
         </select>
 
         <label for="filter-project">Filter Project:</label>
@@ -134,13 +135,11 @@
 
         <br><br>
 
-        <label for="search-text">Filter:</label>
-        <input type="text" id="search-text" placeholder="Enter text to exclude from messages..." style="width: 300px; padding: 5px; margin-right: 10px;">
-        
-        <label style="margin-right: 20px;">
-            <input type="checkbox" id="search-mode" style="margin-right: 5px;">
-            <span id="search-mode-label">exclude</span>
-        </label>
+        <select id="search-mode" style="padding: 5px; margin-right: 10px;">
+            <option value="exclude">Exclude messages:</option>
+            <option value="include">Include messages:</option>
+        </select>
+        <input type="text" id="search-text" placeholder="Exclude pattern (regex) ..." style="width: 300px; padding: 5px; margin-right: 10px;">
 
         <span style="font-size: 12px; color: #666;">
             <span id="visible-count">{{ diagnostics | length }}</span> of {{ diagnostics | length }} diagnostics visible
@@ -153,7 +152,7 @@
                 <th data-sort="project">Project</th>
                 <th data-sort="lint_name">Lint Name</th>
                 <th data-sort="path" class="col-path">File Path</th>
-                <th class="col-message">Message</th>
+                <th data-sort="message" class="col-message">Message</th>
             </tr>
         </thead>
         <tbody>
@@ -175,6 +174,15 @@
             // Sort functionality
             const sortSelect = document.getElementById('sort-select');
             sortSelect.addEventListener('change', sortTable);
+            
+            // Add click handlers to table headers
+            document.querySelectorAll('th[data-sort]').forEach(header => {
+                header.addEventListener('click', function() {
+                    const sortBy = this.getAttribute('data-sort');
+                    sortSelect.value = sortBy;
+                    sortTable();
+                });
+            });
 
             // Filter functionality
             const filterProject = document.getElementById('filter-project');
@@ -233,6 +241,7 @@
                     case 'project': return 1;
                     case 'lint_name': return 2;
                     case 'path': return 3;
+                    case 'message': return 4;
                     default: return 1;
                 }
             }
@@ -241,7 +250,7 @@
                 const projectFilter = filterProject.value;
                 const levelFilter = filterLevel.value;
                 const searchTerm = searchText.value.toLowerCase().trim();
-                const isIncludeMode = searchMode.checked;
+                const isIncludeMode = searchMode.value === 'include';
 
                 const rows = document.querySelectorAll('.diagnostic-row');
                 let visibleCount = 0;
@@ -256,15 +265,25 @@
                     const lintMatch = filterLint.value === 'all' || rowLint === filterLint.value;
                     const levelMatch = levelFilter === 'all' || rowLevel === levelFilter;
                     
-                    // Search logic
+                    // Search logic with regex
                     let searchMatch = true;
                     if (searchTerm) {
-                        if (isIncludeMode) {
-                            // Include mode: show only messages containing the search term
-                            searchMatch = rowMessage.includes(searchTerm);
-                        } else {
-                            // Exclude mode (default): hide messages containing the search term
-                            searchMatch = !rowMessage.includes(searchTerm);
+                        try {
+                            const regex = new RegExp(searchTerm, 'i'); // case-insensitive
+                            if (isIncludeMode) {
+                                // Include mode: show only messages matching the regex
+                                searchMatch = regex.test(rowMessage);
+                            } else {
+                                // Exclude mode (default): hide messages matching the regex
+                                searchMatch = !regex.test(rowMessage);
+                            }
+                        } catch (e) {
+                            // Invalid regex - fall back to literal string matching
+                            if (isIncludeMode) {
+                                searchMatch = rowMessage.includes(searchTerm);
+                            } else {
+                                searchMatch = !rowMessage.includes(searchTerm);
+                            }
                         }
                     }
 
@@ -281,15 +300,12 @@
             }
 
             function updateSearchMode() {
-                const isIncludeMode = searchMode.checked;
-                const modeLabel = document.getElementById('search-mode-label');
+                const isIncludeMode = searchMode.value === 'include';
                 
                 if (isIncludeMode) {
-                    searchText.placeholder = 'Enter text to search in messages...';
-                    modeLabel.textContent = 'include';
+                    searchText.placeholder = 'Include pattern (regex) ...';
                 } else {
-                    searchText.placeholder = 'Enter text to exclude from messages...';
-                    modeLabel.textContent = 'exclude';
+                    searchText.placeholder = 'Exclude pattern (regex) ...';
                 }
                 // Use debounced version for mode changes too
                 debouncedFilterTable();
