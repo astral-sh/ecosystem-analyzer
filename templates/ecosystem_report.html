@@ -94,6 +94,11 @@
 
 <body>
     <h1>ty ecosystem report</h1>
+    
+    <div style="margin-bottom: 20px; font-size: 14px; color: #666;">
+        ty @ <a href="https://github.com/astral-sh/ruff/commit/{{ ty_commit }}" target="_blank">{{
+            ty_commit[0:7] }}</a>
+    </div>
 
     <div class="controls">
         <label for="sort-select">Sort by:</label>
@@ -127,8 +132,19 @@
             {% endfor %}
         </select>
 
-        ty @ <a href="https://github.com/astral-sh/ruff/commit/{{ ty_commit }}" target="_blank">{{
-            ty_commit[0:7] }}</a>
+        <br><br>
+
+        <label for="search-text">Filter:</label>
+        <input type="text" id="search-text" placeholder="Enter text to exclude from messages..." style="width: 300px; padding: 5px; margin-right: 10px;">
+        
+        <label style="margin-right: 20px;">
+            <input type="checkbox" id="search-mode" style="margin-right: 5px;">
+            <span id="search-mode-label">exclude</span>
+        </label>
+
+        <span style="font-size: 12px; color: #666;">
+            <span id="visible-count">{{ diagnostics | length }}</span> of {{ diagnostics | length }} diagnostics visible
+        </span>
     </div>
 
     <table id="diagnostics-table">
@@ -164,10 +180,21 @@
             const filterProject = document.getElementById('filter-project');
             const filterLint = document.getElementById('filter-lint');
             const filterLevel = document.getElementById('filter-level');
+            const searchText = document.getElementById('search-text');
+            const searchMode = document.getElementById('search-mode');
+
+            // Debounce for search input
+            let searchTimeout;
+            const debouncedFilterTable = () => {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(filterTable, 300); // 300ms delay
+            };
 
             filterProject.addEventListener('change', filterTable);
             filterLint.addEventListener('change', filterTable);
             filterLevel.addEventListener('change', filterTable);
+            searchText.addEventListener('input', debouncedFilterTable);
+            searchMode.addEventListener('change', updateSearchMode);
 
             // Initial sort
             sortTable();
@@ -213,25 +240,61 @@
             function filterTable() {
                 const projectFilter = filterProject.value;
                 const levelFilter = filterLevel.value;
+                const searchTerm = searchText.value.toLowerCase().trim();
+                const isIncludeMode = searchMode.checked;
 
                 const rows = document.querySelectorAll('.diagnostic-row');
+                let visibleCount = 0;
 
                 rows.forEach(row => {
                     const rowProject = row.getAttribute('data-project');
                     const rowLint = row.getAttribute('data-lint');
                     const rowLevel = row.getAttribute('data-level');
+                    const rowMessage = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
 
                     const projectMatch = projectFilter === 'all' || rowProject === projectFilter;
                     const lintMatch = filterLint.value === 'all' || rowLint === filterLint.value;
                     const levelMatch = levelFilter === 'all' || rowLevel === levelFilter;
+                    
+                    // Search logic
+                    let searchMatch = true;
+                    if (searchTerm) {
+                        if (isIncludeMode) {
+                            // Include mode: show only messages containing the search term
+                            searchMatch = rowMessage.includes(searchTerm);
+                        } else {
+                            // Exclude mode (default): hide messages containing the search term
+                            searchMatch = !rowMessage.includes(searchTerm);
+                        }
+                    }
 
-                    if (projectMatch && lintMatch && levelMatch) {
+                    if (projectMatch && lintMatch && levelMatch && searchMatch) {
                         row.style.display = '';
+                        visibleCount++;
                     } else {
                         row.style.display = 'none';
                     }
                 });
+
+                // Update visible count
+                document.getElementById('visible-count').textContent = visibleCount;
             }
+
+            function updateSearchMode() {
+                const isIncludeMode = searchMode.checked;
+                const modeLabel = document.getElementById('search-mode-label');
+                
+                if (isIncludeMode) {
+                    searchText.placeholder = 'Enter text to search in messages...';
+                    modeLabel.textContent = 'include';
+                } else {
+                    searchText.placeholder = 'Enter text to exclude from messages...';
+                    modeLabel.textContent = 'exclude';
+                }
+                // Use debounced version for mode changes too
+                debouncedFilterTable();
+            }
+
         });
     </script>
 </body>
