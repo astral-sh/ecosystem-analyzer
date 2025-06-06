@@ -43,7 +43,9 @@ class InstalledProject:
         try:
             logging.info(f"Cloning {self._project.location} into {self._temp_dir.name}")
             self._repo = Repo.clone_from(
-                url=self._project.location, to_path=self._temp_dir.name
+                url=self._project.location,
+                to_path=self._temp_dir.name,
+                recurse_submodules=True,
             )
         except Exception as e:
             logging.error(f"Error cloning repository: {e}")
@@ -54,7 +56,21 @@ class InstalledProject:
         logging.debug(f"Executing: {' '.join(venv_cmd)}")
         subprocess.run(venv_cmd, check=True, cwd=self._temp_dir.name)
 
-        if self._project.deps:
+        if self._project.install_cmd:
+            logging.info(f"Running custom install command: {self._project.install_cmd}")
+
+            install_placeholder = f"uv pip install --python {PYTHON_VERSION}"
+            install_cmd = self._project.install_cmd.format(install=install_placeholder)
+
+            logging.debug(f"Executing: '{install_cmd}'")
+            subprocess.run(
+                install_cmd,
+                shell=True,
+                check=True,
+                cwd=self._temp_dir.name,
+                capture_output=False,
+            )
+        elif self._project.deps:
             logging.info(f"Installing dependencies: {', '.join(self._project.deps)}")
 
             pip_cmd = [
