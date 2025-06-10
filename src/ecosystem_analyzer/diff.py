@@ -383,9 +383,25 @@ class DiagnosticDiff:
                         lint_name = diag.get("lint_name", "unknown")
                         stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
 
-        # Sort lint types by count (descending)
-        stats["added_by_lint"] = dict(sorted(stats["added_by_lint"].items(), key=lambda x: x[1], reverse=True))
-        stats["removed_by_lint"] = dict(sorted(stats["removed_by_lint"].items(), key=lambda x: x[1], reverse=True))
+        # Create merged lint breakdown sorted by total absolute change (descending)
+        all_lints = set(stats["added_by_lint"].keys()) | set(stats["removed_by_lint"].keys())
+        merged_lints = []
+        
+        for lint_name in all_lints:
+            added_count = stats["added_by_lint"].get(lint_name, 0)
+            removed_count = stats["removed_by_lint"].get(lint_name, 0)
+            total_change = added_count + removed_count
+            merged_lints.append({
+                "lint_name": lint_name,
+                "added": added_count,
+                "removed": removed_count,
+                "net_change": added_count - removed_count,
+                "total_change": total_change
+            })
+        
+        # Sort by total absolute change (|removed| + |added|) descending, then by name for ties
+        merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
+        stats["merged_by_lint"] = merged_lints
 
         return stats
 

@@ -203,16 +203,11 @@
             border-radius: 8px;
         }
         
-        .stats-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .stats-summary {
             margin-top: 12px;
-        }
-        
-        .stats-section h4 {
-            margin-top: 0;
-            color: var(--galaxy);
+            display: flex;
+            gap: 30px;
+            align-items: center;
         }
         
         .stats-total {
@@ -229,15 +224,45 @@
             color: #dc3545;
         }
         
-        .lint-breakdown {
+        .stats-table {
             font-family: 'Fira Code', monospace;
-            font-size: 12px;
-            margin-top: 8px;
+            font-size: 13px;
+            margin-top: 12px;
+            border-collapse: collapse;
         }
         
-        .lint-item {
-            margin: 2px 0;
-            padding: 2px 4px;
+        .stats-table th,
+        .stats-table td {
+            padding: 4px 8px;
+            text-align: left;
+            border: none;
+        }
+        
+        .stats-table th {
+            font-weight: 600;
+            color: var(--galaxy);
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .stats-table .removed-col {
+            color: #dc3545;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .stats-table .added-col {
+            color: #28a745;
+            font-weight: 600;
+            text-align: center;
+        }
+        
+        .stats-table .total-row {
+            font-weight: 600;
+            border-bottom: 2px solid #ddd;
+        }
+        
+        .stats-table .total-row td {
+            padding: 6px 8px;
         }
     </style>
 </head>
@@ -248,28 +273,31 @@
         
         <div class="statistics">
             <h3>Summary</h3>
-            <div class="stats-grid">
-                <div class="stats-section">
-                    <div class="stats-total added">+ {{ statistics.total_added }} diagnostics added</div>
-                    {% if statistics.added_by_lint %}
-                    <div class="lint-breakdown">
-                        {% for lint_name, count in statistics.added_by_lint.items() %}
-                        <div class="lint-item">{{ lint_name }}: {{ count }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-                <div class="stats-section">
-                    <div class="stats-total removed">- {{ statistics.total_removed }} diagnostics removed</div>
-                    {% if statistics.removed_by_lint %}
-                    <div class="lint-breakdown">
-                        {% for lint_name, count in statistics.removed_by_lint.items() %}
-                        <div class="lint-item">{{ lint_name }}: {{ count }}</div>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                </div>
-            </div>
+            {% if statistics.merged_by_lint %}
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Lint Rule</th>
+                        <th>Removed</th>
+                        <th>Added</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="total-row">
+                        <td><strong>Total</strong></td>
+                        <td class="removed-col">{{ statistics.total_removed }}</td>
+                        <td class="added-col">{{ statistics.total_added }}</td>
+                    </tr>
+                    {% for lint_data in statistics.merged_by_lint %}
+                    <tr>
+                        <td>{{ lint_data.lint_name }}</td>
+                        <td class="removed-col">{{ lint_data.removed }}</td>
+                        <td class="added-col">{{ lint_data.added }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% endif %}
         </div>
 
 
@@ -324,7 +352,7 @@
             {% if project.diffs.added_files %}
             {% for file_data in project.diffs.added_files %}
             <div class="file added">
-                <h4>+ {{ file_data.path }}</h4>
+                <h4>{{ file_data.path }}</h4>
                 {% for diag in file_data.diagnostics %}
                 <div class="diagnostic added">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
@@ -339,7 +367,7 @@
             {% if project.diffs.removed_files %}
             {% for file_data in project.diffs.removed_files %}
             <div class="file removed">
-                <h4>- {{ file_data.path }}</h4>
+                <h4>{{ file_data.path }}</h4>
                 {% for diag in file_data.diagnostics %}
                 <div class="diagnostic removed">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
@@ -354,7 +382,7 @@
             {% if project.diffs.modified_files %}
             {% for file_data in project.diffs.modified_files %}
             <div class="file modified">
-                <h4>~ {{ file_data.path }}</h4>
+                <h4>{{ file_data.path }}</h4>
                 {% if file_data.diffs.added_lines %}
                 {% for line_data in file_data.diffs.added_lines %}
                 {% for diag in line_data.diagnostics %}
