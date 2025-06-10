@@ -280,6 +280,8 @@ class DiagnosticDiff:
             if removed or added:
                 # Find line-by-line diffs for each diagnostic
                 text_diffs = []
+                changed_old_formatted = set()
+                changed_new_formatted = set()
 
                 # For simplicity, we'll just show all removed and added diagnostics
                 for old_diag in old_diagnostics:
@@ -296,17 +298,20 @@ class DiagnosticDiff:
                                     text_diffs.append(
                                         {"old": old_diag, "new": new_diag, "diff": diff}
                                     )
+                                    changed_old_formatted.add(old_str)
+                                    changed_new_formatted.add(new_str)
                                 break
 
+                # Filter out diagnostics that are part of changes
                 removed_diagnostics = [
                     d
                     for d in old_diagnostics
-                    if self._format_diagnostic(d) in removed
+                    if self._format_diagnostic(d) in removed and self._format_diagnostic(d) not in changed_old_formatted
                 ]
                 added_diagnostics = [
                     d
                     for d in new_diagnostics
-                    if self._format_diagnostic(d) in added
+                    if self._format_diagnostic(d) in added and self._format_diagnostic(d) not in changed_new_formatted
                 ]
                 # Sort removed and added diagnostics
                 removed_diagnostics = sorted(removed_diagnostics, key=lambda d: (d.get("column", 0), d.get("message", "")))
@@ -402,22 +407,16 @@ class DiagnosticDiff:
                         lint_name = diff_item["old"].get("lint_name", "unknown")
                         stats["changed_by_lint"][lint_name] = stats["changed_by_lint"].get(lint_name, 0) + 1
                     
-                    # Count pure additions and removals (not part of changes)
+                    # Count pure additions and removals (already filtered in diff computation)
                     for diag in line_data["added"]:
-                        # Only count as added if not part of a text_diff
-                        is_changed = any(diff_item["new"] == diag for diff_item in line_data.get("text_diffs", []))
-                        if not is_changed:
-                            stats["total_added"] += 1
-                            lint_name = diag.get("lint_name", "unknown")
-                            stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
+                        stats["total_added"] += 1
+                        lint_name = diag.get("lint_name", "unknown")
+                        stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
                     
                     for diag in line_data["removed"]:
-                        # Only count as removed if not part of a text_diff
-                        is_changed = any(diff_item["old"] == diag for diff_item in line_data.get("text_diffs", []))
-                        if not is_changed:
-                            stats["total_removed"] += 1
-                            lint_name = diag.get("lint_name", "unknown")
-                            stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
+                        stats["total_removed"] += 1
+                        lint_name = diag.get("lint_name", "unknown")
+                        stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = set(stats["added_by_lint"].keys()) | set(stats["removed_by_lint"].keys()) | set(stats["changed_by_lint"].keys())
