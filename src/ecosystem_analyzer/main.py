@@ -26,7 +26,7 @@ def setup_logging(verbose: bool = False) -> None:
     "--repository",
     help="Path to the ty repository",
     type=click.Path(exists=True, dir_okay=True, readable=True),
-    required=True,
+    required=False,
 )
 @click.option(
     "--verbose",
@@ -35,12 +35,12 @@ def setup_logging(verbose: bool = False) -> None:
     help="Enable verbose logging",
 )
 @click.pass_context
-def cli(ctx: click.Context, repository: str, verbose: bool) -> None:
+def cli(ctx: click.Context, repository: str | None, verbose: bool) -> None:
     """
     Command-line interface for analyzing Python projects with ty.
     """
     ctx.ensure_object(dict)
-    ctx.obj["repository"] = Repo(repository)
+    ctx.obj["repository"] = Repo(repository) if repository else None
     ctx.obj["verbose"] = verbose
     setup_logging(verbose)
 
@@ -70,6 +70,9 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
     """
     Run ty on a specific project.
     """
+    if ctx.obj["repository"] is None:
+        click.echo("Error: --repository is required for this command", err=True)
+        ctx.exit(1)
 
     manager = Manager(ty_repo=ctx.obj["repository"], project_names=[project_name])
     run_outputs = manager.run_for_commit(commit)
@@ -100,6 +103,9 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
     """
+    if ctx.obj["repository"] is None:
+        click.echo("Error: --repository is required for this command", err=True)
+        ctx.exit(1)
 
     project_names = Path(projects).read_text().splitlines()
 
@@ -132,6 +138,9 @@ def diff(ctx, projects: str, old: str, new: str) -> None:
     """
     Compare diagnostics between two commits.
     """
+    if ctx.obj["repository"] is None:
+        click.echo("Error: --repository is required for this command", err=True)
+        ctx.exit(1)
 
     project_names = Path(projects).read_text().splitlines()
 
@@ -209,6 +218,9 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
     """
     Analyze diagnostics across a range of commits.
     """
+    if ctx.obj["repository"] is None:
+        click.echo("Error: --repository is required for this command", err=True)
+        ctx.exit(1)
 
     repository = ctx.obj["repository"]
 
