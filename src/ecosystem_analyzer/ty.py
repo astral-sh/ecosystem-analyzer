@@ -5,7 +5,6 @@ from pathlib import Path
 
 from git import Commit, Repo
 
-from .config import LOG_FILE
 from .diagnostic import DiagnosticsParser
 from .installed_project import InstalledProject
 from .run_output import RunOutput
@@ -71,8 +70,6 @@ class Ty:
                 f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
             )
 
-        with open(LOG_FILE, "a") as log_file:
-            log_file.write(result.stdout)
 
         parser = DiagnosticsParser(
             repo_location=project.location,
