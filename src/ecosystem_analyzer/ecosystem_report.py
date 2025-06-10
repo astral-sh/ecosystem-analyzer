@@ -73,7 +73,7 @@ def generate(diagnostics_path: str | Path, output_path: str | Path) -> str:
     diagnostics_path = Path(diagnostics_path)
     output_path = Path(output_path)
 
-    with open(diagnostics_path, "r") as f:
+    with open(diagnostics_path) as f:
         data = json.load(f)
     diagnostics = process_diagnostics(data)
 

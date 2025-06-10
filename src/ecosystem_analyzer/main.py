@@ -26,6 +26,7 @@ def setup_logging(verbose: bool = False) -> None:
     "--repository",
     help="Path to the ty repository",
     type=click.Path(exists=True, dir_okay=True, readable=True),
+    required=True,
 )
 @click.option(
     "--verbose",

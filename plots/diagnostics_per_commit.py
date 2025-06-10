@@ -12,8 +12,6 @@ def read_from_json_and_plot(filename: str) -> None:
     import json
 
     import plotly.graph_objects as go
-    import plotly.express as px
-    import numpy as np
 
     # Read from JSON file
     with open(filename) as json_file:

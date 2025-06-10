@@ -1,8 +1,8 @@
+import hashlib
 import logging
+import os
 import subprocess
 import tempfile
-import os
-import hashlib
 from pathlib import Path
 
 from git import Repo
