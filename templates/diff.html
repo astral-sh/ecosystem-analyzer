@@ -422,7 +422,7 @@
                 <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
             </div>
@@ -444,7 +444,7 @@
                 <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
             </div>
@@ -465,7 +465,7 @@
                 <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
             </div>
@@ -480,7 +480,7 @@
                 <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
             </div>
@@ -497,7 +497,7 @@
                 <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
                 {% endfor %}
@@ -508,7 +508,7 @@
                 <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
                 {% endfor %}
@@ -520,8 +520,8 @@
                     <span class="{{ 'error' if diff_item.old.level == 'error' else 'warning' }}">[{{ diff_item.old.level }}]</span> {{ diff_item.old.lint_name }} -
                     <a href="{{ diff_item.old.github_ref|default('') }}" target="_blank">:{{ diff_item.old.line }}:{{ diff_item.old.column }}</a> -
                     <div style="margin-top: 4px;">
-                        <div style="color: #dc3545;">Old: {{ diff_item.old.message }}</div>
-                        <div style="color: #28a745;">New: {{ diff_item.new.message }}</div>
+                        <div style="color: #dc3545;">Old: {{ diff_item.old.message|e }}</div>
+                        <div style="color: #28a745;">New: {{ diff_item.new.message|e }}</div>
                     </div>
                 </div>
                 {% endfor %}
@@ -529,14 +529,14 @@
                 <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
                 {% for diag in line_data.added %}
                 <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
                     <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message }}
+                    {{ diag.message|e }}
                 </div>
                 {% endfor %}
                 {% endfor %}
