@@ -6,11 +6,34 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Diagnostic Diff Report</title>
     <style>
+        /* Import Fira Code font */
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
+
+        :root {
+            /* Astral Brand Colors */
+            --radiate: #D7FF64;
+            --galaxy: #261230;
+            --space: #30173D;
+            --starlight: #F4F4F1;
+            --rock: #78876E;
+            --crater: #F0DFDF;
+            --lunar: #FBF2FC;
+            --nebula: #CDCBFB;
+            --flare: #6340AC;
+            --electron: #46EBE1;
+            --cosmic: #DE5FE9;
+            --sandstone: #E1DF99;
+            --comet: #6F5D6F;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Fira Code', monospace;
             margin: 0;
             padding: 20px;
-            color: #333;
+            background: linear-gradient(135deg, var(--starlight) 0%, var(--lunar) 100%);
+            min-height: 100vh;
+            color: var(--galaxy);
+            font-size: 14px;
         }
 
         .container {
@@ -18,71 +41,95 @@
             margin: 0 auto;
         }
 
-        h1,
-        h2,
-        h3,
-        h4 {
-            margin-top: 20px;
-            margin-bottom: 10px;
+        h1 { 
+            margin: 0 0 20px 0; 
+            font-size: 28px;
+            color: var(--galaxy);
+            font-weight: 600;
+        }
+        h2 { 
+            margin: 20px 0 10px 0; 
+            font-size: 20px;
+            color: var(--galaxy);
+            font-weight: 500;
+        }
+        h3 { 
+            margin: 12px 0 8px 0; 
+            font-size: 16px;
+            color: var(--galaxy);
+            font-weight: 500;
+        }
+        h4 { 
+            margin: 8px 0 6px 0; 
+            font-size: 14px;
+            color: var(--galaxy);
+            font-weight: 500;
         }
 
         .project {
-            margin-bottom: 30px;
+            margin-bottom: 20px;
             border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 15px;
+            border-radius: 8px;
+            padding: 16px;
+            background: white;
         }
 
         .project-header {
             background-color: #f7f7f7;
-            padding: 10px;
-            margin: -15px -15px 15px -15px;
+            padding: 6px 8px;
+            margin: -8px -8px 6px -8px;
             border-bottom: 1px solid #ddd;
-            border-radius: 5px 5px 0 0;
+            border-radius: 3px 3px 0 0;
         }
 
         .file {
-            margin-bottom: 20px;
+            margin-bottom: 12px;
             border: 1px solid #eee;
-            border-radius: 3px;
-            padding: 10px;
+            border-radius: 6px;
+            padding: 12px;
+            background: #fafafa;
         }
 
         .file-header {
             background-color: #f3f3f3;
-            padding: 5px 10px;
-            margin: -10px -10px 10px -10px;
+            padding: 3px 6px;
+            margin: -4px -4px 4px -4px;
             border-bottom: 1px solid #eee;
-            border-radius: 3px 3px 0 0;
+            border-radius: 2px 2px 0 0;
             font-family: monospace;
+            font-size: 12px;
         }
 
         .line {
-            margin-bottom: 15px;
-            padding: 5px;
+            margin-bottom: 4px;
+            padding: 2px;
             background-color: #f9f9f9;
-            border-radius: 3px;
+            border-radius: 2px;
         }
 
         .diagnostic {
-            font-family: monospace;
-            margin: 5px 0;
-            padding: 3px;
+            font-family: 'Fira Code', monospace;
+            margin: 4px 0;
+            padding: 8px 10px;
+            font-size: 13px;
+            line-height: 1.4;
+            border-radius: 6px;
+            border-left: 3px solid transparent;
         }
 
-        .added {
-            background-color: #e6ffed;
-            border-left: 3px solid #2cbe4e;
+        .diagnostic.added {
+            background-color: #d4edda;
+            border-left-color: #28a745;
         }
 
-        .removed {
-            background-color: #ffeef0;
-            border-left: 3px solid #cb2431;
+        .diagnostic.removed {
+            background-color: #f8d7da;
+            border-left-color: #dc3545;
         }
 
-        .modified {
-            background-color: #f9f9f9;
-            border-left: 3px solid #0366d6;
+        .diagnostic.modified {
+            background-color: #fff3cd;
+            border-left-color: #ffc107;
         }
 
         .diff-line {
@@ -101,25 +148,96 @@
         }
 
         .error {
-            color: #cb2431;
-            font-weight: bold;
+            color: var(--cosmic);
+            font-weight: 600;
+            background: rgba(222, 95, 233, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
         }
 
         .warning {
-            color: #b08800;
-            font-weight: bold;
+            color: #B8860B;
+            font-weight: 600;
+            background: rgba(225, 223, 153, 0.2);
+            padding: 4px 8px;
+            border-radius: 6px;
         }
 
-        .summary {
-            margin-bottom: 20px;
-            padding: 10px;
-            background-color: #f3f3f3;
-            border-radius: 5px;
-        }
 
         .content {
             display: block;
             overflow: hidden;
+        }
+        
+        small {
+            font-weight: normal;
+            color: var(--rock);
+        }
+        
+        small a {
+            color: var(--flare);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        small a:hover {
+            color: var(--cosmic);
+        }
+        
+        a {
+            color: var(--flare);
+            text-decoration: none;
+            transition: color 0.2s ease;
+        }
+        
+        a:hover {
+            color: var(--cosmic);
+            text-decoration: underline;
+        }
+        
+        .statistics {
+            margin-bottom: 20px;
+            padding: 16px;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-top: 12px;
+        }
+        
+        .stats-section h4 {
+            margin-top: 0;
+            color: var(--galaxy);
+        }
+        
+        .stats-total {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .stats-total.added {
+            color: #28a745;
+        }
+        
+        .stats-total.removed {
+            color: #dc3545;
+        }
+        
+        .lint-breakdown {
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        
+        .lint-item {
+            margin: 2px 0;
+            padding: 2px 4px;
         }
     </style>
 </head>
@@ -127,57 +245,52 @@
 <body>
     <div class="container">
         <h1>Diagnostic Diff Report</h1>
-        <!--
-        <div class="summary">
-            <ul>
-                <li><strong>Old:</strong> <a href="https://github.com/astral-sh/ruff/commit/{{ old_commit }}">{{
-                        old_commit
-                        | truncate(10) }}</a> ({{ old_diagnostics }} diagnostics)</li>
-                <li><strong>New:</strong> <a href="https://github.com/astral-sh/ruff/commit/{{ new_commit }}">{{
-                        new_commit
-                        | truncate(10) }}</a> ({{ new_diagnostics }} diagnostics)</li>
-            </ul>
+        
+        <div class="statistics">
+            <h3>Summary</h3>
+            <div class="stats-grid">
+                <div class="stats-section">
+                    <div class="stats-total added">+ {{ statistics.total_added }} diagnostics added</div>
+                    {% if statistics.added_by_lint %}
+                    <div class="lint-breakdown">
+                        {% for lint_name, count in statistics.added_by_lint.items() %}
+                        <div class="lint-item">{{ lint_name }}: {{ count }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="stats-section">
+                    <div class="stats-total removed">- {{ statistics.total_removed }} diagnostics removed</div>
+                    {% if statistics.removed_by_lint %}
+                    <div class="lint-breakdown">
+                        {% for lint_name, count in statistics.removed_by_lint.items() %}
+                        <div class="lint-item">{{ lint_name }}: {{ count }}</div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
-        -->
 
 
         {% if diffs.added_projects %}
         <h2>Added Projects</h2>
         {% for project in diffs.added_projects %}
         <div class="project added">
-            <div class="project-header">
-                <h3>{{
-                    project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
-                </p>
-            </div>
-            <div class="content">
-                <h4>Diagnostics</h4>
-                {% set file_groups = project.diagnostics|groupby('path') %}
-                {% for path, diagnostics in file_groups %}
-                <div class="file">
-                    <div class="file-header">
-                        <h4>{{ path }}</h4>
-                    </div>
-                    <div class="content">
-                        {% set line_groups = diagnostics|groupby('line') %}
-                        {% for line, line_diagnostics in line_groups %}
-                        <div class="line">
-                            {% for diag in line_diagnostics %}
-                            <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line
-                                    }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                    </div>
+            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            {% set file_groups = project.diagnostics|groupby('path') %}
+            {% for path, diagnostics in file_groups %}
+            <div class="file">
+                <h4>{{ path }}</h4>
+                {% for diag in diagnostics %}
+                <div class="diagnostic added">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
                 </div>
                 {% endfor %}
             </div>
+            {% endfor %}
         </div>
         {% endfor %}
         {% endif %}
@@ -186,188 +299,105 @@
         <h2>Removed Projects</h2>
         {% for project in diffs.removed_projects %}
         <div class="project removed">
-            <div class="project-header">
-                <h3>{{
-                    project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
-                </p>
-            </div>
-            <div class="content">
-                <h4>Diagnostics</h4>
-                {% set file_groups = project.diagnostics|groupby('path') %}
-                {% for path, diagnostics in file_groups %}
-                <div class="file">
-                    <div class="file-header">
-                        <h4>{{ path }}</h4>
-                    </div>
-                    <div class="content">
-                        {% set line_groups = diagnostics|groupby('line') %}
-                        {% for line, line_diagnostics in line_groups %}
-                        <div class="line">
-                            {% for diag in line_diagnostics %}
-                            <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ path }}:{{ diag.line
-                                    }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                    </div>
+            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            {% set file_groups = project.diagnostics|groupby('path') %}
+            {% for path, diagnostics in file_groups %}
+            <div class="file">
+                <h4>{{ path }}</h4>
+                {% for diag in diagnostics %}
+                <div class="diagnostic removed">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
                 </div>
                 {% endfor %}
             </div>
+            {% endfor %}
         </div>
         {% endfor %}
         {% endif %}
 
         {% if diffs.modified_projects %}
-        <h2>Modified Projects</h2>
         {% for project in diffs.modified_projects %}
         <div class="project modified">
-            <div class="project-header">
-                <h3>{{
-                    project.project }}</h3>
-                <p>Location: <a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>
-                </p>
+            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            {% if project.diffs.added_files %}
+            {% for file_data in project.diffs.added_files %}
+            <div class="file added">
+                <h4>+ {{ file_data.path }}</h4>
+                {% for diag in file_data.diagnostics %}
+                <div class="diagnostic added">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
+                </div>
+                {% endfor %}
             </div>
-            <div class="content">
-                {% if project.diffs.added_files %}
-                {% for file_data in project.diffs.added_files %}
-                <div class="file added">
-                    <div class="file-header">
-                        <h4>{{ file_data.path }}</h4>
-                    </div>
-                    <div class="content">
-                        {% set line_groups = file_data.diagnostics|groupby('line') %}
-                        {% for line, diagnostics in line_groups %}
-                        <div class="line">
-                            {% for diag in diagnostics %}
-                            <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                    </div>
+            {% endfor %}
+            {% endif %}
+
+            {% if project.diffs.removed_files %}
+            {% for file_data in project.diffs.removed_files %}
+            <div class="file removed">
+                <h4>- {{ file_data.path }}</h4>
+                {% for diag in file_data.diagnostics %}
+                <div class="diagnostic removed">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
                 </div>
                 {% endfor %}
-                {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
 
-                {% if project.diffs.removed_files %}
-                {% for file_data in project.diffs.removed_files %}
-                <div class="file removed">
-                    <div class="file-header">
-                        <h4>{{ file_data.path }}</h4>
-                    </div>
-                    <div class="content">
-                        {% set line_groups = file_data.diagnostics|groupby('line') %}
-                        {% for line, diagnostics in line_groups %}
-                        <div class="line">
-                            {% for diag in diagnostics %}
-                            <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                    </div>
+            {% if project.diffs.modified_files %}
+            {% for file_data in project.diffs.modified_files %}
+            <div class="file modified">
+                <h4>~ {{ file_data.path }}</h4>
+                {% if file_data.diffs.added_lines %}
+                {% for line_data in file_data.diffs.added_lines %}
+                {% for diag in line_data.diagnostics %}
+                <div class="diagnostic added">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
                 </div>
                 {% endfor %}
+                {% endfor %}
                 {% endif %}
-
-                {% if project.diffs.modified_files %}
-                {% for file_data in project.diffs.modified_files %}
-                <div class="file modified">
-                    <div class="file-header">
-                        <h4>{{ file_data.path }}</h4>
-                    </div>
-                    <div class="content">
-                        {% if file_data.diffs.added_lines %}
-                        {% for line_data in file_data.diffs.added_lines %}
-                        <div class="line added">
-                            {% for diag in line_data.diagnostics %}
-                            <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                        {% endif %}
-
-                        {% if file_data.diffs.removed_lines %}
-                        {% for line_data in file_data.diffs.removed_lines %}
-                        <div class="line removed">
-                            {% for diag in line_data.diagnostics %}
-                            <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endfor %}
-                        {% endif %}
-
-                        {% if file_data.diffs.modified_lines %}
-                        {% for line_data in file_data.diffs.modified_lines %}
-                        <div class="line modified">
-                            {% for diag in line_data.removed %}
-                            <div class="diagnostic removed">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-
-                            {% for diag in line_data.added %}
-                            <div class="diagnostic added">
-                                <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level
-                                    }}]</span> {{ diag.lint_name }} -
-                                <a href="{{ diag.github_ref|default('') }}" target="_blank">{{ file_data.path }}:{{
-                                    diag.line }}:{{ diag.column }}</a> -
-                                {{ diag.message }}
-                            </div>
-                            {% endfor %}
-                            <!--
-                            {% if line_data.text_diffs %}
-                            <h6>Detailed Diffs</h6>
-                            {% for diff_data in line_data.text_diffs %}
-                            <div class="text-diff">
-                                {% for diff_line in diff_data.diff %}
-                                <pre
-                                    class="diff-line {{ 'diff-removed' if diff_line.startswith('- ') else ('diff-added' if diff_line.startswith('+ ') else '') }}">{{ diff_line }}</pre>
-                                {% endfor %}
-                            </div>
-                            {% endfor %}
-                            {% endif %}
-                            -->
-                        </div>
-                        {% endfor %}
-                        {% endif %}
-                    </div>
+                {% if file_data.diffs.removed_lines %}
+                {% for line_data in file_data.diffs.removed_lines %}
+                {% for diag in line_data.diagnostics %}
+                <div class="diagnostic removed">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
                 </div>
+                {% endfor %}
+                {% endfor %}
+                {% endif %}
+                {% if file_data.diffs.modified_lines %}
+                {% for line_data in file_data.diffs.modified_lines %}
+                {% for diag in line_data.removed %}
+                <div class="diagnostic removed">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
+                </div>
+                {% endfor %}
+                {% for diag in line_data.added %}
+                <div class="diagnostic added">
+                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
+                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
+                    {{ diag.message }}
+                </div>
+                {% endfor %}
                 {% endfor %}
                 {% endif %}
             </div>
+            {% endfor %}
+            {% endif %}
         </div>
         {% endfor %}
         {% endif %}
