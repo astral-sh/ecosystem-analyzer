@@ -331,10 +331,25 @@
 
 <body>
     <div class="container">
-        <h1>Diagnostic Diff Report</h1>
-        
         <div class="statistics">
             <h3>Summary</h3>
+            <div class="comparison-info" style="margin-bottom: 16px; padding: 12px; background: rgba(99, 64, 172, 0.05); border: 1px solid rgba(99, 64, 172, 0.2); border-radius: 6px;">
+                <div style="font-weight: 600; margin-bottom: 8px;">Comparing branches/commits:</div>
+                <div style="font-family: 'Fira Code', monospace; font-size: 13px;">
+                    <div style="margin-bottom: 4px;">
+                        <span style="color: #dc3545; font-weight: 600;">Old:</span> {{ old_branch_info }} 
+                        <span style="color: var(--rock); margin-left: 12px;">
+                            <a href="{{ ty_repo_url }}/commit/{{ old_commit }}" target="_blank" style="color: var(--flare); text-decoration: none;">{{ old_commit[:8] }}</a>
+                        </span>
+                    </div>
+                    <div>
+                        <span style="color: #28a745; font-weight: 600;">New:</span> {{ new_branch_info }} 
+                        <span style="color: var(--rock); margin-left: 12px;">
+                            <a href="{{ ty_repo_url }}/commit/{{ new_commit }}" target="_blank" style="color: var(--flare); text-decoration: none;">{{ new_commit[:8] }}</a>
+                        </span>
+                    </div>
+                </div>
+            </div>
             {% if statistics.merged_by_lint %}
             <table class="stats-table">
                 <thead>

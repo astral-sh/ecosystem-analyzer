@@ -1,6 +1,8 @@
 import difflib
 import json
 import os
+import re
+from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader
@@ -13,11 +15,16 @@ class DiagnosticDiff:
         """Initialize with paths to the old and new JSON files."""
         self.old_file = old_file
         self.new_file = new_file
+        self.ty_repo_url = "https://github.com/astral-sh/ruff"
         self.old_data = self._load_json(old_file)
         self.new_data = self._load_json(new_file)
 
         self.old_commit = self._get_commit(self.old_data)
         self.new_commit = self._get_commit(self.new_data)
+        
+        # Extract branch information from filenames
+        self.old_branch_info = self._extract_branch_info(old_file)
+        self.new_branch_info = self._extract_branch_info(new_file)
 
         self.old_diagnostics = self._count_diagnostics(self.old_data)
         self.new_diagnostics = self._count_diagnostics(self.new_data)
@@ -48,6 +55,19 @@ class DiagnosticDiff:
                 "Error: The JSON file must contain diagnostics from a single ty commit."
             )
         return ty_commits.pop()
+
+    def _extract_branch_info(self, file_path: str) -> str:
+        """Extract branch/commit information from filename."""
+        filename = Path(file_path).name
+        
+        # Pattern: diagnostics-{prefix}-{branch_or_commit}.json
+        # Examples: diagnostics-old-main.json, diagnostics-new-attr-subscript-narrowing.json
+        match = re.match(r"diagnostics-(?:old|new)-(.+)\.json$", filename)
+        if match:
+            return match.group(1)
+        
+        # Fallback: just use filename without extension
+        return Path(file_path).stem
 
     def _count_diagnostics(self, data) -> int:
         """Count the total number of diagnostics in the data."""
@@ -418,6 +438,9 @@ class DiagnosticDiff:
         context = {
             "old_commit": self.old_commit,
             "new_commit": self.new_commit,
+            "old_branch_info": self.old_branch_info,
+            "new_branch_info": self.new_branch_info,
+            "ty_repo_url": self.ty_repo_url,
             "old_diagnostics": self.old_diagnostics,
             "new_diagnostics": self.new_diagnostics,
             "diffs": self.diffs,
