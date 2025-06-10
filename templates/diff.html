@@ -256,6 +256,12 @@
             text-align: center;
         }
         
+        .stats-table .changed-col {
+            color: #e68900;
+            font-weight: 600;
+            text-align: center;
+        }
+        
         .stats-table .total-row {
             font-weight: 600;
             border-bottom: 2px solid #ddd;
@@ -357,6 +363,7 @@
                         <th>Lint Rule</th>
                         <th>Removed</th>
                         <th>Added</th>
+                        <th>Changed</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -364,12 +371,14 @@
                         <td><strong>Total</strong></td>
                         <td class="removed-col">{{ statistics.total_removed }}</td>
                         <td class="added-col">{{ statistics.total_added }}</td>
+                        <td class="changed-col">{{ statistics.total_changed }}</td>
                     </tr>
                     {% for lint_data in statistics.merged_by_lint %}
                     <tr>
                         <td>{{ lint_data.lint_name }}</td>
                         <td class="removed-col">{{ lint_data.removed }}</td>
                         <td class="added-col">{{ lint_data.added }}</td>
+                        <td class="changed-col">{{ lint_data.changed }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -384,6 +393,7 @@
                     <button class="filter-btn active" data-filter="all">All</button>
                     <button class="filter-btn" data-filter="removed">Removed Only</button>
                     <button class="filter-btn" data-filter="added">Added Only</button>
+                    <button class="filter-btn" data-filter="changed">Changed Only</button>
                 </div>
             </div>
             <div class="filter-section">
@@ -505,6 +515,16 @@
                 {% endif %}
                 {% if file_data.diffs.modified_lines %}
                 {% for line_data in file_data.diffs.modified_lines %}
+                {% for diff_item in line_data.text_diffs %}
+                <div class="diagnostic modified" data-change-type="changed" data-lint-name="{{ diff_item.old.lint_name }}">
+                    <span class="{{ 'error' if diff_item.old.level == 'error' else 'warning' }}">[{{ diff_item.old.level }}]</span> {{ diff_item.old.lint_name }} -
+                    <a href="{{ diff_item.old.github_ref|default('') }}" target="_blank">:{{ diff_item.old.line }}:{{ diff_item.old.column }}</a> -
+                    <div style="margin-top: 4px;">
+                        <div style="color: #dc3545;">Old: {{ diff_item.old.message }}</div>
+                        <div style="color: #28a745;">New: {{ diff_item.new.message }}</div>
+                    </div>
+                </div>
+                {% endfor %}
                 {% for diag in line_data.removed %}
                 <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}">
                     <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
