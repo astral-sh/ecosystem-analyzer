@@ -90,6 +90,7 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
     "--projects",
     help="List to a file with projects to analyze",
     type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
 )
 @click.option(
     "--output",
@@ -199,6 +200,7 @@ def generate_diff(
     "--projects",
     help="List to a file with projects to analyze",
     type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
 )
 @click.option(
     "--num-commits",
