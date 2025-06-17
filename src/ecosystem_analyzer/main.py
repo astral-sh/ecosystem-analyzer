@@ -180,8 +180,18 @@ def diff(ctx, projects: str, old: str, new: str) -> None:
     type=click.Path(writable=True),
     help="Path to save the JSON diff data",
 )
+@click.option(
+    "--old-name",
+    type=str,
+    help="Label for the old version (e.g., branch name, commit, or description)",
+)
+@click.option(
+    "--new-name",
+    type=str,
+    help="Label for the new version (e.g., branch name, commit, or description)",
+)
 def generate_diff(
-    old_file: str, new_file: str, output_html: str, output_json: str | None
+    old_file: str, new_file: str, output_html: str, output_json: str | None, old_name: str | None, new_name: str | None
 ) -> None:
     """
     Generate a diff report of diagnostic data between two JSON files.
@@ -189,7 +199,7 @@ def generate_diff(
     OLD_FILE: Path to the old JSON file.
     NEW_FILE: Path to the new JSON file.
     """
-    diff_tool = DiagnosticDiff(old_file, new_file)
+    diff_tool = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     diff_tool.generate_html_report(output_html)
     if output_json:
         diff_tool.save_json_diff(output_json)

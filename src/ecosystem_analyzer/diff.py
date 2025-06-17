@@ -1,18 +1,16 @@
 import difflib
 import json
 import os
-import re
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
-from importlib.resources import files
 
 
 class DiagnosticDiff:
     """Class for comparing diagnostic data between two JSON files."""
 
-    def __init__(self, old_file: str, new_file: str):
+    def __init__(self, old_file: str, new_file: str, old_name: str | None = None, new_name: str | None = None):
         """Initialize with paths to the old and new JSON files."""
         self.old_file = old_file
         self.new_file = new_file
@@ -23,9 +21,9 @@ class DiagnosticDiff:
         self.old_commit = self._get_commit(self.old_data)
         self.new_commit = self._get_commit(self.new_data)
 
-        # Extract branch information from filenames
-        self.old_branch_info = self._extract_branch_info(old_file)
-        self.new_branch_info = self._extract_branch_info(new_file)
+        # Use provided names or fallback to commit hashes
+        self.old_branch_info = old_name or self.old_commit[:7]
+        self.new_branch_info = new_name or self.new_commit[:7]
 
         self.old_diagnostics = self._count_diagnostics(self.old_data)
         self.new_diagnostics = self._count_diagnostics(self.new_data)
@@ -56,19 +54,6 @@ class DiagnosticDiff:
                 "Error: The JSON file must contain diagnostics from a single ty commit."
             )
         return ty_commits.pop()
-
-    def _extract_branch_info(self, file_path: str) -> str:
-        """Extract branch/commit information from filename."""
-        filename = Path(file_path).name
-
-        # Pattern: diagnostics-{prefix}-{branch_or_commit}.json
-        # Examples: diagnostics-old-main.json, diagnostics-new-attr-subscript-narrowing.json
-        match = re.match(r"diagnostics-(?:old|new)-(.+)\.json$", filename)
-        if match:
-            return match.group(1)
-
-        # Fallback: just use filename without extension
-        return Path(file_path).stem
 
     def _count_diagnostics(self, data) -> int:
         """Count the total number of diagnostics in the data."""
