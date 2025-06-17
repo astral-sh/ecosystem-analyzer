@@ -2,7 +2,8 @@ import json
 import logging
 from pathlib import Path
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, PackageLoader
+from importlib.resources import files
 
 
 def process_diagnostics(data):
@@ -51,7 +52,17 @@ def generate_html_report(diagnostics, ty_commit, output_path):
         (level, sum(1 for d in diagnostics if d["level"] == level)) for level in levels
     ]
 
-    env = Environment(loader=FileSystemLoader("templates"))
+    # Set up Jinja2 environment with package loader
+    try:
+        # Try PackageLoader first (works for installed packages)
+        env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+    except (ImportError, FileNotFoundError):
+        # Fallback to FileSystemLoader for development
+        template_path = Path(__file__).parent.parent.parent / "templates"
+        if not template_path.exists():
+            template_path = Path("templates")
+        env = Environment(loader=FileSystemLoader(str(template_path)))
+
     template = env.get_template("ecosystem_report.html")
 
     html_content = template.render(

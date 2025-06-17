@@ -70,7 +70,6 @@ class Ty:
                 f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
             )
 
-
         parser = DiagnosticsParser(
             repo_location=project.location,
             repo_commit=project.current_commit,

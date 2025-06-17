@@ -5,7 +5,8 @@ import re
 from pathlib import Path
 from typing import Any
 
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, PackageLoader
+from importlib.resources import files
 
 
 class DiagnosticDiff:
@@ -21,7 +22,7 @@ class DiagnosticDiff:
 
         self.old_commit = self._get_commit(self.old_data)
         self.new_commit = self._get_commit(self.new_data)
-        
+
         # Extract branch information from filenames
         self.old_branch_info = self._extract_branch_info(old_file)
         self.new_branch_info = self._extract_branch_info(new_file)
@@ -59,13 +60,13 @@ class DiagnosticDiff:
     def _extract_branch_info(self, file_path: str) -> str:
         """Extract branch/commit information from filename."""
         filename = Path(file_path).name
-        
+
         # Pattern: diagnostics-{prefix}-{branch_or_commit}.json
         # Examples: diagnostics-old-main.json, diagnostics-new-attr-subscript-narrowing.json
         match = re.match(r"diagnostics-(?:old|new)-(.+)\.json$", filename)
         if match:
             return match.group(1)
-        
+
         # Fallback: just use filename without extension
         return Path(file_path).stem
 
@@ -101,7 +102,15 @@ class DiagnosticDiff:
                 project_data = old_projects[project_name]
                 diagnostics = project_data.get("diagnostics", [])
                 # Sort diagnostics by path, line, column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("path", ""), d.get("line", 0), d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (
+                        d.get("path", ""),
+                        d.get("line", 0),
+                        d.get("column", 0),
+                        d.get("message", ""),
+                    ),
+                )
                 result["removed_projects"].append(
                     {
                         "project": project_name,
@@ -116,7 +125,15 @@ class DiagnosticDiff:
                 project_data = new_projects[project_name]
                 diagnostics = project_data.get("diagnostics", [])
                 # Sort diagnostics by path, line, column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("path", ""), d.get("line", 0), d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (
+                        d.get("path", ""),
+                        d.get("line", 0),
+                        d.get("column", 0),
+                        d.get("message", ""),
+                    ),
+                )
                 result["added_projects"].append(
                     {
                         "project": project_name,
@@ -182,7 +199,14 @@ class DiagnosticDiff:
             if file_path not in new_files:
                 diagnostics = old_files[file_path]
                 # Sort diagnostics by line, column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("line", 0), d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (
+                        d.get("line", 0),
+                        d.get("column", 0),
+                        d.get("message", ""),
+                    ),
+                )
                 result["removed_files"].append(
                     {"path": file_path, "diagnostics": diagnostics}
                 )
@@ -192,7 +216,14 @@ class DiagnosticDiff:
             if file_path not in old_files:
                 diagnostics = new_files[file_path]
                 # Sort diagnostics by line, column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("line", 0), d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (
+                        d.get("line", 0),
+                        d.get("column", 0),
+                        d.get("message", ""),
+                    ),
+                )
                 result["added_files"].append(
                     {"path": file_path, "diagnostics": diagnostics}
                 )
@@ -233,7 +264,10 @@ class DiagnosticDiff:
             result[line].append(diag)
         # Sort diagnostics within each line by column, message
         for line_num in result:
-            result[line_num] = sorted(result[line_num], key=lambda d: (d.get("column", 0), d.get("message", "")))
+            result[line_num] = sorted(
+                result[line_num],
+                key=lambda d: (d.get("column", 0), d.get("message", "")),
+            )
         return result
 
     def _compare_lines(
@@ -249,7 +283,10 @@ class DiagnosticDiff:
             if line_num not in new_lines:
                 diagnostics = old_lines[line_num]
                 # Sort diagnostics by column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (d.get("column", 0), d.get("message", "")),
+                )
                 result["removed_lines"].append(
                     {"line": line_num, "diagnostics": diagnostics}
                 )
@@ -259,7 +296,10 @@ class DiagnosticDiff:
             if line_num not in old_lines:
                 diagnostics = new_lines[line_num]
                 # Sort diagnostics by column, message
-                diagnostics = sorted(diagnostics, key=lambda d: (d.get("column", 0), d.get("message", "")))
+                diagnostics = sorted(
+                    diagnostics,
+                    key=lambda d: (d.get("column", 0), d.get("message", "")),
+                )
                 result["added_lines"].append(
                     {"line": line_num, "diagnostics": diagnostics}
                 )
@@ -306,17 +346,25 @@ class DiagnosticDiff:
                 removed_diagnostics = [
                     d
                     for d in old_diagnostics
-                    if self._format_diagnostic(d) in removed and self._format_diagnostic(d) not in changed_old_formatted
+                    if self._format_diagnostic(d) in removed
+                    and self._format_diagnostic(d) not in changed_old_formatted
                 ]
                 added_diagnostics = [
                     d
                     for d in new_diagnostics
-                    if self._format_diagnostic(d) in added and self._format_diagnostic(d) not in changed_new_formatted
+                    if self._format_diagnostic(d) in added
+                    and self._format_diagnostic(d) not in changed_new_formatted
                 ]
                 # Sort removed and added diagnostics
-                removed_diagnostics = sorted(removed_diagnostics, key=lambda d: (d.get("column", 0), d.get("message", "")))
-                added_diagnostics = sorted(added_diagnostics, key=lambda d: (d.get("column", 0), d.get("message", "")))
-                
+                removed_diagnostics = sorted(
+                    removed_diagnostics,
+                    key=lambda d: (d.get("column", 0), d.get("message", "")),
+                )
+                added_diagnostics = sorted(
+                    added_diagnostics,
+                    key=lambda d: (d.get("column", 0), d.get("message", "")),
+                )
+
                 result["modified_lines"].append(
                     {
                         "line": line_num,
@@ -350,7 +398,7 @@ class DiagnosticDiff:
             "total_changed": 0,
             "added_by_lint": {},
             "removed_by_lint": {},
-            "changed_by_lint": {}
+            "changed_by_lint": {},
         }
 
         # Count diagnostics from added projects
@@ -358,14 +406,18 @@ class DiagnosticDiff:
             for diag in project["diagnostics"]:
                 stats["total_added"] += 1
                 lint_name = diag.get("lint_name", "unknown")
-                stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
+                stats["added_by_lint"][lint_name] = (
+                    stats["added_by_lint"].get(lint_name, 0) + 1
+                )
 
         # Count diagnostics from removed projects
         for project in self.diffs["removed_projects"]:
             for diag in project["diagnostics"]:
                 stats["total_removed"] += 1
                 lint_name = diag.get("lint_name", "unknown")
-                stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
+                stats["removed_by_lint"][lint_name] = (
+                    stats["removed_by_lint"].get(lint_name, 0) + 1
+                )
 
         # Count diagnostics from modified projects
         for project in self.diffs["modified_projects"]:
@@ -374,14 +426,18 @@ class DiagnosticDiff:
                 for diag in file_data["diagnostics"]:
                     stats["total_added"] += 1
                     lint_name = diag.get("lint_name", "unknown")
-                    stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
+                    stats["added_by_lint"][lint_name] = (
+                        stats["added_by_lint"].get(lint_name, 0) + 1
+                    )
 
             # Removed files in modified projects
             for file_data in project["diffs"].get("removed_files", []):
                 for diag in file_data["diagnostics"]:
                     stats["total_removed"] += 1
                     lint_name = diag.get("lint_name", "unknown")
-                    stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
+                    stats["removed_by_lint"][lint_name] = (
+                        stats["removed_by_lint"].get(lint_name, 0) + 1
+                    )
 
             # Modified files in modified projects
             for file_data in project["diffs"].get("modified_files", []):
@@ -390,14 +446,18 @@ class DiagnosticDiff:
                     for diag in line_data["diagnostics"]:
                         stats["total_added"] += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
+                        stats["added_by_lint"][lint_name] = (
+                            stats["added_by_lint"].get(lint_name, 0) + 1
+                        )
 
                 # Removed lines
                 for line_data in file_data["diffs"].get("removed_lines", []):
                     for diag in line_data["diagnostics"]:
                         stats["total_removed"] += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
+                        stats["removed_by_lint"][lint_name] = (
+                            stats["removed_by_lint"].get(lint_name, 0) + 1
+                        )
 
                 # Modified lines
                 for line_data in file_data["diffs"].get("modified_lines", []):
@@ -405,37 +465,49 @@ class DiagnosticDiff:
                     for diff_item in line_data.get("text_diffs", []):
                         stats["total_changed"] += 1
                         lint_name = diff_item["old"].get("lint_name", "unknown")
-                        stats["changed_by_lint"][lint_name] = stats["changed_by_lint"].get(lint_name, 0) + 1
-                    
+                        stats["changed_by_lint"][lint_name] = (
+                            stats["changed_by_lint"].get(lint_name, 0) + 1
+                        )
+
                     # Count pure additions and removals (already filtered in diff computation)
                     for diag in line_data["added"]:
                         stats["total_added"] += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["added_by_lint"][lint_name] = stats["added_by_lint"].get(lint_name, 0) + 1
-                    
+                        stats["added_by_lint"][lint_name] = (
+                            stats["added_by_lint"].get(lint_name, 0) + 1
+                        )
+
                     for diag in line_data["removed"]:
                         stats["total_removed"] += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["removed_by_lint"][lint_name] = stats["removed_by_lint"].get(lint_name, 0) + 1
+                        stats["removed_by_lint"][lint_name] = (
+                            stats["removed_by_lint"].get(lint_name, 0) + 1
+                        )
 
         # Create merged lint breakdown sorted by total absolute change (descending)
-        all_lints = set(stats["added_by_lint"].keys()) | set(stats["removed_by_lint"].keys()) | set(stats["changed_by_lint"].keys())
+        all_lints = (
+            set(stats["added_by_lint"].keys())
+            | set(stats["removed_by_lint"].keys())
+            | set(stats["changed_by_lint"].keys())
+        )
         merged_lints = []
-        
+
         for lint_name in all_lints:
             added_count = stats["added_by_lint"].get(lint_name, 0)
             removed_count = stats["removed_by_lint"].get(lint_name, 0)
             changed_count = stats["changed_by_lint"].get(lint_name, 0)
             total_change = added_count + removed_count + changed_count
-            merged_lints.append({
-                "lint_name": lint_name,
-                "added": added_count,
-                "removed": removed_count,
-                "changed": changed_count,
-                "net_change": added_count - removed_count,
-                "total_change": total_change
-            })
-        
+            merged_lints.append(
+                {
+                    "lint_name": lint_name,
+                    "added": added_count,
+                    "removed": removed_count,
+                    "changed": changed_count,
+                    "net_change": added_count - removed_count,
+                    "total_change": total_change,
+                }
+            )
+
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
         stats["merged_by_lint"] = merged_lints
@@ -444,8 +516,17 @@ class DiagnosticDiff:
 
     def generate_html_report(self, output_path: str) -> None:
         """Generate an HTML report of the diagnostic differences."""
-        # Set up Jinja2 environment
-        env = Environment(loader=FileSystemLoader("templates"))
+        # Set up Jinja2 environment with package loader
+        try:
+            # Try PackageLoader first (works for installed packages)
+            env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+        except (ImportError, FileNotFoundError):
+            # Fallback to FileSystemLoader for development
+            template_path = Path(__file__).parent.parent.parent / "templates"
+            if not template_path.exists():
+                template_path = Path("templates")
+            env = Environment(loader=FileSystemLoader(str(template_path)))
+
         template = env.get_template("diff.html")
 
         # Calculate statistics
