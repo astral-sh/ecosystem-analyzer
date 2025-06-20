@@ -280,11 +280,9 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
 
 @cli.command()
-@click.option(
-    "--diagnostics",
-    help="Path to the JSON file with diagnostics",
+@click.argument(
+    "diagnostics",
     type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=True,
 )
 @click.option(
     "--output",
