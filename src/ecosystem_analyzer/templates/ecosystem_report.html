@@ -186,10 +186,12 @@
 <body>
     <h1>ty ecosystem report</h1>
     
+    {% if ty_commit and ty_commit != "unknown" %}
     <div style="margin-bottom: 20px; font-size: 14px; color: #666;">
         ty @ <a href="https://github.com/astral-sh/ruff/commit/{{ ty_commit }}" target="_blank">{{
             ty_commit[0:7] }}</a>
     </div>
+    {% endif %}
 
     <div class="controls">
         <label for="sort-select">Sort by:</label>
@@ -250,10 +252,21 @@
             {% for diagnostic in diagnostics %}
             <tr class="diagnostic-row" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
                 data-level="{{ diagnostic.level }}">
-                <td><a href="{{ diagnostic.project_location }}">{{ diagnostic.project }}</a></td>
+                <td>
+                    {% if diagnostic.project_location %}
+                        <a href="{{ diagnostic.project_location }}">{{ diagnostic.project }}</a>
+                    {% else %}
+                        {{ diagnostic.project }}
+                    {% endif %}
+                </td>
                 <td class="{{ diagnostic.level }}">{{ diagnostic.lint_name }}</td>
-                <td><a href="{{ diagnostic.github_ref }}"
-                        target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a></td>
+                <td>
+                    {% if diagnostic.github_ref %}
+                        <a href="{{ diagnostic.github_ref }}" target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a>
+                    {% else %}
+                        {{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}
+                    {% endif %}
+                </td>
                 <td>{{ diagnostic.message | e }}</td>
             </tr>
             {% endfor %}

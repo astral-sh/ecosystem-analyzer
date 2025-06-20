@@ -26,7 +26,7 @@ def process_diagnostics(data):
         for diagnostic in output.get("diagnostics", []):
             # Add project metadata to each diagnostic for easier sorting/filtering
             diagnostic["project"] = project
-            diagnostic["project_location"] = output["project_location"]
+            diagnostic["project_location"] = output.get("project_location")
             all_diagnostics.append(diagnostic)
 
     logging.info(f"Total diagnostics included: {total_diagnostics}")
@@ -88,12 +88,12 @@ def generate(diagnostics_path: str | Path, output_path: str | Path) -> str:
         data = json.load(f)
     diagnostics = process_diagnostics(data)
 
-    ty_commits = set(output["ty_commit"] for output in data["outputs"])
-    if len(ty_commits) != 1:
+    ty_commits = set(output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit"))
+    if len(ty_commits) > 1:
         raise RuntimeError(
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
-    ty_commit = ty_commits.pop()
+    ty_commit = ty_commits.pop() if ty_commits else "unknown"
 
     output_file = generate_html_report(diagnostics, ty_commit, output_path)
 
