@@ -1,6 +1,6 @@
 import re
 from pathlib import Path
-from typing import TypedDict
+from typing import NotRequired, TypedDict
 
 
 class Diagnostic(TypedDict):
@@ -13,12 +13,15 @@ class Diagnostic(TypedDict):
 
     message: str
 
-    github_ref: str
+    github_ref: NotRequired[str]
 
 
 class DiagnosticsParser:
     def __init__(
-        self, repo_location: str, repo_commit: str, repo_working_dir: Path
+        self,
+        repo_location: str | None = None,
+        repo_commit: str | None = None,
+        repo_working_dir: Path | None = None,
     ) -> None:
         self.repo_location = repo_location
         self.repo_commit = repo_commit
@@ -34,17 +37,24 @@ class DiagnosticsParser:
         if match := re.match(pattern, line):
             path = str(match.group("path"))
             line = str(match.group("line"))
-            github_ref = f"{self.repo_location}/blob/{self.repo_commit}/{path}#L{line}"
 
-            return {
+            diagnostic: Diagnostic = {
                 "level": str(match.group("level")),
                 "lint_name": str(match.group("lint_name")),
                 "path": path,
                 "line": int(line),
                 "column": int(match.group("column")),
                 "message": str(match.group("message")),
-                "github_ref": github_ref,
             }
+
+            # Only include github_ref if we have valid repo location and commit
+            if self.repo_location and self.repo_commit:
+                github_ref = (
+                    f"{self.repo_location}/blob/{self.repo_commit}/{path}#L{line}"
+                )
+                diagnostic["github_ref"] = github_ref
+
+            return diagnostic
         return None
 
     def parse(self, content: str) -> list[Diagnostic]:

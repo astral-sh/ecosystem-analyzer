@@ -1,10 +1,12 @@
 import json
 import logging
+import sys
 from pathlib import Path
 
 import click
 from git import Repo
 
+from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits
@@ -191,7 +193,12 @@ def diff(ctx, projects: str, old: str, new: str) -> None:
     help="Label for the new version (e.g., branch name, commit, or description)",
 )
 def generate_diff(
-    old_file: str, new_file: str, output_html: str, output_json: str | None, old_name: str | None, new_name: str | None
+    old_file: str,
+    new_file: str,
+    output_html: str,
+    output_json: str | None,
+    old_name: str | None,
+    new_name: str | None,
 ) -> None:
     """
     Generate a diff report of diagnostic data between two JSON files.
@@ -291,6 +298,76 @@ def generate_report(diagnostics: str, output: str) -> None:
     """
 
     generate(diagnostics, output)
+
+
+@cli.command()
+@click.option(
+    "--output",
+    "-o",
+    default="parsed-diagnostics.json",
+    help="Output JSON file with parsed diagnostics",
+    type=click.Path(),
+)
+@click.option(
+    "--project-name",
+    default="stdin",
+    help="Project name for the output",
+    type=str,
+)
+@click.option(
+    "--project-location",
+    help="GitHub URL for the project (for GitHub links)",
+    type=str,
+)
+@click.option(
+    "--commit",
+    help="Commit hash for GitHub links",
+    type=str,
+)
+def parse_diagnostics(
+    output: str, project_name: str, project_location: str | None, commit: str | None
+) -> None:
+    """
+    Parse ty diagnostic output from stdin and generate a JSON file.
+    """
+    # Read diagnostic output from stdin
+    diagnostic_content = sys.stdin.read()
+
+    if not diagnostic_content.strip():
+        click.echo("No diagnostic content provided on stdin", err=True)
+        return
+
+    # Create a parser with the provided information
+    parser = DiagnosticsParser(
+        repo_location=project_location,
+        repo_commit=commit,
+        repo_working_dir=Path.cwd(),
+    )
+
+    # Parse the diagnostics (parser will conditionally include github_ref)
+    diagnostics = parser.parse(diagnostic_content)
+
+    # Create output structure - only include fields that have meaningful values
+    run_output = {
+        "project": project_name,
+        "diagnostics": diagnostics,
+    }
+
+    # Only include optional fields if they're provided
+    if project_location:
+        run_output["project_location"] = project_location
+    if commit:
+        run_output["ty_commit"] = commit
+
+    # Write to JSON file in the same format as Manager.write_run_outputs
+    output_data = {"outputs": [run_output]}
+
+    output_path = Path(output)
+    with output_path.open("w") as json_file:
+        json.dump(output_data, json_file, indent=4)
+
+    logging.info(f"Parsed {len(diagnostics)} diagnostics and wrote to {output_path}")
+    click.echo(f"Parsed {len(diagnostics)} diagnostics and wrote to {output_path}")
 
 
 if __name__ == "__main__":

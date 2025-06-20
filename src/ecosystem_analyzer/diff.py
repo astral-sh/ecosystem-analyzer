@@ -10,7 +10,13 @@ from jinja2 import Environment, FileSystemLoader, PackageLoader
 class DiagnosticDiff:
     """Class for comparing diagnostic data between two JSON files."""
 
-    def __init__(self, old_file: str, new_file: str, old_name: str | None = None, new_name: str | None = None):
+    def __init__(
+        self,
+        old_file: str,
+        new_file: str,
+        old_name: str | None = None,
+        new_name: str | None = None,
+    ):
         """Initialize with paths to the old and new JSON files."""
         self.old_file = old_file
         self.new_file = new_file
