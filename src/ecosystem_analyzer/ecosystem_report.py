@@ -6,7 +6,7 @@ from jinja2 import Environment, FileSystemLoader, PackageLoader
 from importlib.resources import files
 
 
-def process_diagnostics(data):
+def process_diagnostics(data, max_diagnostics_per_project=None):
     """Process the JSON data to extract all diagnostics."""
     all_diagnostics = []
 
@@ -15,9 +15,9 @@ def process_diagnostics(data):
         project = output["project"]
 
         num_diagnostics = len(output["diagnostics"])
-        if num_diagnostics > 1000:
+        if max_diagnostics_per_project is not None and num_diagnostics > max_diagnostics_per_project:
             logging.info(
-                f"Skipping project '{project}' ({num_diagnostics} diagnostics)"
+                f"Skipping project '{project}' ({num_diagnostics} diagnostics, limit: {max_diagnostics_per_project})"
             )
             continue
 
@@ -80,13 +80,13 @@ def generate_html_report(diagnostics, ty_commit, output_path):
     return output_path
 
 
-def generate(diagnostics_path: str | Path, output_path: str | Path) -> str:
+def generate(diagnostics_path: str | Path, output_path: str | Path, max_diagnostics_per_project: int | None = None) -> None:
     diagnostics_path = Path(diagnostics_path)
     output_path = Path(output_path)
 
     with open(diagnostics_path) as f:
         data = json.load(f)
-    diagnostics = process_diagnostics(data)
+    diagnostics = process_diagnostics(data, max_diagnostics_per_project)
 
     ty_commits = set(output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit"))
     if len(ty_commits) > 1:

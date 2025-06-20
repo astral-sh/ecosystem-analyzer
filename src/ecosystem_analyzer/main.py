@@ -292,12 +292,18 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
     type=click.Path(),
     default="ecosystem-report.html",
 )
-def generate_report(diagnostics: str, output: str) -> None:
+@click.option(
+    "--max-diagnostics-per-project",
+    help="Maximum number of diagnostics per project to include (unlimited by default)",
+    type=int,
+    default=None,
+)
+def generate_report(diagnostics: str, output: str, max_diagnostics_per_project: int | None) -> None:
     """
     Generate an HTML report from the diagnostics JSON file.
     """
 
-    generate(diagnostics, output)
+    generate(diagnostics, output, max_diagnostics_per_project)
 
 
 @cli.command()
