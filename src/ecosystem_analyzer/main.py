@@ -322,19 +322,15 @@ def generate_diff_statistics(
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     statistics = diff._calculate_statistics()
 
-    # Generate Markdown content
-    markdown_content = f"""### Summary
-
-- **Added**: {statistics["total_added"]:,}
-- **Removed**: {statistics["total_removed"]:,}
-- **Changed**: {statistics["total_changed"]:,}
-
+    markdown_content = """
 | Lint rule | Added | Removed | Changed |
-|-----------|-------|---------|---------|
+|-----------|------:|--------:|--------:|
 """
 
     for lint_data in statistics["merged_by_lint"]:
         markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
+
+    markdown_content += f"| **Total** | **{statistics['total_added']:,}** | **{statistics['total_removed']:,}** | **{statistics['total_changed']:,}** |\n"
 
     with open(output, "w") as f:
         f.write(markdown_content)
