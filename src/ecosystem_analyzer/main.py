@@ -281,6 +281,69 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
 @cli.command()
 @click.argument(
+    "old_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.argument(
+    "new_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
+    "--output",
+    type=click.Path(writable=True),
+    default="diff-statistics.md",
+    help="Path for the Markdown statistics file",
+)
+@click.option(
+    "--old-name",
+    type=str,
+    help="Label for the old version (e.g., branch name, commit, or description)",
+)
+@click.option(
+    "--new-name",
+    type=str,
+    help="Label for the new version (e.g., branch name, commit, or description)",
+)
+def generate_diff_statistics(
+    old_file: str,
+    new_file: str,
+    output: str,
+    old_name: str | None,
+    new_name: str | None,
+) -> None:
+    """
+    Generate a Markdown statistics report of diagnostic differences between two JSON files.
+
+    OLD_FILE: Path to the old JSON file.
+    NEW_FILE: Path to the new JSON file.
+    """
+    diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
+    statistics = diff._calculate_statistics()
+
+    # Generate Markdown content
+    markdown_content = f"""### Summary
+
+- **Added**: {statistics["total_added"]:,}
+- **Removed**: {statistics["total_removed"]:,}
+- **Changed**: {statistics["total_changed"]:,}
+
+| Lint rule | Added | Removed | Changed |
+|-----------|-------|---------|---------|
+"""
+
+    for lint_data in statistics["merged_by_lint"]:
+        markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
+
+    with open(output, "w") as f:
+        f.write(markdown_content)
+
+    print(f"Markdown statistics report generated at: {output}")
+
+
+@cli.command()
+@click.argument(
     "diagnostics",
     type=click.Path(exists=True, dir_okay=False, readable=True),
 )
@@ -296,7 +359,9 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
     type=int,
     default=None,
 )
-def generate_report(diagnostics: str, output: str, max_diagnostics_per_project: int | None) -> None:
+def generate_report(
+    diagnostics: str, output: str, max_diagnostics_per_project: int | None
+) -> None:
     """
     Generate an HTML report from the diagnostics JSON file.
     """
