@@ -322,15 +322,22 @@ def generate_diff_statistics(
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     statistics = diff._calculate_statistics()
 
-    markdown_content = """
-| Lint rule | Added | Removed | Changed |
-|-----------|------:|--------:|--------:|
-"""
+    if (
+        statistics["total_added"] == 0
+        and statistics["total_removed"] == 0
+        and statistics["total_changed"] == 0
+    ):
+        markdown_content = "No changes detected ✅"
+    else:
+        markdown_content = """
+    | Lint rule | Added | Removed | Changed |
+    |-----------|------:|--------:|--------:|
+    """
 
-    for lint_data in statistics["merged_by_lint"]:
-        markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
+        for lint_data in statistics["merged_by_lint"]:
+            markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
 
-    markdown_content += f"| **Total** | **{statistics['total_added']:,}** | **{statistics['total_removed']:,}** | **{statistics['total_changed']:,}** |\n"
+        markdown_content += f"| **Total** | **{statistics['total_added']:,}** | **{statistics['total_removed']:,}** | **{statistics['total_changed']:,}** |\n"
 
     with open(output, "w") as f:
         f.write(markdown_content)
