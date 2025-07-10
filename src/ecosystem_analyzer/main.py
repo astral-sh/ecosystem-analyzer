@@ -136,8 +136,20 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     type=str,
     required=True,
 )
+@click.option(
+    "--output-old",
+    help="Output filename for old commit diagnostics",
+    type=str,
+    default="diagnostics-old.json",
+)
+@click.option(
+    "--output-new",
+    help="Output filename for new commit diagnostics",
+    type=str,
+    default="diagnostics-new.json",
+)
 @click.pass_context
-def diff(ctx, projects: str, old: str, new: str) -> None:
+def diff(ctx, projects: str, old: str, new: str, output_old: str, output_new: str) -> None:
     """
     Compare diagnostics between two commits.
     """
@@ -150,14 +162,10 @@ def diff(ctx, projects: str, old: str, new: str) -> None:
     manager = Manager(ty_repo=ctx.obj["repository"], project_names=project_names)
 
     run_outputs_old = manager.run_for_commit(old)
-    manager.write_run_outputs(
-        run_outputs_old, f"diagnostics-old-{old.replace('/', '-')}.json"
-    )
+    manager.write_run_outputs(run_outputs_old, output_old)
 
     run_outputs_new = manager.run_for_commit(new)
-    manager.write_run_outputs(
-        run_outputs_new, f"diagnostics-new-{new.replace('/', '-')}.json"
-    )
+    manager.write_run_outputs(run_outputs_new, output_new)
 
 
 @cli.command()
