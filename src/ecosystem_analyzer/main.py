@@ -119,8 +119,14 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
 
 @cli.command()
 @click.option(
-    "--projects",
-    help="List to a file with projects to analyze",
+    "--projects-old",
+    help="List to a file with projects to analyze for old commit",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
+    "--projects-new",
+    help="List to a file with projects to analyze for new commit",
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=True,
 )
@@ -149,7 +155,7 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     default="diagnostics-new.json",
 )
 @click.pass_context
-def diff(ctx, projects: str, old: str, new: str, output_old: str, output_new: str) -> None:
+def diff(ctx, projects_old: str, projects_new: str, old: str, new: str, output_old: str, output_new: str) -> None:
     """
     Compare diagnostics between two commits.
     """
@@ -157,13 +163,21 @@ def diff(ctx, projects: str, old: str, new: str, output_old: str, output_new: st
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
-    project_names = Path(projects).read_text().splitlines()
+    project_names_old = Path(projects_old).read_text().splitlines()
+    project_names_new = Path(projects_new).read_text().splitlines()
 
-    manager = Manager(ty_repo=ctx.obj["repository"], project_names=project_names)
+    # Create union of both project lists for installation
+    all_project_names = list(set(project_names_old + project_names_new))
 
+    manager = Manager(ty_repo=ctx.obj["repository"], project_names=all_project_names)
+
+    # Run for old commit with old projects
+    manager.activate(project_names_old)
     run_outputs_old = manager.run_for_commit(old)
     manager.write_run_outputs(run_outputs_old, output_old)
 
+    # Run for new commit with new projects
+    manager.activate(project_names_new)
     run_outputs_new = manager.run_for_commit(new)
     manager.write_run_outputs(run_outputs_new, output_new)
 

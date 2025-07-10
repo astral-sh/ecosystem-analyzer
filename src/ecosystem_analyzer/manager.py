@@ -29,6 +29,7 @@ def _get_ecosystem_projects() -> dict[str, Project]:
 class Manager:
     _project_names: list[str]
     _installed_projects: list[InstalledProject] = []
+    _active_projects: list[InstalledProject] = []
 
     _ty: Ty
 
@@ -51,6 +52,8 @@ class Manager:
 
         self._project_names = project_names
         self._install_projects()
+        # By default, activate all installed projects
+        self._active_projects = self._installed_projects.copy()
 
     def _install_projects(self) -> None:
         def install_single_project(project_name: str) -> InstalledProject:
@@ -78,11 +81,29 @@ class Manager:
                     logging.error(f"Failed to install project {project_name}: {e}")
                     raise
 
+    def activate(self, project_names: list[str]) -> None:
+        """Activate a subset of installed projects for running."""
+        # Validate that all requested projects are installed
+        installed_project_names = {project.name for project in self._installed_projects}
+
+        unavailable_projects = set(project_names) - installed_project_names
+        if unavailable_projects:
+            raise RuntimeError(
+                f"Projects {', '.join(unavailable_projects)} not found in installed projects. "
+            )
+
+        # Filter installed projects to only include the requested ones
+        self._active_projects = [
+            project
+            for project in self._installed_projects
+            if project.name in project_names
+        ]
+
     def run_for_commit(self, commit: str) -> list[RunOutput]:
         self._ty.compile_for_commit(commit)
 
         run_outputs = []
-        for project in self._installed_projects:
+        for project in self._active_projects:
             output = self._ty.run_on_project(project)
             run_outputs.append(output)
 
