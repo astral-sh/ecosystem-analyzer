@@ -330,9 +330,9 @@ def generate_diff_statistics(
         markdown_content = "No changes detected ✅"
     else:
         markdown_content = """
-    | Lint rule | Added | Removed | Changed |
-    |-----------|------:|--------:|--------:|
-    """
+| Lint rule | Added | Removed | Changed |
+|-----------|------:|--------:|--------:|
+"""
 
         for lint_data in statistics["merged_by_lint"]:
             markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
