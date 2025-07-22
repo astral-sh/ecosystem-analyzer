@@ -26,3 +26,8 @@ ignore = [
 
 [tool.uv.sources]
 mypy-primer = { git = "https://github.com/hauntsaninja/mypy_primer" }
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.1",
+]
