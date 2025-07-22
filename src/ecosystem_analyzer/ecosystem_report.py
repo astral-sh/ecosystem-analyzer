@@ -3,7 +3,6 @@ import logging
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
-from importlib.resources import files
 
 
 def process_diagnostics(data, max_diagnostics_per_project=None):
