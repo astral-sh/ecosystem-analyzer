@@ -34,7 +34,7 @@ class DiagnosticsParser:
             r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
             r"(?P<message>.+)$"
         )
-        
+
         # New format: path:line:column: error[lint-name] message
         new_pattern = (
             r"^(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
@@ -64,7 +64,7 @@ class DiagnosticsParser:
                 diagnostic["github_ref"] = github_ref
 
             return diagnostic
-        
+
         # Try new format
         elif match := re.match(new_pattern, line):
             path = str(match.group("path"))
@@ -87,7 +87,7 @@ class DiagnosticsParser:
                 diagnostic["github_ref"] = github_ref
 
             return diagnostic
-            
+
         return None
 
     def parse(self, content: str) -> list[Diagnostic]:

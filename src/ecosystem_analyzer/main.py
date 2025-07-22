@@ -155,7 +155,15 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     default="diagnostics-new.json",
 )
 @click.pass_context
-def diff(ctx, projects_old: str, projects_new: str, old: str, new: str, output_old: str, output_new: str) -> None:
+def diff(
+    ctx,
+    projects_old: str,
+    projects_new: str,
+    old: str,
+    new: str,
+    output_old: str,
+    output_new: str,
+) -> None:
     """
     Compare diagnostics between two commits.
     """

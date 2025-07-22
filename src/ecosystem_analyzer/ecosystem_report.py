@@ -15,7 +15,10 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
         project = output["project"]
 
         num_diagnostics = len(output["diagnostics"])
-        if max_diagnostics_per_project is not None and num_diagnostics > max_diagnostics_per_project:
+        if (
+            max_diagnostics_per_project is not None
+            and num_diagnostics > max_diagnostics_per_project
+        ):
             logging.info(
                 f"Skipping project '{project}' ({num_diagnostics} diagnostics, limit: {max_diagnostics_per_project})"
             )
@@ -80,7 +83,11 @@ def generate_html_report(diagnostics, ty_commit, output_path):
     return output_path
 
 
-def generate(diagnostics_path: str | Path, output_path: str | Path, max_diagnostics_per_project: int | None = None) -> None:
+def generate(
+    diagnostics_path: str | Path,
+    output_path: str | Path,
+    max_diagnostics_per_project: int | None = None,
+) -> None:
     diagnostics_path = Path(diagnostics_path)
     output_path = Path(output_path)
 
@@ -88,7 +95,9 @@ def generate(diagnostics_path: str | Path, output_path: str | Path, max_diagnost
         data = json.load(f)
     diagnostics = process_diagnostics(data, max_diagnostics_per_project)
 
-    ty_commits = set(output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit"))
+    ty_commits = set(
+        output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit")
+    )
     if len(ty_commits) > 1:
         raise RuntimeError(
             "Error: The JSON file must contain diagnostics from a single ty commit."

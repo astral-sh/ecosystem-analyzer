@@ -55,25 +55,26 @@ class DiagnosticDiff:
 
     def _get_commit(self, data) -> str:
         ty_commits = set(
-            output.get("ty_commit", "unknown") for output in data["outputs"]
+            output.get("ty_commit", "unknown")
+            for output in data["outputs"]
             if output.get("ty_commit") is not None
         )
-        
+
         # If no ty_commit fields are present, return "unknown"
         if not ty_commits:
             return "unknown"
-            
+
         # If all commits are the same (or there's only one), return it
         if len(ty_commits) == 1:
             return ty_commits.pop()
-            
+
         # If there are multiple different commits, that's an error
         if len(ty_commits) > 1 and "unknown" in ty_commits:
             # Remove "unknown" and check again
             ty_commits.discard("unknown")
             if len(ty_commits) == 1:
                 return ty_commits.pop()
-        
+
         raise RuntimeError(
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
