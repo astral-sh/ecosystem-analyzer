@@ -409,6 +409,65 @@
             </div>
         </div>
 
+        {% if diffs.failed_projects %}
+        <h2>Failed Projects</h2>
+        <div class="failed-projects">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                <thead>
+                    <tr style="background: var(--flare); color: white;">
+                        <th style="padding: 12px; text-align: left;">Project</th>
+                        <th style="padding: 12px; text-align: center;">Old Status</th>
+                        <th style="padding: 12px; text-align: center;">New Status</th>
+                        <th style="padding: 12px; text-align: center;">Old Return Code</th>
+                        <th style="padding: 12px; text-align: center;">New Return Code</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in diffs.failed_projects %}
+                    <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1); background: rgba(200, 50, 50, 0.1);">
+                        <td style="padding: 12px;">
+                            <strong>{{ project.project }}</strong>
+                            <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-weight: 500;">
+                            {% if project.old_status == 'timeout' %}
+                                <span style="color: #dc3545;">timeout</span>
+                            {% elif project.old_status == 'abnormal exit' %}
+                                <span style="color: #fd7e14;">abnormal exit</span>
+                            {% else %}
+                                <span style="color: #28a745;">success</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-weight: 500;">
+                            {% if project.new_status == 'timeout' %}
+                                <span style="color: #dc3545;">timeout</span>
+                            {% elif project.new_status == 'abnormal exit' %}
+                                <span style="color: #fd7e14;">abnormal exit</span>
+                            {% else %}
+                                <span style="color: #28a745;">success</span>
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
+                            {% if project.old_return_code is none %}
+                                <span style="color: #6c757d;">None</span>
+                            {% else %}
+                                {{ project.old_return_code }}
+                            {% endif %}
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
+                            {% if project.new_return_code is none %}
+                                <span style="color: #6c757d;">None</span>
+                            {% else %}
+                                {{ project.new_return_code }}
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
         {% if diffs.added_projects %}
         <h2>Added Projects</h2>
         {% for project in diffs.added_projects %}

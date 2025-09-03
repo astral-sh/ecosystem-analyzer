@@ -269,23 +269,23 @@
                         class="{% if row.is_failed %}failed{% elif row.factor < 0.9 %}speedup{% elif row.factor > 1.1 %}slowdown{% endif %}">
                         <td class="project-name">{{ row.project }}</td>
                         <td class="time-value">
-                            {% if row.old_is_timeout %}timeout
-                            {% elif row.old_is_abnormal %}abnormal exit
+                            {% if row.old_is_abnormal %}abnormal exit
+                            {% elif row.old_is_timeout %}timeout
                             {% elif row.old_time is none %}N/A
                             {% else %}{{ "%.3f"|format(row.old_time) }}
                             {% endif %}
                         </td>
                         <td class="time-value">
-                            {% if row.new_is_timeout %}timeout
-                            {% elif row.new_is_abnormal %}abnormal exit
+                            {% if row.new_is_abnormal %}abnormal exit
+                            {% elif row.new_is_timeout %}timeout
                             {% elif row.new_time is none %}N/A
                             {% else %}{{ "%.3f"|format(row.new_time) }}
                             {% endif %}
                         </td>
                         <td class="factor-value">
                             {% if row.is_failed %}
-                            {% if row.old_is_timeout or row.new_is_timeout %}timeout
-                            {% else %}abnormal exit
+                            {% if row.old_is_abnormal or row.new_is_abnormal %}abnormal exit
+                            {% else %}timeout
                             {% endif %}
                             {% else %}{{ "%.2f"|format(row.factor) }}×
                             {% endif %}

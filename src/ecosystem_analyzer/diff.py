@@ -100,13 +100,55 @@ class DiagnosticDiff:
             f"{diag['path']}:{diag['line']}:{diag['column']} - {diag['message']}"
         )
 
+    def _is_project_failed(self, project_data: dict) -> tuple[bool, str]:
+        """Check if a project failed (timeout or abnormal exit) and return status."""
+        return_code = project_data.get("return_code")
+        time_s = project_data.get("time_s")
+
+        if return_code is None:
+            return True, "timeout"
+        elif return_code not in (0, 1):
+            return True, "abnormal exit"
+        elif time_s is None:
+            return True, "abnormal exit"
+        else:
+            return False, "success"
+
     def _compute_diffs(self) -> dict[str, Any]:
         """Compute differences between the old and new diagnostic data."""
-        result = {"added_projects": [], "removed_projects": [], "modified_projects": []}
+        result = {
+            "added_projects": [],
+            "removed_projects": [],
+            "modified_projects": [],
+            "failed_projects": [],
+        }
 
         # Get project names from both files
         old_projects = {proj["project"]: proj for proj in self.old_data["outputs"]}
         new_projects = {proj["project"]: proj for proj in self.new_data["outputs"]}
+
+        # Check for failed projects in common projects first
+        common_projects = set(old_projects.keys()) & set(new_projects.keys())
+        for project_name in sorted(common_projects):
+            old_project = old_projects[project_name]
+            new_project = new_projects[project_name]
+
+            old_failed, old_status = self._is_project_failed(old_project)
+            new_failed, new_status = self._is_project_failed(new_project)
+
+            if old_failed or new_failed:
+                result["failed_projects"].append(
+                    {
+                        "project": project_name,
+                        "project_location": new_project.get("project_location", ""),
+                        "old_status": old_status,
+                        "new_status": new_status,
+                        "old_return_code": old_project.get("return_code"),
+                        "new_return_code": new_project.get("return_code"),
+                    }
+                )
+                # Skip detailed diff analysis for failed projects
+                continue
 
         # Find removed projects
         for project_name in sorted(old_projects.keys()):
@@ -154,8 +196,14 @@ class DiagnosticDiff:
                     }
                 )
 
-        # Find modified projects
+        # Get list of failed projects to exclude from detailed analysis
+        failed_project_names = {proj["project"] for proj in result["failed_projects"]}
+
+        # Find modified projects (excluding failed ones)
         for project_name in sorted(set(old_projects.keys()) & set(new_projects.keys())):
+            if project_name in failed_project_names:
+                continue  # Skip failed projects
+
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
@@ -183,6 +231,22 @@ class DiagnosticDiff:
                         "diffs": file_diffs,
                     }
                 )
+
+        # Sort failed projects to prioritize abnormal exits over timeouts
+        def failed_project_sort_key(project):
+            old_abnormal = project["old_status"] == "abnormal exit"
+            new_abnormal = project["new_status"] == "abnormal exit"
+            old_timeout = project["old_status"] == "timeout"
+            new_timeout = project["new_status"] == "timeout"
+
+            if old_abnormal or new_abnormal:
+                return (2, project["project"])  # Abnormal exits first
+            elif old_timeout or new_timeout:
+                return (1, project["project"])  # Timeouts second
+            else:
+                return (0, project["project"])  # Other failures last
+
+        result["failed_projects"].sort(key=failed_project_sort_key, reverse=True)
 
         return result
 
@@ -406,6 +470,7 @@ class DiagnosticDiff:
             "total_added": 0,
             "total_removed": 0,
             "total_changed": 0,
+            "failed_projects": len(self.diffs.get("failed_projects", [])),
             "added_by_lint": {},
             "removed_by_lint": {},
             "changed_by_lint": {},
@@ -688,14 +753,19 @@ class DiagnosticDiff:
                 }
             )
 
-        # Sort by failure status first (failures at top), then by factor significance
-        timing_data.sort(
-            key=lambda x: (
-                x["is_failed"],
-                abs(x["factor"] - 1.0) if not x["is_failed"] else 0,
-            ),
-            reverse=True,
-        )
+        # Sort by failure type first (abnormal exits, then timeouts, then normal), then by factor significance
+        def sort_key(x):
+            if x["old_is_abnormal"] or x["new_is_abnormal"]:
+                return (2, 0)  # Abnormal exits first
+            elif x["old_is_timeout"] or x["new_is_timeout"]:
+                return (1, 0)  # Timeouts second
+            else:
+                return (
+                    0,
+                    abs(x["factor"] - 1.0),
+                )  # Normal projects by factor significance
+
+        timing_data.sort(key=sort_key, reverse=True)
 
         return timing_data
 
