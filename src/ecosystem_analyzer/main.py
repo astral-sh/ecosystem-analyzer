@@ -406,15 +406,38 @@ def generate_diff_statistics(
     """
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     statistics = diff._calculate_statistics()
+    failed_projects = diff.diffs.get("failed_projects", [])
 
+    markdown_content = ""
+
+    # Add failed projects section if any
+    if failed_projects:
+        markdown_content += "**Failing projects**:\n\n"
+        markdown_content += "| Project | Old Status | New Status | Old Return Code | New Return Code |\n"
+        markdown_content += "|---------|------------|------------|-----------------|------------------|\n"
+
+        for project in failed_projects:
+            old_status = project["old_status"]
+            new_status = project["new_status"]
+            old_rc = project.get("old_return_code", "None")
+            new_rc = project.get("new_return_code", "None")
+
+            markdown_content += f"| `{project['project']}` | {old_status} | {new_status} | `{old_rc}` | `{new_rc}` |\n"
+
+        markdown_content += "\n"
+
+    # Add diagnostic changes section
     if (
         statistics["total_added"] == 0
         and statistics["total_removed"] == 0
         and statistics["total_changed"] == 0
     ):
-        markdown_content = "No changes detected ✅"
+        markdown_content += "No diagnostic changes detected ✅"
     else:
-        markdown_content = """
+        if failed_projects:
+            markdown_content += "**Diagnostic changes:**\n"
+
+        markdown_content += """
 | Lint rule | Added | Removed | Changed |
 |-----------|------:|--------:|--------:|
 """
