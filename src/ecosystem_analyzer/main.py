@@ -154,6 +154,12 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
     type=str,
     default="diagnostics-new.json",
 )
+@click.option(
+    "--profile",
+    help="Whether to build ty in debug or in release mode",
+    type=click.Choice(["debug", "release"]),
+    default="debug",
+)
 @click.pass_context
 def diff(
     ctx,
@@ -163,6 +169,7 @@ def diff(
     new: str,
     output_old: str,
     output_new: str,
+    profile: str,
 ) -> None:
     """
     Compare diagnostics between two commits.
@@ -177,7 +184,11 @@ def diff(
     # Create union of both project lists for installation
     all_project_names = list(set(project_names_old + project_names_new))
 
-    manager = Manager(ty_repo=ctx.obj["repository"], project_names=all_project_names)
+    manager = Manager(
+        ty_repo=ctx.obj["repository"],
+        project_names=all_project_names,
+        release=(profile == "release"),
+    )
 
     # Run for old commit with old projects
     manager.activate(project_names_old)

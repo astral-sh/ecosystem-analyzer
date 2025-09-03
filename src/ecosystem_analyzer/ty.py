@@ -1,6 +1,7 @@
 import logging
 import os
 import subprocess
+import time
 from pathlib import Path
 
 from git import Commit, Repo
@@ -57,6 +58,7 @@ class Ty:
             *extra_args,
         ]
         logging.debug(f"Executing: {' '.join(cmd)}")
+        start_time = time.time()
         result = subprocess.run(
             cmd,
             cwd=project.root_directory,
@@ -64,6 +66,7 @@ class Ty:
             capture_output=True,
             text=True,
         )
+        execution_time = time.time() - start_time
 
         if result.returncode not in (0, 1):
             logging.error(
@@ -77,9 +80,12 @@ class Ty:
         )
         diagnostics = parser.parse(result.stdout)
 
-        return {
-            "project": project.name,
-            "project_location": project.location,
-            "ty_commit": self.repository.head.commit.hexsha,
-            "diagnostics": diagnostics,
-        }
+        return RunOutput(
+            {
+                "project": project.name,
+                "project_location": project.location,
+                "ty_commit": self.repository.head.commit.hexsha,
+                "diagnostics": diagnostics,
+                "time_s": execution_time,
+            }
+        )
