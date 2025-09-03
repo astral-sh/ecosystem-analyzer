@@ -2,9 +2,16 @@ import difflib
 import json
 import os
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
+
+from .diagnostic import Diagnostic
+from .run_output import RunOutput
+
+
+class JsonData(TypedDict):
+    outputs: list[RunOutput]
 
 
 class DiagnosticDiff:
@@ -21,8 +28,8 @@ class DiagnosticDiff:
         self.old_file = old_file
         self.new_file = new_file
         self.ty_repo_url = "https://github.com/astral-sh/ruff"
-        self.old_data = self._load_json(old_file)
-        self.new_data = self._load_json(new_file)
+        self.old_data: JsonData = self._load_json(old_file)
+        self.new_data: JsonData = self._load_json(new_file)
 
         self.old_commit = self._get_commit(self.old_data)
         self.new_commit = self._get_commit(self.new_data)
@@ -36,7 +43,7 @@ class DiagnosticDiff:
 
         self.diffs = self._compute_diffs()
 
-    def _load_json(self, file_path: str) -> dict[str, Any]:
+    def _load_json(self, file_path: str) -> JsonData:
         """Load and parse a JSON file."""
         with open(file_path) as f:
             data = json.load(f)
@@ -53,7 +60,7 @@ class DiagnosticDiff:
 
         return data
 
-    def _get_commit(self, data) -> str:
+    def _get_commit(self, data: JsonData) -> str:
         ty_commits = set(
             output.get("ty_commit", "unknown")
             for output in data["outputs"]
@@ -79,14 +86,14 @@ class DiagnosticDiff:
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
 
-    def _count_diagnostics(self, data) -> int:
+    def _count_diagnostics(self, data: JsonData) -> int:
         """Count the total number of diagnostics in the data."""
         total_diagnostics = 0
         for output in data["outputs"]:
             total_diagnostics += len(output.get("diagnostics", []))
         return total_diagnostics
 
-    def _format_diagnostic(self, diag: dict[str, Any]) -> str:
+    def _format_diagnostic(self, diag: Diagnostic) -> str:
         """Format a diagnostic entry as a string for comparison."""
         return (
             f"[{diag['level']}] {diag['lint_name']} - "
@@ -98,12 +105,8 @@ class DiagnosticDiff:
         result = {"added_projects": [], "removed_projects": [], "modified_projects": []}
 
         # Get project names from both files
-        old_projects = {
-            proj["project"]: proj for proj in self.old_data.get("outputs", [])
-        }
-        new_projects = {
-            proj["project"]: proj for proj in self.new_data.get("outputs", [])
-        }
+        old_projects = {proj["project"]: proj for proj in self.old_data["outputs"]}
+        new_projects = {proj["project"]: proj for proj in self.new_data["outputs"]}
 
         # Find removed projects
         for project_name in sorted(old_projects.keys()):
@@ -184,8 +187,8 @@ class DiagnosticDiff:
         return result
 
     def _group_diagnostics_by_file(
-        self, diagnostics: list[dict[str, Any]]
-    ) -> dict[str, list[dict[str, Any]]]:
+        self, diagnostics: list[Diagnostic]
+    ) -> dict[str, list[Diagnostic]]:
         """Group diagnostics by file path."""
         result = {}
         for diag in diagnostics:
@@ -197,8 +200,8 @@ class DiagnosticDiff:
 
     def _compare_files(
         self,
-        old_files: dict[str, list[dict[str, Any]]],
-        new_files: dict[str, list[dict[str, Any]]],
+        old_files: dict[str, list[Diagnostic]],
+        new_files: dict[str, list[Diagnostic]],
     ) -> dict[str, Any]:
         """Compare diagnostics across files."""
         result = {"added_files": [], "removed_files": [], "modified_files": []}
@@ -262,8 +265,8 @@ class DiagnosticDiff:
         return result
 
     def _group_diagnostics_by_line(
-        self, diagnostics: list[dict[str, Any]]
-    ) -> dict[int, list[dict[str, Any]]]:
+        self, diagnostics: list[Diagnostic]
+    ) -> dict[int, list[Diagnostic]]:
         """Group diagnostics by line number."""
         result = {}
         for diag in diagnostics:
@@ -281,8 +284,8 @@ class DiagnosticDiff:
 
     def _compare_lines(
         self,
-        old_lines: dict[int, list[dict[str, Any]]],
-        new_lines: dict[int, list[dict[str, Any]]],
+        old_lines: dict[int, list[Diagnostic]],
+        new_lines: dict[int, list[Diagnostic]],
     ) -> dict[str, Any]:
         """Compare diagnostics across lines."""
         result = {"added_lines": [], "removed_lines": [], "modified_lines": []}
@@ -385,9 +388,7 @@ class DiagnosticDiff:
 
         return result
 
-    def _similar_diagnostics(
-        self, diag1: dict[str, Any], diag2: dict[str, Any]
-    ) -> bool:
+    def _similar_diagnostics(self, diag1: Diagnostic, diag2: Diagnostic) -> bool:
         """Check if two diagnostics are similar (same lint name and position)."""
         return (
             diag1["lint_name"] == diag2["lint_name"]

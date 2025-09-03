@@ -3,7 +3,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from git import Repo
+from git import Commit, Repo
 from mypy_primer.model import Project
 from mypy_primer.projects import get_projects
 
@@ -99,7 +99,7 @@ class Manager:
             if project.name in project_names
         ]
 
-    def run_for_commit(self, commit: str) -> list[RunOutput]:
+    def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
         self._ty.compile_for_commit(commit)
 
         run_outputs = []
