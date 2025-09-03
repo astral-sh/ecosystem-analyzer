@@ -59,26 +59,33 @@ class Ty:
         ]
         logging.debug(f"Executing: {' '.join(cmd)}")
         start_time = time.time()
-        result = subprocess.run(
-            cmd,
-            cwd=project.root_directory,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        execution_time = time.time() - start_time
-
-        if result.returncode not in (0, 1):
-            logging.error(
-                f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
+        try:
+            result = subprocess.run(
+                cmd,
+                cwd=project.root_directory,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=30,
             )
 
-        parser = DiagnosticsParser(
-            repo_location=project.location,
-            repo_commit=project.current_commit,
-            repo_working_dir=project.root_directory,
-        )
-        diagnostics = parser.parse(result.stdout)
+            execution_time = time.time() - start_time
+
+            if result.returncode not in (0, 1):
+                logging.error(
+                    f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
+                )
+
+            parser = DiagnosticsParser(
+                repo_location=project.location,
+                repo_commit=project.current_commit,
+                repo_working_dir=project.root_directory,
+            )
+
+            diagnostics = parser.parse(result.stdout)
+        except subprocess.TimeoutExpired:
+            diagnostics = []
+            execution_time = None
 
         return RunOutput(
             {

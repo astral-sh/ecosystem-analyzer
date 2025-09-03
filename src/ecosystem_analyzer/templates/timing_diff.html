@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timing Diff Report</title>
+    <style>
+        /* Import Fira Code font */
+        @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
+
+        :root {
+            /* Astral Brand Colors */
+            --radiate: #D7FF64;
+            --galaxy: #261230;
+            --space: #30173D;
+            --starlight: #F4F4F1;
+            --rock: #78876E;
+            --crater: #F0DFDF;
+            --lunar: #FBF2FC;
+            --nebula: #CDCBFB;
+            --flare: #6340AC;
+            --electron: #46EBE1;
+            --cosmic: #DE5FE9;
+            --sandstone: #E1DF99;
+            --comet: #6F5D6F;
+        }
+
+        body {
+            font-family: 'Fira Code', monospace;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, var(--starlight) 0%, var(--lunar) 100%);
+            min-height: 100vh;
+            color: var(--galaxy);
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 { 
+            margin: 0 0 20px 0; 
+            font-size: 28px;
+            color: var(--galaxy);
+            font-weight: 600;
+        }
+        
+        h2 { 
+            margin: 30px 0 15px 0; 
+            font-size: 20px;
+            color: var(--space);
+            font-weight: 500;
+        }
+
+        .metadata {
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+            border-left: 4px solid var(--flare);
+        }
+
+        .metadata .row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .metadata .row:last-child {
+            margin-bottom: 0;
+        }
+
+        .metadata .label {
+            font-weight: 500;
+            color: var(--space);
+        }
+
+        .metadata .value {
+            color: var(--galaxy);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid rgba(38, 18, 48, 0.1);
+        }
+
+        th {
+            background: var(--flare);
+            color: white;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        th:first-child {
+            text-align: left;
+        }
+
+        td {
+            font-family: 'Fira Code', monospace;
+        }
+
+        td:nth-child(2), td:nth-child(3), td:nth-child(4) {
+            text-align: center;
+            font-weight: 500;
+        }
+
+        tr:hover {
+            background: rgba(100, 64, 172, 0.05);
+        }
+
+        .speedup {
+            background: rgba(120, 200, 120, 0.2) !important;
+        }
+
+        .slowdown {
+            background: rgba(200, 120, 120, 0.2) !important;
+        }
+
+        .timeout {
+            background: rgba(200, 50, 50, 0.3) !important;
+            color: var(--galaxy);
+            font-weight: 600;
+        }
+
+        .project-name {
+            font-weight: 500;
+            color: var(--galaxy);
+        }
+
+        .time-value {
+            font-variant-numeric: tabular-nums;
+        }
+
+        .factor-value {
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        .summary {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            border-left: 4px solid var(--cosmic);
+        }
+
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .stat-box {
+            background: rgba(255, 255, 255, 0.6);
+            padding: 12px;
+            border-radius: 6px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--flare);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--comet);
+            margin-top: 4px;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px;
+            color: var(--comet);
+            font-style: italic;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Timing Diff Report</h1>
+        
+        <div class="metadata">
+            <div class="row">
+                <span class="label">Old Version:</span>
+                <span class="value">{{ old_branch_info }} ({{ old_commit[:7] }})</span>
+            </div>
+            <div class="row">
+                <span class="label">New Version:</span>
+                <span class="value">{{ new_branch_info }} ({{ new_commit[:7] }})</span>
+            </div>
+            <div class="row">
+                <span class="label">Total Projects:</span>
+                <span class="value">{{ timing_data|length }}</span>
+            </div>
+        </div>
+
+        {% if timing_data %}
+        <div class="summary">
+            <h2>Summary Statistics</h2>
+            <div class="summary-stats">
+                <div class="stat-box">
+                    <div class="stat-value">{{ summary.speedups }}</div>
+                    <div class="stat-label">Speedups (factor < 0.9)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ summary.slowdowns }}</div>
+                    <div class="stat-label">Slowdowns (factor > 1.1)</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ summary.timeouts }}</div>
+                    <div class="stat-label">Timeouts</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ "%.2f"|format(summary.avg_factor) }}×</div>
+                    <div class="stat-label">Average Factor</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-value">{{ "%.2f"|format(summary.median_factor) }}×</div>
+                    <div class="stat-label">Median Factor</div>
+                </div>
+            </div>
+        </div>
+
+        <h2>Project Timing Comparison</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Project</th>
+                    <th>Old Time (s)</th>
+                    <th>New Time (s)</th>
+                    <th>Factor</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in timing_data %}
+                <tr class="{% if row.is_timeout %}timeout{% elif row.factor < 0.9 %}speedup{% elif row.factor > 1.1 %}slowdown{% endif %}">
+                    <td class="project-name">{{ row.project }}</td>
+                    <td class="time-value">{% if row.old_time is none %}timeout{% else %}{{ "%.3f"|format(row.old_time) }}{% endif %}</td>
+                    <td class="time-value">{% if row.new_time is none %}timeout{% else %}{{ "%.3f"|format(row.new_time) }}{% endif %}</td>
+                    <td class="factor-value">{% if row.is_timeout %}timeout{% else %}{{ "%.2f"|format(row.factor) }}×{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="no-data">
+            No timing data available for comparison.
+        </div>
+        {% endif %}
+    </div>
+</body>
+
+</html>

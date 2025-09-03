@@ -8,4 +8,4 @@ class RunOutput(TypedDict):
     project_location: str
     ty_commit: str
     diagnostics: list[Diagnostic]
-    time_s: float
+    time_s: float | None

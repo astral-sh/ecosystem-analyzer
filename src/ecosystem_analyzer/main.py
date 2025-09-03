@@ -332,6 +332,50 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
     required=True,
 )
 @click.option(
+    "--output-html",
+    type=click.Path(writable=True),
+    default="timing-diff.html",
+    help="Path for the HTML timing diff report",
+)
+@click.option(
+    "--old-name",
+    type=str,
+    help="Label for the old version (e.g., branch name, commit, or description)",
+)
+@click.option(
+    "--new-name",
+    type=str,
+    help="Label for the new version (e.g., branch name, commit, or description)",
+)
+def generate_timing_diff(
+    old_file: str,
+    new_file: str,
+    output_html: str,
+    old_name: str | None,
+    new_name: str | None,
+) -> None:
+    """
+    Generate a timing diff report comparing execution times between two JSON files.
+
+    OLD_FILE: Path to the old JSON file.
+    NEW_FILE: Path to the new JSON file.
+    """
+    diff_tool = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
+    diff_tool.generate_timing_html_report(output_html)
+
+
+@cli.command()
+@click.argument(
+    "old_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.argument(
+    "new_file",
+    type=click.Path(exists=True, dir_okay=False, readable=True),
+    required=True,
+)
+@click.option(
     "--output",
     type=click.Path(writable=True),
     default="diff-statistics.md",

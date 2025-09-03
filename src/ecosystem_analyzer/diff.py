@@ -570,3 +570,145 @@ class DiagnosticDiff:
             json.dump(self.diffs, f, indent=2)
 
         print(f"JSON diff saved to: {output_path}")
+
+    def generate_timing_html_report(self, output_path: str) -> None:
+        """Generate an HTML report comparing timing data between old and new runs."""
+        # Get timing data for comparison
+        timing_data = self._compute_timing_comparison()
+
+        # Set up Jinja2 environment with package loader
+        try:
+            # Try PackageLoader first (works for installed packages)
+            env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+        except (ImportError, FileNotFoundError):
+            # Fallback to FileSystemLoader for development
+            template_path = Path(__file__).parent.parent.parent / "templates"
+            if not template_path.exists():
+                template_path = Path("templates")
+            env = Environment(loader=FileSystemLoader(str(template_path)))
+
+        template = env.get_template("timing_diff.html")
+
+        # Calculate summary statistics
+        summary = self._calculate_timing_summary(timing_data)
+
+        # Create template context
+        context = {
+            "old_commit": self.old_commit,
+            "new_commit": self.new_commit,
+            "old_branch_info": self.old_branch_info,
+            "new_branch_info": self.new_branch_info,
+            "timing_data": timing_data,
+            "summary": summary,
+        }
+
+        # Ensure the output directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+        # Render the template and write to file
+        with open(output_path, "w") as f:
+            f.write(template.render(context))
+
+        print(f"Timing diff HTML report generated at: {output_path}")
+
+    def _compute_timing_comparison(self) -> list[dict[str, Any]]:
+        """Compute timing comparison data between old and new runs."""
+        # Get project timing data from both files
+        old_projects = {proj["project"]: proj for proj in self.old_data["outputs"]}
+        new_projects = {proj["project"]: proj for proj in self.new_data["outputs"]}
+
+        timing_data = []
+
+        # Find projects that exist in both old and new data
+        common_projects = set(old_projects.keys()) & set(new_projects.keys())
+
+        for project_name in sorted(common_projects):
+            old_project = old_projects[project_name]
+            new_project = new_projects[project_name]
+
+            # Get timing data (None indicates timeout)
+            old_time = old_project.get("time_s")
+            new_time = new_project.get("time_s")
+
+            # Handle timeout cases
+            if old_time is None and new_time is None:
+                # Both timed out
+                factor = 1.0
+                is_timeout = True
+            elif old_time is None:
+                # Old timed out, new didn't
+                factor = 0.0  # Special case for template
+                is_timeout = True
+            elif new_time is None:
+                # New timed out, old didn't
+                factor = float("inf")  # Special case for template
+                is_timeout = True
+            else:
+                # Neither timed out, calculate normal factor
+                if old_time > 0:
+                    factor = new_time / old_time
+                else:
+                    factor = float("inf") if new_time > 0 else 1.0
+                is_timeout = False
+
+            timing_data.append(
+                {
+                    "project": project_name,
+                    "old_time": old_time,
+                    "new_time": new_time,
+                    "factor": factor,
+                    "is_timeout": is_timeout,
+                }
+            )
+
+        # Sort by timeout status first (timeouts at top), then by factor significance
+        timing_data.sort(
+            key=lambda x: (
+                x["is_timeout"],
+                abs(x["factor"] - 1.0) if not x["is_timeout"] else 0,
+            ),
+            reverse=True,
+        )
+
+        return timing_data
+
+    def _calculate_timing_summary(
+        self, timing_data: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Calculate summary statistics for timing comparison."""
+        if not timing_data:
+            return {
+                "speedups": 0,
+                "slowdowns": 0,
+                "timeouts": 0,
+                "avg_factor": 1.0,
+                "median_factor": 1.0,
+            }
+
+        # Filter out timeouts and infinite values for statistical calculations
+        valid_data = [row for row in timing_data if not row.get("is_timeout", False)]
+        factors = [row["factor"] for row in valid_data if row["factor"] != float("inf")]
+
+        speedups = sum(1 for row in valid_data if row["factor"] < 0.9)
+        slowdowns = sum(1 for row in valid_data if row["factor"] > 1.1)
+        timeouts = sum(1 for row in timing_data if row.get("is_timeout", False))
+
+        avg_factor = sum(factors) / len(factors) if factors else 1.0
+
+        # Calculate median factor
+        sorted_factors = sorted(factors)
+        n = len(sorted_factors)
+        if n == 0:
+            median_factor = 1.0
+        elif n % 2 == 0:
+            median_factor = (sorted_factors[n // 2 - 1] + sorted_factors[n // 2]) / 2
+        else:
+            median_factor = sorted_factors[n // 2]
+
+        return {
+            "speedups": speedups,
+            "slowdowns": slowdowns,
+            "timeouts": timeouts,
+            "avg_factor": avg_factor,
+            "median_factor": median_factor,
+        }
