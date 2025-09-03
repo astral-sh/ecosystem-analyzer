@@ -24,6 +24,9 @@ ignore = [
     "E501", # line too long
 ]
 
+[tool.ty.src]
+exclude = ["plots"]
+
 [tool.uv.sources]
 mypy-primer = { git = "https://github.com/hauntsaninja/mypy_primer" }
 
