@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timing Diff Report</title>
+    <title>ty timing diff report</title>
     <style>
         /* Import Fira Code font */
         @import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap');
@@ -41,15 +41,15 @@
             margin: 0 auto;
         }
 
-        h1 { 
-            margin: 0 0 20px 0; 
+        h1 {
+            margin: 0 0 20px 0;
             font-size: 28px;
             color: var(--galaxy);
             font-weight: 600;
         }
-        
-        h2 { 
-            margin: 30px 0 15px 0; 
+
+        h2 {
+            margin: 30px 0 15px 0;
             font-size: 20px;
             color: var(--space);
             font-weight: 500;
@@ -91,7 +91,8 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
-        th, td {
+        th,
+        td {
             padding: 12px 16px;
             text-align: left;
             border-bottom: 1px solid rgba(38, 18, 48, 0.1);
@@ -112,7 +113,9 @@
             font-family: 'Fira Code', monospace;
         }
 
-        td:nth-child(2), td:nth-child(3), td:nth-child(4) {
+        td:nth-child(2),
+        td:nth-child(3),
+        td:nth-child(4) {
             text-align: center;
             font-weight: 500;
         }
@@ -130,6 +133,18 @@
         }
 
         .timeout {
+            background: rgba(200, 50, 50, 0.3) !important;
+            color: var(--galaxy);
+            font-weight: 600;
+        }
+
+        .abnormal {
+            background: rgba(200, 100, 50, 0.3) !important;
+            color: var(--galaxy);
+            font-weight: 600;
+        }
+
+        .failed {
             background: rgba(200, 50, 50, 0.3) !important;
             color: var(--galaxy);
             font-weight: 600;
@@ -194,8 +209,8 @@
 
 <body>
     <div class="container">
-        <h1>Timing Diff Report</h1>
-        
+        <h1>ty timing diff report</h1>
+
         <div class="metadata">
             <div class="row">
                 <span class="label">Old Version:</span>
@@ -218,53 +233,73 @@
                 <div class="stat-box">
                     <div class="stat-value">{{ summary.speedups }}</div>
                     <div class="stat-label">Speedups (factor < 0.9)</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value">{{ summary.slowdowns }}</div>
-                    <div class="stat-label">Slowdowns (factor > 1.1)</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value">{{ summary.timeouts }}</div>
-                    <div class="stat-label">Timeouts</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value">{{ "%.2f"|format(summary.avg_factor) }}×</div>
-                    <div class="stat-label">Average Factor</div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-value">{{ "%.2f"|format(summary.median_factor) }}×</div>
-                    <div class="stat-label">Median Factor</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ summary.slowdowns }}</div>
+                        <div class="stat-label">Slowdowns (factor > 1.1)</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ summary.timeouts }}</div>
+                        <div class="stat-label">Timeouts</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ summary.abnormal_exits }}</div>
+                        <div class="stat-label">Abnormal Exits</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-value">{{ "%.2f"|format(summary.avg_factor) }}×</div>
+                        <div class="stat-label">Average Factor</div>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <h2>Project Timing Comparison</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Project</th>
-                    <th>Old Time (s)</th>
-                    <th>New Time (s)</th>
-                    <th>Factor</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for row in timing_data %}
-                <tr class="{% if row.is_timeout %}timeout{% elif row.factor < 0.9 %}speedup{% elif row.factor > 1.1 %}slowdown{% endif %}">
-                    <td class="project-name">{{ row.project }}</td>
-                    <td class="time-value">{% if row.old_time is none %}timeout{% else %}{{ "%.3f"|format(row.old_time) }}{% endif %}</td>
-                    <td class="time-value">{% if row.new_time is none %}timeout{% else %}{{ "%.3f"|format(row.new_time) }}{% endif %}</td>
-                    <td class="factor-value">{% if row.is_timeout %}timeout{% else %}{{ "%.2f"|format(row.factor) }}×{% endif %}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <div class="no-data">
-            No timing data available for comparison.
+            <h2>Project Timing Comparison</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Project</th>
+                        <th>Old Time [s]</th>
+                        <th>New Time [s]</th>
+                        <th>Factor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in timing_data %}
+                    <tr
+                        class="{% if row.is_failed %}failed{% elif row.factor < 0.9 %}speedup{% elif row.factor > 1.1 %}slowdown{% endif %}">
+                        <td class="project-name">{{ row.project }}</td>
+                        <td class="time-value">
+                            {% if row.old_is_timeout %}timeout
+                            {% elif row.old_is_abnormal %}abnormal exit
+                            {% elif row.old_time is none %}N/A
+                            {% else %}{{ "%.3f"|format(row.old_time) }}
+                            {% endif %}
+                        </td>
+                        <td class="time-value">
+                            {% if row.new_is_timeout %}timeout
+                            {% elif row.new_is_abnormal %}abnormal exit
+                            {% elif row.new_time is none %}N/A
+                            {% else %}{{ "%.3f"|format(row.new_time) }}
+                            {% endif %}
+                        </td>
+                        <td class="factor-value">
+                            {% if row.is_failed %}
+                            {% if row.old_is_timeout or row.new_is_timeout %}timeout
+                            {% else %}abnormal exit
+                            {% endif %}
+                            {% else %}{{ "%.2f"|format(row.factor) }}×
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <div class="no-data">
+                No timing data available for comparison.
+            </div>
+            {% endif %}
         </div>
-        {% endif %}
-    </div>
 </body>
 
 </html>

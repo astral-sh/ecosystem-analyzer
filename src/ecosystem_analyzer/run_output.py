@@ -9,3 +9,4 @@ class RunOutput(TypedDict):
     ty_commit: str
     diagnostics: list[Diagnostic]
     time_s: float | None
+    return_code: int | None

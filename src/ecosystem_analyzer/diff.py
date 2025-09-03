@@ -626,46 +626,73 @@ class DiagnosticDiff:
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
-            # Get timing data (None indicates timeout)
+            # Get timing data and return codes
             old_time = old_project.get("time_s")
             new_time = new_project.get("time_s")
+            old_return_code = old_project.get("return_code")
+            new_return_code = new_project.get("return_code")
 
-            # Handle timeout cases
-            if old_time is None and new_time is None:
-                # Both timed out
+            # Determine the status based on return codes and timing data
+            old_is_timeout = old_time is None
+            new_is_timeout = new_time is None
+            old_is_abnormal = old_return_code is not None and old_return_code not in (
+                0,
+                1,
+            )
+            new_is_abnormal = new_return_code is not None and new_return_code not in (
+                0,
+                1,
+            )
+
+            # Handle different failure cases
+            if (old_is_timeout or old_is_abnormal) and (
+                new_is_timeout or new_is_abnormal
+            ):
+                # Both failed (timeout or abnormal)
                 factor = 1.0
-                is_timeout = True
-            elif old_time is None:
-                # Old timed out, new didn't
+                is_failed = True
+                failure_type = "both_failed"
+            elif old_is_timeout or old_is_abnormal:
+                # Old failed, new succeeded
                 factor = 0.0  # Special case for template
-                is_timeout = True
-            elif new_time is None:
-                # New timed out, old didn't
+                is_failed = True
+                failure_type = "old_failed"
+            elif new_is_timeout or new_is_abnormal:
+                # New failed, old succeeded
                 factor = float("inf")  # Special case for template
-                is_timeout = True
+                is_failed = True
+                failure_type = "new_failed"
             else:
-                # Neither timed out, calculate normal factor
+                # Neither failed, calculate normal factor
                 if old_time > 0:
                     factor = new_time / old_time
                 else:
                     factor = float("inf") if new_time > 0 else 1.0
-                is_timeout = False
+                is_failed = False
+                failure_type = None
 
             timing_data.append(
                 {
                     "project": project_name,
                     "old_time": old_time,
                     "new_time": new_time,
+                    "old_return_code": old_return_code,
+                    "new_return_code": new_return_code,
                     "factor": factor,
-                    "is_timeout": is_timeout,
+                    "is_failed": is_failed,
+                    "failure_type": failure_type,
+                    "old_is_timeout": old_is_timeout,
+                    "new_is_timeout": new_is_timeout,
+                    "old_is_abnormal": old_is_abnormal,
+                    "new_is_abnormal": new_is_abnormal,
                 }
             )
 
-        # Sort by timeout status first (timeouts at top), then by factor significance
+        # Sort by failure status first (failures at top), then by factor significance
         timing_data.sort(
             key=lambda x: (
-                x["is_timeout"],
-                abs(x["factor"] - 1.0) if not x["is_timeout"] else 0,
+                x["is_failed"],
+                abs(x["factor"] - 1.0) if not x["is_failed"] else 0,
             ),
             reverse=True,
         )
@@ -681,34 +708,33 @@ class DiagnosticDiff:
                 "speedups": 0,
                 "slowdowns": 0,
                 "timeouts": 0,
+                "abnormal_exits": 0,
                 "avg_factor": 1.0,
-                "median_factor": 1.0,
             }
 
-        # Filter out timeouts and infinite values for statistical calculations
-        valid_data = [row for row in timing_data if not row.get("is_timeout", False)]
+        # Filter out failed runs and infinite values for statistical calculations
+        valid_data = [row for row in timing_data if not row.get("is_failed", False)]
         factors = [row["factor"] for row in valid_data if row["factor"] != float("inf")]
 
         speedups = sum(1 for row in valid_data if row["factor"] < 0.9)
         slowdowns = sum(1 for row in valid_data if row["factor"] > 1.1)
-        timeouts = sum(1 for row in timing_data if row.get("is_timeout", False))
+        timeouts = sum(
+            1
+            for row in timing_data
+            if row.get("old_is_timeout", False) or row.get("new_is_timeout", False)
+        )
+        abnormal_exits = sum(
+            1
+            for row in timing_data
+            if row.get("old_is_abnormal", False) or row.get("new_is_abnormal", False)
+        )
 
         avg_factor = sum(factors) / len(factors) if factors else 1.0
-
-        # Calculate median factor
-        sorted_factors = sorted(factors)
-        n = len(sorted_factors)
-        if n == 0:
-            median_factor = 1.0
-        elif n % 2 == 0:
-            median_factor = (sorted_factors[n // 2 - 1] + sorted_factors[n // 2]) / 2
-        else:
-            median_factor = sorted_factors[n // 2]
 
         return {
             "speedups": speedups,
             "slowdowns": slowdowns,
             "timeouts": timeouts,
+            "abnormal_exits": abnormal_exits,
             "avg_factor": avg_factor,
-            "median_factor": median_factor,
         }

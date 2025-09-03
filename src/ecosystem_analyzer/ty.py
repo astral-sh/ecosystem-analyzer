@@ -70,11 +70,14 @@ class Ty:
             )
 
             execution_time = time.time() - start_time
+            return_code = result.returncode
 
             if result.returncode not in (0, 1):
                 logging.error(
                     f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
                 )
+                # Don't trust execution time for abnormal exits
+                execution_time = None
 
             parser = DiagnosticsParser(
                 repo_location=project.location,
@@ -86,6 +89,7 @@ class Ty:
         except subprocess.TimeoutExpired:
             diagnostics = []
             execution_time = None
+            return_code = None
 
         return RunOutput(
             {
@@ -94,5 +98,6 @@ class Ty:
                 "ty_commit": self.repository.head.commit.hexsha,
                 "diagnostics": diagnostics,
                 "time_s": execution_time,
+                "return_code": return_code,
             }
         )
