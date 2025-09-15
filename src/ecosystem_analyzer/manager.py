@@ -46,11 +46,18 @@ class Manager:
 
         unavailable_projects = set(project_names) - set(self._ecosystem_projects.keys())
         if unavailable_projects:
-            raise RuntimeError(
-                f'Project(s) "{", ".join(unavailable_projects)}" not found in available projects.'
+            logging.warning(
+                f'Project(s) "{", ".join(sorted(unavailable_projects))}" not found in available projects. Skipping.'
             )
 
-        self._project_names = project_names
+        # Filter out unavailable projects and continue with available ones
+        self._project_names = [
+            name for name in project_names if name in self._ecosystem_projects
+        ]
+
+        if not self._project_names:
+            raise RuntimeError("No valid projects found to analyze.")
+
         self._install_projects()
         # By default, activate all installed projects
         self._active_projects = self._installed_projects.copy()
@@ -88,15 +95,18 @@ class Manager:
 
         unavailable_projects = set(project_names) - installed_project_names
         if unavailable_projects:
-            raise RuntimeError(
-                f'Project(s) "{", ".join(unavailable_projects)}" not found in installed projects.'
+            logging.warning(
+                f'Project(s) "{", ".join(sorted(unavailable_projects))}" not found in installed projects. Skipping.'
             )
 
-        # Filter installed projects to only include the requested ones
+        # Filter installed projects to only include the requested ones that are available
+        available_project_names = [
+            name for name in project_names if name in installed_project_names
+        ]
         self._active_projects = [
             project
             for project in self._installed_projects
-            if project.name in project_names
+            if project.name in available_project_names
         ]
 
     def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
