@@ -47,7 +47,7 @@ class Manager:
         unavailable_projects = set(project_names) - set(self._ecosystem_projects.keys())
         if unavailable_projects:
             raise RuntimeError(
-                f"Projects {', '.join(unavailable_projects)} not found in available projects. "
+                f'Project(s) "{", ".join(unavailable_projects)}" not found in available projects.'
             )
 
         self._project_names = project_names
@@ -89,7 +89,7 @@ class Manager:
         unavailable_projects = set(project_names) - installed_project_names
         if unavailable_projects:
             raise RuntimeError(
-                f"Projects {', '.join(unavailable_projects)} not found in installed projects. "
+                f'Project(s) "{", ".join(unavailable_projects)}" not found in installed projects.'
             )
 
         # Filter installed projects to only include the requested ones
