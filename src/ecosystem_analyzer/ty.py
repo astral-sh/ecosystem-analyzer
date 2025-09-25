@@ -66,7 +66,7 @@ class Ty:
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=15 if self.release else 120,
+                timeout=30 if self.release else 180,
             )
 
             execution_time = time.time() - start_time
