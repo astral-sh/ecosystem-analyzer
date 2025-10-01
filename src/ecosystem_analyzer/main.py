@@ -101,8 +101,14 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
     help="Output JSON file with collected diagnostics",
     type=click.Path(),
 )
+@click.option(
+    "--profile",
+    help="Whether to build ty in debug or in release mode",
+    type=click.Choice(["debug", "release"]),
+    default="debug",
+)
 @click.pass_context
-def analyze(ctx, commit: str, projects: str, output: str) -> None:
+def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
     """
@@ -112,7 +118,11 @@ def analyze(ctx, commit: str, projects: str, output: str) -> None:
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(ty_repo=ctx.obj["repository"], project_names=project_names)
+    manager = Manager(
+        ty_repo=ctx.obj["repository"],
+        project_names=project_names,
+        release=(profile == "release"),
+    )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
 
