@@ -67,8 +67,14 @@ def cli(ctx: click.Context, repository: str | None, verbose: bool) -> None:
     help="Output JSON file with collected diagnostics",
     type=click.Path(),
 )
+@click.option(
+    "--profile",
+    help="Cargo profile to use for building ty (e.g., 'dev', 'release')",
+    type=str,
+    default="dev",
+)
 @click.pass_context
-def run(ctx, project_name: str, commit: str, output: str) -> None:
+def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     """
     Run ty on a specific project.
     """
@@ -76,7 +82,9 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
-    manager = Manager(ty_repo=ctx.obj["repository"], project_names=[project_name])
+    manager = Manager(
+        ty_repo=ctx.obj["repository"], project_names=[project_name], profile=profile
+    )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
 
@@ -103,9 +111,9 @@ def run(ctx, project_name: str, commit: str, output: str) -> None:
 )
 @click.option(
     "--profile",
-    help="Whether to build ty in debug or in release mode",
-    type=click.Choice(["debug", "release"]),
-    default="debug",
+    help="Cargo profile to use for building ty (e.g., 'dev', 'release')",
+    type=str,
+    default="dev",
 )
 @click.pass_context
 def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
@@ -121,7 +129,7 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
     manager = Manager(
         ty_repo=ctx.obj["repository"],
         project_names=project_names,
-        release=(profile == "release"),
+        profile=profile,
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -166,9 +174,9 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
 )
 @click.option(
     "--profile",
-    help="Whether to build ty in debug or in release mode",
-    type=click.Choice(["debug", "release"]),
-    default="debug",
+    help="Cargo profile to use for building ty (e.g., 'dev', 'release')",
+    type=str,
+    default="dev",
 )
 @click.pass_context
 def diff(
@@ -197,7 +205,7 @@ def diff(
     manager = Manager(
         ty_repo=ctx.obj["repository"],
         project_names=all_project_names,
-        release=(profile == "release"),
+        profile=profile,
     )
 
     # Run for old commit with old projects
@@ -283,8 +291,14 @@ def generate_diff(
     type=click.Path(),
     default="history-statistics.json",
 )
+@click.option(
+    "--profile",
+    help="Cargo profile to use for building ty (e.g., 'dev', 'release')",
+    type=str,
+    default="release",
+)
 @click.pass_context
-def history(ctx, projects: str, num_commits: int, output: str) -> None:
+def history(ctx, projects: str, num_commits: int, output: str, profile: str) -> None:
     """
     Analyze diagnostics across a range of commits.
     """
@@ -302,7 +316,7 @@ def history(ctx, projects: str, num_commits: int, output: str) -> None:
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(ty_repo=repository, project_names=project_names, release=True)
+    manager = Manager(ty_repo=repository, project_names=project_names, profile=profile)
 
     statistics = []
 
