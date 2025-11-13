@@ -399,14 +399,19 @@ class DiagnosticDiff:
                 changed_old_formatted = set()
                 changed_new_formatted = set()
 
+                # Track which new diagnostics have been matched to avoid double-matching
+                matched_new_strs = set()
+
                 # For simplicity, we'll just show all removed and added diagnostics
                 for old_diag in old_diagnostics:
                     old_str = self._format_diagnostic(old_diag)
                     if old_str in removed:
                         for new_diag in new_diagnostics:
                             new_str = self._format_diagnostic(new_diag)
-                            if new_str in added and self._similar_diagnostics(
-                                old_diag, new_diag
+                            if (
+                                new_str in added
+                                and new_str not in matched_new_strs
+                                and self._similar_diagnostics(old_diag, new_diag)
                             ):
                                 # Generate line diff
                                 diff = self._generate_text_diff(old_str, new_str)
@@ -416,6 +421,7 @@ class DiagnosticDiff:
                                     )
                                     changed_old_formatted.add(old_str)
                                     changed_new_formatted.add(new_str)
+                                    matched_new_strs.add(new_str)
                                 break
 
                 # Filter out diagnostics that are part of changes
