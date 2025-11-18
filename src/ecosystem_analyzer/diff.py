@@ -459,11 +459,8 @@ class DiagnosticDiff:
         return result
 
     def _similar_diagnostics(self, diag1: Diagnostic, diag2: Diagnostic) -> bool:
-        """Check if two diagnostics are similar (same lint name and position)."""
-        return (
-            diag1["lint_name"] == diag2["lint_name"]
-            and diag1["column"] == diag2["column"]
-        )
+        """Check if two diagnostics are similar (same lint name)."""
+        return diag1["lint_name"] == diag2["lint_name"]
 
     def _generate_text_diff(self, old_text: str, new_text: str) -> list[str]:
         """Generate a text diff between two strings."""
