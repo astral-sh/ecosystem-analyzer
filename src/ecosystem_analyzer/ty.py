@@ -1,5 +1,6 @@
 import logging
 import os
+import shlex
 import subprocess
 import time
 from pathlib import Path
@@ -48,15 +49,35 @@ class Ty:
     def run_on_project(self, project: InstalledProject) -> RunOutput:
         logging.info(f"Running ty on project '{project.name}'")
 
-        extra_args = project.paths
-        cmd = [
-            self.executable.as_posix(),
-            "check",
+        # Standard flags to add to all ty check commands
+        standard_flags = [
             "--output-format=concise",
             "--python",
             str(project.venv_path),
-            *extra_args,
         ]
+
+        if project.ty_cmd:
+            # Use custom ty command from project configuration
+            cmd_parts = shlex.split(project.ty_cmd)
+
+            # Replace placeholders: {ty} with executable, {paths} with project paths
+            cmd = []
+            for part in cmd_parts:
+                if part == "{ty}":
+                    cmd.append(self.executable.as_posix())
+                elif part == "{paths}":
+                    cmd.extend(project.paths)
+                else:
+                    cmd.append(part)
+
+            cmd.extend(standard_flags)
+        else:
+            cmd = [
+                self.executable.as_posix(),
+                "check",
+                *standard_flags,
+                *project.paths,
+            ]
         logging.debug(f"Executing: {' '.join(cmd)}")
         start_time = time.time()
         try:

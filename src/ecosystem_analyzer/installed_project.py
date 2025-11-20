@@ -71,6 +71,10 @@ class InstalledProject:
     def current_commit(self) -> str:
         return self._repo.head.commit.hexsha
 
+    @property
+    def ty_cmd(self) -> str | None:
+        return self._project.ty_cmd
+
     def _clone_or_update(self) -> None:
         try:
             if self._cache_path.exists():
