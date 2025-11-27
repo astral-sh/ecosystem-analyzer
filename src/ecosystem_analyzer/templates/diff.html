@@ -406,6 +406,24 @@
             background: #28a745;
             border-color: #28a745;
         }
+
+        .show-more-btn {
+            padding: 6px 12px;
+            background: rgba(99, 64, 172, 0.1);
+            border: 1px solid rgba(99, 64, 172, 0.3);
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--flare);
+            transition: all 0.2s ease;
+        }
+
+        .show-more-btn:hover {
+            background: rgba(99, 64, 172, 0.2);
+            border-color: var(--flare);
+        }
     </style>
 </head>
 
@@ -470,7 +488,7 @@
                                 <td class="added-col">{{ statistics.total_added }}</td>
                                 <td class="changed-col">{{ statistics.total_changed }}</td>
                             </tr>
-                            {% for project_data in statistics.merged_by_project %}
+                            {% for project_data in statistics.merged_by_project[:20] %}
                             <tr>
                                 <td>{{ project_data.project_name }}</td>
                                 <td class="removed-col">{{ project_data.removed }}</td>
@@ -478,6 +496,23 @@
                                 <td class="changed-col">{{ project_data.changed }}</td>
                             </tr>
                             {% endfor %}
+                            {% if statistics.merged_by_project|length > 20 %}
+                            {% for project_data in statistics.merged_by_project[20:] %}
+                            <tr class="project-row-hidden" style="display: none;">
+                                <td>{{ project_data.project_name }}</td>
+                                <td class="removed-col">{{ project_data.removed }}</td>
+                                <td class="added-col">{{ project_data.added }}</td>
+                                <td class="changed-col">{{ project_data.changed }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="show-more-row">
+                                <td colspan="4" style="text-align: center; padding: 8px;">
+                                    <button class="show-more-btn" onclick="toggleProjectRows(this)">
+                                        Show {{ statistics.merged_by_project|length - 20 }} more projects
+                                    </button>
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -496,7 +531,7 @@
                     <option value="all">All Lint Types</option>
                     {% if statistics.merged_by_lint %}
                     {% for lint_data in statistics.merged_by_lint %}
-                    <option value="{{ lint_data.lint_name }}">{{ lint_data.lint_name }}</option>
+                    <option value="{{ lint_data.lint_name }}">{{ lint_data.lint_name }} (-{{ lint_data.removed }} +{{ lint_data.added }} ~{{ lint_data.changed }})</option>
                     {% endfor %}
                     {% endif %}
                 </select>
@@ -504,7 +539,7 @@
                     <option value="all">All Projects</option>
                     {% if statistics.merged_by_project %}
                     {% for project_data in statistics.merged_by_project %}
-                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }}</option>
+                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }} (-{{ project_data.removed }} +{{ project_data.added }} ~{{ project_data.changed }})</option>
                     {% endfor %}
                     {% endif %}
                 </select>
@@ -756,6 +791,22 @@
                     button.textContent = '📋';
                 }, 1500);
             });
+        }
+
+        function toggleProjectRows(button) {
+            const hiddenRows = document.querySelectorAll('.project-row-hidden');
+            const isExpanded = hiddenRows[0].style.display !== 'none';
+
+            if (isExpanded) {
+                // Collapse
+                hiddenRows.forEach(row => row.style.display = 'none');
+                const count = hiddenRows.length;
+                button.textContent = `Show ${count} more project${count !== 1 ? 's' : ''}`;
+            } else {
+                // Expand
+                hiddenRows.forEach(row => row.style.display = '');
+                button.textContent = 'Show less';
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function() {
