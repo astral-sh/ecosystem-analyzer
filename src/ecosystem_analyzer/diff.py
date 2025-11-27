@@ -25,6 +25,17 @@ class MergedLintStats(TypedDict):
     total_change: int
 
 
+class MergedProjectStats(TypedDict):
+    """Statistics for a single project in the merged view."""
+
+    project_name: str
+    added: int
+    removed: int
+    changed: int
+    net_change: int
+    total_change: int
+
+
 class DiffStatistics(TypedDict):
     """Statistics about diagnostic changes."""
 
@@ -32,10 +43,8 @@ class DiffStatistics(TypedDict):
     total_removed: int
     total_changed: int
     failed_projects: int
-    added_by_lint: dict[str, int]
-    removed_by_lint: dict[str, int]
-    changed_by_lint: dict[str, int]
     merged_by_lint: list[MergedLintStats]
+    merged_by_project: list[MergedProjectStats]
 
 
 class DiagnosticDiff:
@@ -493,112 +502,107 @@ class DiagnosticDiff:
 
     def _calculate_statistics(self) -> DiffStatistics:
         """Calculate statistics about added, removed, and changed diagnostics."""
-        stats: DiffStatistics = {
-            "total_added": 0,
-            "total_removed": 0,
-            "total_changed": 0,
-            "failed_projects": len(self.diffs.get("failed_projects", [])),
-            "added_by_lint": {},
-            "removed_by_lint": {},
-            "changed_by_lint": {},
-            "merged_by_lint": [],
-        }
+        # Intermediate dictionaries (local variables)
+        added_by_lint: dict[str, int] = {}
+        removed_by_lint: dict[str, int] = {}
+        changed_by_lint: dict[str, int] = {}
+        added_by_project: dict[str, int] = {}
+        removed_by_project: dict[str, int] = {}
+        changed_by_project: dict[str, int] = {}
+
+        total_added = 0
+        total_removed = 0
+        total_changed = 0
 
         # Count diagnostics from added projects
         for project in self.diffs["added_projects"]:
+            project_name = project["project"]
             for diag in project["diagnostics"]:
-                stats["total_added"] += 1
+                total_added += 1
                 lint_name = diag.get("lint_name", "unknown")
-                stats["added_by_lint"][lint_name] = (
-                    stats["added_by_lint"].get(lint_name, 0) + 1
-                )
+                added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
 
         # Count diagnostics from removed projects
         for project in self.diffs["removed_projects"]:
+            project_name = project["project"]
             for diag in project["diagnostics"]:
-                stats["total_removed"] += 1
+                total_removed += 1
                 lint_name = diag.get("lint_name", "unknown")
-                stats["removed_by_lint"][lint_name] = (
-                    stats["removed_by_lint"].get(lint_name, 0) + 1
-                )
+                removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
 
         # Count diagnostics from modified projects
         for project in self.diffs["modified_projects"]:
+            project_name = project["project"]
             # Added files in modified projects
             for file_data in project["diffs"].get("added_files", []):
                 for diag in file_data["diagnostics"]:
-                    stats["total_added"] += 1
+                    total_added += 1
                     lint_name = diag.get("lint_name", "unknown")
-                    stats["added_by_lint"][lint_name] = (
-                        stats["added_by_lint"].get(lint_name, 0) + 1
-                    )
+                    added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                    added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
 
             # Removed files in modified projects
             for file_data in project["diffs"].get("removed_files", []):
                 for diag in file_data["diagnostics"]:
-                    stats["total_removed"] += 1
+                    total_removed += 1
                     lint_name = diag.get("lint_name", "unknown")
-                    stats["removed_by_lint"][lint_name] = (
-                        stats["removed_by_lint"].get(lint_name, 0) + 1
-                    )
+                    removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                    removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
 
             # Modified files in modified projects
             for file_data in project["diffs"].get("modified_files", []):
                 # Added lines
                 for line_data in file_data["diffs"].get("added_lines", []):
                     for diag in line_data["diagnostics"]:
-                        stats["total_added"] += 1
+                        total_added += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["added_by_lint"][lint_name] = (
-                            stats["added_by_lint"].get(lint_name, 0) + 1
-                        )
+                        added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                        added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
 
                 # Removed lines
                 for line_data in file_data["diffs"].get("removed_lines", []):
                     for diag in line_data["diagnostics"]:
-                        stats["total_removed"] += 1
+                        total_removed += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["removed_by_lint"][lint_name] = (
-                            stats["removed_by_lint"].get(lint_name, 0) + 1
-                        )
+                        removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                        removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
 
                 # Modified lines
                 for line_data in file_data["diffs"].get("modified_lines", []):
                     # Count text_diffs as changed diagnostics
                     for diff_item in line_data.get("text_diffs", []):
-                        stats["total_changed"] += 1
+                        total_changed += 1
                         lint_name = diff_item["old"].get("lint_name", "unknown")
-                        stats["changed_by_lint"][lint_name] = (
-                            stats["changed_by_lint"].get(lint_name, 0) + 1
-                        )
+                        changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
+                        changed_by_project[project_name] = changed_by_project.get(project_name, 0) + 1
 
                     # Count pure additions and removals (already filtered in diff computation)
                     for diag in line_data["added"]:
-                        stats["total_added"] += 1
+                        total_added += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["added_by_lint"][lint_name] = (
-                            stats["added_by_lint"].get(lint_name, 0) + 1
-                        )
+                        added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                        added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
 
                     for diag in line_data["removed"]:
-                        stats["total_removed"] += 1
+                        total_removed += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        stats["removed_by_lint"][lint_name] = (
-                            stats["removed_by_lint"].get(lint_name, 0) + 1
-                        )
+                        removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                        removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
-            set(stats["added_by_lint"].keys())
-            | set(stats["removed_by_lint"].keys())
-            | set(stats["changed_by_lint"].keys())
+            set(added_by_lint.keys())
+            | set(removed_by_lint.keys())
+            | set(changed_by_lint.keys())
         )
         merged_lints = []
 
         for lint_name in all_lints:
-            added_count = stats["added_by_lint"].get(lint_name, 0)
-            removed_count = stats["removed_by_lint"].get(lint_name, 0)
-            changed_count = stats["changed_by_lint"].get(lint_name, 0)
+            added_count = added_by_lint.get(lint_name, 0)
+            removed_count = removed_by_lint.get(lint_name, 0)
+            changed_count = changed_by_lint.get(lint_name, 0)
             total_change = added_count + removed_count + changed_count
             merged_lints.append(
                 {
@@ -613,9 +617,42 @@ class DiagnosticDiff:
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
-        stats["merged_by_lint"] = merged_lints
 
-        return stats
+        # Create merged project breakdown sorted by total absolute change (descending)
+        all_projects = (
+            set(added_by_project.keys())
+            | set(removed_by_project.keys())
+            | set(changed_by_project.keys())
+        )
+        merged_projects = []
+
+        for project_name in all_projects:
+            added_count = added_by_project.get(project_name, 0)
+            removed_count = removed_by_project.get(project_name, 0)
+            changed_count = changed_by_project.get(project_name, 0)
+            total_change = added_count + removed_count + changed_count
+            merged_projects.append(
+                {
+                    "project_name": project_name,
+                    "added": added_count,
+                    "removed": removed_count,
+                    "changed": changed_count,
+                    "net_change": added_count - removed_count,
+                    "total_change": total_change,
+                }
+            )
+
+        # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
+        merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
+
+        return {
+            "total_added": total_added,
+            "total_removed": total_removed,
+            "total_changed": total_changed,
+            "failed_projects": len(self.diffs.get("failed_projects", [])),
+            "merged_by_lint": merged_lints,
+            "merged_by_project": merged_projects,
+        }
 
     def generate_html_report(self, output_path: str) -> None:
         """Generate an HTML report of the diagnostic differences."""
