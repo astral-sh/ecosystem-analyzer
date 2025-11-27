@@ -6,6 +6,8 @@ def get_latest_ty_commits(repo: Repo, num_commits: int) -> list[Commit]:
 
     commits = []
     for commit in repo.iter_commits():
+        assert isinstance(commit.message, str)
+
         if commit.message.startswith("[ty] "):
             commits.append(commit)
             if len(commits) >= num_commits:

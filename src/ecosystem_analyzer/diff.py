@@ -14,6 +14,30 @@ class JsonData(TypedDict):
     outputs: list[RunOutput]
 
 
+class MergedLintStats(TypedDict):
+    """Statistics for a single lint rule in the merged view."""
+
+    lint_name: str
+    added: int
+    removed: int
+    changed: int
+    net_change: int
+    total_change: int
+
+
+class DiffStatistics(TypedDict):
+    """Statistics about diagnostic changes."""
+
+    total_added: int
+    total_removed: int
+    total_changed: int
+    failed_projects: int
+    added_by_lint: dict[str, int]
+    removed_by_lint: dict[str, int]
+    changed_by_lint: dict[str, int]
+    merged_by_lint: list[MergedLintStats]
+
+
 class DiagnosticDiff:
     """Class for comparing diagnostic data between two JSON files."""
 
@@ -100,7 +124,7 @@ class DiagnosticDiff:
             f"{diag['path']}:{diag['line']}:{diag['column']} - {diag['message']}"
         )
 
-    def _is_project_failed(self, project_data: dict) -> tuple[bool, str]:
+    def _is_project_failed(self, project_data: RunOutput) -> tuple[bool, str]:
         """Check if a project failed (timeout or abnormal exit) and return status."""
         return_code = project_data.get("return_code")
         time_s = project_data.get("time_s")
@@ -467,9 +491,9 @@ class DiagnosticDiff:
         diff = difflib.ndiff(old_text.splitlines(), new_text.splitlines())
         return list(diff)
 
-    def _calculate_statistics(self) -> dict[str, Any]:
+    def _calculate_statistics(self) -> DiffStatistics:
         """Calculate statistics about added, removed, and changed diagnostics."""
-        stats = {
+        stats: DiffStatistics = {
             "total_added": 0,
             "total_removed": 0,
             "total_changed": 0,
@@ -477,6 +501,7 @@ class DiagnosticDiff:
             "added_by_lint": {},
             "removed_by_lint": {},
             "changed_by_lint": {},
+            "merged_by_lint": [],
         }
 
         # Count diagnostics from added projects
@@ -731,6 +756,9 @@ class DiagnosticDiff:
                 is_failed = True
                 failure_type = "new_failed"
             else:
+                assert old_time is not None
+                assert new_time is not None
+
                 # Neither failed, calculate normal factor
                 if old_time > 0:
                     factor = new_time / old_time
