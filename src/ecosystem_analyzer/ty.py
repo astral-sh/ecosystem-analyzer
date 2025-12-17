@@ -2,6 +2,7 @@ import logging
 import os
 import shlex
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -97,6 +98,9 @@ class Ty:
                 logging.error(
                     f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
                 )
+                if result.stderr:
+                    print("ty stderr output:", file=sys.stderr)
+                    print(result.stderr, file=sys.stderr)
                 # Don't trust execution time for abnormal exits
                 execution_time = None
 
