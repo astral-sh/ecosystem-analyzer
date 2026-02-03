@@ -4,12 +4,10 @@ import sys
 from pathlib import Path
 
 import click
-from git import Repo
-
 from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
-from .git import get_latest_ty_commits
+from .git import get_latest_ty_commits, resolve_ty_repo
 from .manager import Manager
 
 
@@ -42,7 +40,7 @@ def cli(ctx: click.Context, repository: str | None, verbose: bool) -> None:
     Command-line interface for analyzing Python projects with ty.
     """
     ctx.ensure_object(dict)
-    ctx.obj["repository"] = Repo(repository) if repository else None
+    ctx.obj["repository"] = resolve_ty_repo(repository) if repository else None
     ctx.obj["verbose"] = verbose
     setup_logging(verbose)
 
