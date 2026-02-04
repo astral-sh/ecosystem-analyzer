@@ -37,10 +37,11 @@ class Manager:
         self,
         *,
         ty_repo: Repo,
+        target_dir: Path | None,
         project_names: list[str],
         profile: str = "dev",
     ) -> None:
-        self._ty = Ty(ty_repo, profile=profile)
+        self._ty = Ty(ty_repo, target_dir, profile=profile)
 
         self._ecosystem_projects = _get_ecosystem_projects()
 

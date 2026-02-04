@@ -14,10 +14,10 @@ from .run_output import RunOutput
 
 
 class Ty:
-    def __init__(self, repository: Repo, profile: str = "dev") -> None:
+    def __init__(self, repository: Repo, target_dir: Path | None, profile: str = "dev") -> None:
         self.repository: Repo = repository
         self.working_dir: Path = Path(self.repository.working_dir)
-        self.cargo_target_dir: Path = self.working_dir / "target"
+        self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
         self.profile: str = profile
 
     def compile_for_commit(self, commit: str | Commit):

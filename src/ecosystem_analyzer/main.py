@@ -29,18 +29,25 @@ def setup_logging(verbose: bool = False) -> None:
     required=False,
 )
 @click.option(
+    "--target",
+    help="Custom Rust target directory to use",
+    type=click.Path(file_okay=False, dir_okay=True, readable=True, path_type=Path),
+    required=False,
+)
+@click.option(
     "--verbose",
     "-v",
     is_flag=True,
     help="Enable verbose logging",
 )
 @click.pass_context
-def cli(ctx: click.Context, repository: str | None, verbose: bool) -> None:
+def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose: bool) -> None:
     """
     Command-line interface for analyzing Python projects with ty.
     """
     ctx.ensure_object(dict)
     ctx.obj["repository"] = resolve_ty_repo(repository) if repository else None
+    ctx.obj["target"] = target
     ctx.obj["verbose"] = verbose
     setup_logging(verbose)
 
@@ -81,7 +88,10 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
         ctx.exit(1)
 
     manager = Manager(
-        ty_repo=ctx.obj["repository"], project_names=[project_name], profile=profile
+        ty_repo=ctx.obj["repository"],
+        target_dir=ctx.obj["target"],
+        project_names=[project_name],
+        profile=profile,
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -126,6 +136,7 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
 
     manager = Manager(
         ty_repo=ctx.obj["repository"],
+        target_dir=ctx.obj["target"],
         project_names=project_names,
         profile=profile,
     )
@@ -202,6 +213,7 @@ def diff(
 
     manager = Manager(
         ty_repo=ctx.obj["repository"],
+        target_dir=ctx.obj["target"],
         project_names=all_project_names,
         profile=profile,
     )
@@ -314,7 +326,12 @@ def history(ctx, projects: str, num_commits: int, output: str, profile: str) -> 
 
     project_names = Path(projects).read_text().splitlines()
 
-    manager = Manager(ty_repo=repository, project_names=project_names, profile=profile)
+    manager = Manager(
+        ty_repo=repository,
+        target_dir=ctx.obj["target"],
+        project_names=project_names,
+        profile=profile,
+    )
 
     statistics = []
 
