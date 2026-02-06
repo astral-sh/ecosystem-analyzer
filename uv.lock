@@ -126,7 +126,7 @@ wheels = [
 [[package]]
 name = "mypy-primer"
 version = "0.1.0"
-source = { git = "https://github.com/hauntsaninja/mypy_primer#089ac1da83cf26aee9c98de412b7eb10e20b2212" }
+source = { git = "https://github.com/hauntsaninja/mypy_primer#d4e091e8937adea5b2722b49e17d3b252f2c8950" }
 
 [[package]]
 name = "packaging"
