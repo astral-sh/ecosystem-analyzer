@@ -4,11 +4,13 @@ import shlex
 import subprocess
 import sys
 import time
+from collections import Counter
 from pathlib import Path
 
 from git import Commit, Repo
 
 from .diagnostic import DiagnosticsParser
+from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
 from .run_output import RunOutput
 
@@ -126,3 +128,75 @@ class Ty:
                 "return_code": return_code,
             }
         )
+
+    def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
+        """Run ty on a project N times and classify diagnostics as stable/flaky.
+
+        Returns a single RunOutput where `diagnostics` contains only stable
+        diagnostics and `flaky_diagnostics` contains grouped flaky ones.
+        """
+        assert n >= 2, "Use run_on_project for single runs"
+        logging.info(f"Running ty on project '{project.name}' {n} times for flaky detection")
+
+        all_diagnostics: list[list] = []
+        times: list[float] = []
+        return_codes: list[int | None] = []
+
+        for i in range(n):
+            logging.info(f"  Run {i + 1}/{n} for '{project.name}'")
+            output = self.run_on_project(project)
+
+            # If any run fails abnormally, bail out and return the failure
+            if output.get("return_code") is not None and output["return_code"] not in (0, 1):
+                logging.warning(
+                    f"Run {i + 1}/{n} for '{project.name}' failed with return code "
+                    f"{output['return_code']}; aborting flaky detection"
+                )
+                return output
+            if output.get("return_code") is None:
+                # Timeout
+                logging.warning(
+                    f"Run {i + 1}/{n} for '{project.name}' timed out; aborting flaky detection"
+                )
+                return output
+
+            all_diagnostics.append(output["diagnostics"])
+            if output.get("time_s") is not None:
+                times.append(output["time_s"])
+            return_codes.append(output.get("return_code"))
+
+        stable, flaky_locations = classify_diagnostics(all_diagnostics)
+
+        # Use median time
+        median_time: float | None = None
+        if times:
+            sorted_times = sorted(times)
+            mid = len(sorted_times) // 2
+            median_time = sorted_times[mid]
+
+        # Use most common return code
+        rc_counts = Counter(rc for rc in return_codes if rc is not None)
+        most_common_rc = rc_counts.most_common(1)[0][0] if rc_counts else None
+
+        result = RunOutput(
+            {
+                "project": project.name,
+                "project_location": project.location,
+                "ty_commit": self.repository.head.commit.hexsha,
+                "diagnostics": stable,
+                "flaky_runs": n,
+                "time_s": median_time,
+                "return_code": most_common_rc,
+            }
+        )
+
+        if flaky_locations:
+            result["flaky_diagnostics"] = flaky_locations
+
+        flaky_count = sum(len(loc["variants"]) for loc in flaky_locations)
+        logging.info(
+            f"  '{project.name}': {len(stable)} stable diagnostics, "
+            f"{flaky_count} flaky diagnostics at {len(flaky_locations)} locations"
+        )
+
+        return result

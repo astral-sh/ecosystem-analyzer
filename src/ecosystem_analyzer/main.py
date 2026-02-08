@@ -78,8 +78,14 @@ def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose
     type=str,
     default="dev",
 )
+@click.option(
+    "--flaky-runs",
+    help="Number of times to run ty for flaky detection (1 = no detection)",
+    type=int,
+    default=1,
+)
 @click.pass_context
-def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
+def run(ctx, project_name: str, commit: str, output: str, profile: str, flaky_runs: int) -> None:
     """
     Run ty on a specific project.
     """
@@ -93,7 +99,7 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
         project_names=[project_name],
         profile=profile,
     )
-    run_outputs = manager.run_for_commit(commit)
+    run_outputs = manager.run_for_commit(commit, flaky_runs=flaky_runs)
     manager.write_run_outputs(run_outputs, output)
 
 
@@ -123,8 +129,14 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     type=str,
     default="dev",
 )
+@click.option(
+    "--flaky-runs",
+    help="Number of times to run ty for flaky detection (1 = no detection)",
+    type=int,
+    default=1,
+)
 @click.pass_context
-def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
+def analyze(ctx, commit: str, projects: str, output: str, profile: str, flaky_runs: int) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
     """
@@ -140,7 +152,7 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
         project_names=project_names,
         profile=profile,
     )
-    run_outputs = manager.run_for_commit(commit)
+    run_outputs = manager.run_for_commit(commit, flaky_runs=flaky_runs)
     manager.write_run_outputs(run_outputs, output)
 
 

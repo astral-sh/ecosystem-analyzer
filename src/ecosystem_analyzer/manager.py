@@ -110,12 +110,17 @@ class Manager:
             if project.name in available_project_names
         ]
 
-    def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
+    def run_for_commit(
+        self, commit: str | Commit, flaky_runs: int = 1
+    ) -> list[RunOutput]:
         self._ty.compile_for_commit(commit)
 
         run_outputs = []
         for project in self._active_projects:
-            output = self._ty.run_on_project(project)
+            if flaky_runs > 1:
+                output = self._ty.run_on_project_multiple(project, flaky_runs)
+            else:
+                output = self._ty.run_on_project(project)
             run_outputs.append(output)
 
         return run_outputs
