@@ -129,19 +129,37 @@ class Ty:
             }
         )
 
+    @staticmethod
+    def _diagnostic_keys(diagnostics: list) -> frozenset:
+        """Return the set of unique diagnostic keys from a run."""
+        return frozenset(
+            (d["path"], d["line"], d["column"], d["level"], d["lint_name"], d["message"])
+            for d in diagnostics
+        )
+
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
-        """Run ty on a project N times and classify diagnostics as stable/flaky.
+        """Run ty on a project up to N times and classify diagnostics as stable/flaky.
+
+        Uses an adaptive strategy: stops early if an additional run doesn't
+        change the diagnostic classification (no new variants discovered,
+        no previously-stable diagnostic becomes flaky).
 
         Returns a single RunOutput where `diagnostics` contains only stable
         diagnostics and `flaky_diagnostics` contains grouped flaky ones.
         """
         assert n >= 2, "Use run_on_project for single runs"
-        logging.info(f"Running ty on project '{project.name}' {n} times for flaky detection")
+        logging.info(f"Running ty on project '{project.name}' up to {n} times for flaky detection")
 
         all_diagnostics: list[list] = []
         times: list[float] = []
         return_codes: list[int | None] = []
 
+        # Track the set of all diagnostic keys seen so far, and
+        # the set of keys that appeared in every run so far.
+        all_seen: set = set()
+        stable_so_far: set | None = None
+
+        actual_runs = 0
         for i in range(n):
             logging.info(f"  Run {i + 1}/{n} for '{project.name}'")
             output = self.run_on_project(project)
@@ -164,6 +182,27 @@ class Ty:
             if output.get("time_s") is not None:
                 times.append(output["time_s"])
             return_codes.append(output.get("return_code"))
+            actual_runs += 1
+
+            # Check if this run changed the classification
+            run_keys = self._diagnostic_keys(output["diagnostics"])
+
+            if i == 0:
+                all_seen = set(run_keys)
+                stable_so_far = set(run_keys)
+            else:
+                new_variants = run_keys - all_seen
+                newly_flaky = stable_so_far - run_keys
+
+                if not new_variants and not newly_flaky:
+                    logging.info(
+                        f"  '{project.name}': run {i + 1} unchanged, "
+                        f"stopping early after {actual_runs} runs"
+                    )
+                    break
+
+                all_seen |= run_keys
+                stable_so_far &= run_keys
 
         stable, flaky_locations = classify_diagnostics(all_diagnostics)
 
@@ -184,7 +223,7 @@ class Ty:
                 "project_location": project.location,
                 "ty_commit": self.repository.head.commit.hexsha,
                 "diagnostics": stable,
-                "flaky_runs": n,
+                "flaky_runs": actual_runs,
                 "time_s": median_time,
                 "return_code": most_common_rc,
             }
@@ -197,6 +236,7 @@ class Ty:
         logging.info(
             f"  '{project.name}': {len(stable)} stable diagnostics, "
             f"{flaky_count} flaky diagnostics at {len(flaky_locations)} locations"
+            f" ({actual_runs}/{n} runs)"
         )
 
         return result

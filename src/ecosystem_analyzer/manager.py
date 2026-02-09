@@ -111,14 +111,14 @@ class Manager:
         ]
 
     def run_for_commit(
-        self, commit: str | Commit, flaky_runs: int = 1
+        self, commit: str | Commit, max_flaky_runs: int = 1
     ) -> list[RunOutput]:
         self._ty.compile_for_commit(commit)
 
         run_outputs = []
         for project in self._active_projects:
-            if flaky_runs > 1:
-                output = self._ty.run_on_project_multiple(project, flaky_runs)
+            if max_flaky_runs > 1:
+                output = self._ty.run_on_project_multiple(project, max_flaky_runs)
             else:
                 output = self._ty.run_on_project(project)
             run_outputs.append(output)

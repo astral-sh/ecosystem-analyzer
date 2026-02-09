@@ -79,13 +79,13 @@ def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose
     default="dev",
 )
 @click.option(
-    "--flaky-runs",
-    help="Number of times to run ty for flaky detection (1 = no detection)",
+    "--max-flaky-runs",
+    help="Maximum number of times to run ty for flaky detection (1 = no detection, stops early if stable)",
     type=int,
     default=1,
 )
 @click.pass_context
-def run(ctx, project_name: str, commit: str, output: str, profile: str, flaky_runs: int) -> None:
+def run(ctx, project_name: str, commit: str, output: str, profile: str, max_flaky_runs: int) -> None:
     """
     Run ty on a specific project.
     """
@@ -99,7 +99,7 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str, flaky_ru
         project_names=[project_name],
         profile=profile,
     )
-    run_outputs = manager.run_for_commit(commit, flaky_runs=flaky_runs)
+    run_outputs = manager.run_for_commit(commit, max_flaky_runs=max_flaky_runs)
     manager.write_run_outputs(run_outputs, output)
 
 
@@ -130,13 +130,13 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str, flaky_ru
     default="dev",
 )
 @click.option(
-    "--flaky-runs",
-    help="Number of times to run ty for flaky detection (1 = no detection)",
+    "--max-flaky-runs",
+    help="Maximum number of times to run ty for flaky detection (1 = no detection, stops early if stable)",
     type=int,
     default=1,
 )
 @click.pass_context
-def analyze(ctx, commit: str, projects: str, output: str, profile: str, flaky_runs: int) -> None:
+def analyze(ctx, commit: str, projects: str, output: str, profile: str, max_flaky_runs: int) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
     """
@@ -152,7 +152,7 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str, flaky_ru
         project_names=project_names,
         profile=profile,
     )
-    run_outputs = manager.run_for_commit(commit, flaky_runs=flaky_runs)
+    run_outputs = manager.run_for_commit(commit, max_flaky_runs=max_flaky_runs)
     manager.write_run_outputs(run_outputs, output)
 
 
