@@ -119,6 +119,143 @@ class DiagnosticDiff:
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
 
+    def _exclude_flaky_overlaps(
+        self, diagnostics: list[Diagnostic], other_flaky: list
+    ) -> list[Diagnostic]:
+        """Remove stable diagnostics at locations that are flaky on the other side.
+
+        A diagnostic at a location that's nondeterministic on the other side
+        should not appear in the stable diff — it's the same underlying
+        flaky behavior, just with different classification luck.
+        """
+        if not other_flaky:
+            return diagnostics
+
+        flaky_locs: set[tuple] = set()
+        for loc in other_flaky:
+            flaky_locs.add((loc["path"], loc["line"], loc["column"]))
+
+        return [
+            d for d in diagnostics
+            if (d["path"], d["line"], d["column"]) not in flaky_locs
+        ]
+
+    def _all_diagnostic_locations(self, project: dict) -> set[tuple]:
+        """Build a set of (path, line, column) locations from all diagnostics.
+
+        Includes locations from both stable diagnostics and flaky variants.
+        """
+        locs: set[tuple] = set()
+        for d in project.get("diagnostics", []):
+            locs.add((d["path"], d["line"], d["column"]))
+        for loc in project.get("flaky_diagnostics", []):
+            locs.add((loc["path"], loc["line"], loc["column"]))
+        return locs
+
+    def _all_diagnostic_keys(self, project: dict) -> set[tuple]:
+        """Build a set of (path, line, column, message) keys from all diagnostics.
+
+        Includes both stable diagnostics and all flaky variants.
+        """
+        keys: set[tuple] = set()
+        for d in project.get("diagnostics", []):
+            keys.add((d["path"], d["line"], d["column"], d["message"]))
+        for loc in project.get("flaky_diagnostics", []):
+            for v in loc["variants"]:
+                d = v["diagnostic"]
+                keys.add((d["path"], d["line"], d["column"], d["message"]))
+        return keys
+
+    def _exclude_known_overlaps(
+        self, flaky_locations: list, other_all_locations: set[tuple]
+    ) -> list:
+        """Remove flaky locations that exist at a known location on the other side.
+
+        Due to statistical noise with limited runs, a flaky location might
+        have entirely different variants in one batch vs another.  If the
+        *location* (path, line, column) has any diagnostic on the other side
+        (whether stable or flaky), we consider the whole location accounted
+        for — it's the same nondeterministic source location, just with
+        different luck in which variants showed up.
+        """
+        if not other_all_locations:
+            return flaky_locations
+
+        return [
+            loc for loc in flaky_locations
+            if (loc["path"], loc["line"], loc["column"]) not in other_all_locations
+        ]
+
+    def _flaky_variant_key(self, variant: dict) -> tuple:
+        """Hashable key for a single flaky variant."""
+        d = variant["diagnostic"]
+        return (d["level"], d["lint_name"], d["message"])
+
+    def _flaky_location_variant_set(self, location: dict) -> frozenset:
+        """Frozenset of variant keys for a flaky location."""
+        return frozenset(self._flaky_variant_key(v) for v in location["variants"])
+
+    def _compare_flaky_locations(
+        self,
+        old_flaky: list,
+        new_flaky: list,
+        old_flaky_runs: int | None,
+        new_flaky_runs: int | None,
+    ) -> dict[str, list]:
+        """Compare flaky locations between old and new.
+
+        Returns dict with added/removed/changed lists.
+        Each flaky location is annotated with its flaky_runs count.
+        """
+        result: dict[str, list] = {"added": [], "removed": [], "changed": []}
+
+        old_by_loc = {(loc["path"], loc["line"], loc["column"]): loc for loc in old_flaky}
+        new_by_loc = {(loc["path"], loc["line"], loc["column"]): loc for loc in new_flaky}
+
+        old_keys = set(old_by_loc.keys())
+        new_keys = set(new_by_loc.keys())
+
+        for key in sorted(new_keys - old_keys):
+            loc = dict(new_by_loc[key])
+            loc["flaky_runs"] = new_flaky_runs
+            result["added"].append(loc)
+
+        for key in sorted(old_keys - new_keys):
+            loc = dict(old_by_loc[key])
+            loc["flaky_runs"] = old_flaky_runs
+            result["removed"].append(loc)
+
+        for key in sorted(old_keys & new_keys):
+            old_loc = old_by_loc[key]
+            new_loc = new_by_loc[key]
+            if self._flaky_location_variant_set(old_loc) != self._flaky_location_variant_set(new_loc):
+                old_annotated = dict(old_loc)
+                old_annotated["flaky_runs"] = old_flaky_runs
+                new_annotated = dict(new_loc)
+                new_annotated["flaky_runs"] = new_flaky_runs
+                result["changed"].append({"old": old_annotated, "new": new_annotated})
+
+        return result
+
+    def _organize_flaky_diffs_by_file(self, flaky_diffs: dict[str, list]) -> dict[str, dict[str, list]]:
+        """Organize flaky diffs by file path for inline rendering.
+
+        Returns {path: {"added": [...], "removed": [...], "changed": [...]}}.
+        """
+        by_file: dict[str, dict[str, list]] = {}
+
+        for change_type in ("added", "removed", "changed"):
+            for item in flaky_diffs[change_type]:
+                if change_type == "changed":
+                    path = item["old"]["path"]
+                else:
+                    path = item["path"]
+                if path not in by_file:
+                    by_file[path] = {"added": [], "removed": [], "changed": []}
+                by_file[path][change_type].append(item)
+
+        return by_file
+
     def _count_diagnostics(self, data: JsonData) -> int:
         """Count the total number of diagnostics in the data."""
         total_diagnostics = 0
@@ -188,7 +325,6 @@ class DiagnosticDiff:
             if project_name not in new_projects:
                 project_data = old_projects[project_name]
                 diagnostics = project_data.get("diagnostics", [])
-                # Sort diagnostics by path, line, column, message
                 diagnostics = sorted(
                     diagnostics,
                     key=lambda d: (
@@ -198,20 +334,22 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["removed_projects"].append(
-                    {
-                        "project": project_name,
-                        "project_location": project_data.get("project_location", ""),
-                        "diagnostics": diagnostics,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "project": project_name,
+                    "project_location": project_data.get("project_location", ""),
+                    "diagnostics": diagnostics,
+                }
+                flaky = project_data.get("flaky_diagnostics", [])
+                if flaky:
+                    entry["flaky_diagnostics"] = flaky
+                    entry["flaky_runs"] = project_data.get("flaky_runs")
+                result["removed_projects"].append(entry)
 
         # Find added projects
         for project_name in sorted(new_projects.keys()):
             if project_name not in old_projects:
                 project_data = new_projects[project_name]
                 diagnostics = project_data.get("diagnostics", [])
-                # Sort diagnostics by path, line, column, message
                 diagnostics = sorted(
                     diagnostics,
                     key=lambda d: (
@@ -221,13 +359,16 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["added_projects"].append(
-                    {
-                        "project": project_name,
-                        "project_location": project_data.get("project_location", ""),
-                        "diagnostics": diagnostics,
-                    }
-                )
+                entry: dict[str, Any] = {
+                    "project": project_name,
+                    "project_location": project_data.get("project_location", ""),
+                    "diagnostics": diagnostics,
+                }
+                flaky = project_data.get("flaky_diagnostics", [])
+                if flaky:
+                    entry["flaky_diagnostics"] = flaky
+                    entry["flaky_runs"] = project_data.get("flaky_runs")
+                result["added_projects"].append(entry)
 
         # Get list of failed projects to exclude from detailed analysis
         failed_project_names = {proj["project"] for proj in result["failed_projects"]}
@@ -240,30 +381,71 @@ class DiagnosticDiff:
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
-            # Organize diagnostics by file path
-            old_diagnostics_by_file = self._group_diagnostics_by_file(
-                old_project.get("diagnostics", [])
-            )
-            new_diagnostics_by_file = self._group_diagnostics_by_file(
-                new_project.get("diagnostics", [])
-            )
+            old_flaky = old_project.get("flaky_diagnostics", [])
+            new_flaky = new_project.get("flaky_diagnostics", [])
+
+            # Reconcile stable vs flaky: exclude stable diagnostics at
+            # locations that are flaky on either side.  A stable diagnostic
+            # at a flaky location is unreliable — it just happened to appear
+            # in all N runs of this batch, but is nondeterministic.
+            all_flaky_locs: set[tuple] = set()
+            for loc in old_flaky:
+                all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
+            for loc in new_flaky:
+                all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
+
+            old_diagnostics = [
+                d for d in old_project.get("diagnostics", [])
+                if (d["path"], d["line"], d["column"]) not in all_flaky_locs
+            ]
+            new_diagnostics = [
+                d for d in new_project.get("diagnostics", [])
+                if (d["path"], d["line"], d["column"]) not in all_flaky_locs
+            ]
+
+            # Compare stable diagnostics
+            old_diagnostics_by_file = self._group_diagnostics_by_file(old_diagnostics)
+            new_diagnostics_by_file = self._group_diagnostics_by_file(new_diagnostics)
 
             file_diffs = self._compare_files(
                 old_diagnostics_by_file, new_diagnostics_by_file
             )
 
-            if (
+            # Reconcile flaky vs stable: exclude flaky locations that also
+            # exist (as stable or flaky) on the other side.
+            old_all_locs = self._all_diagnostic_locations(old_project)
+            new_all_locs = self._all_diagnostic_locations(new_project)
+            old_flaky_filtered = self._exclude_known_overlaps(old_flaky, new_all_locs)
+            new_flaky_filtered = self._exclude_known_overlaps(new_flaky, old_all_locs)
+
+            # Compare flaky locations as grouped units
+            flaky_diffs = self._compare_flaky_locations(
+                old_flaky_filtered, new_flaky_filtered,
+                old_project.get("flaky_runs"),
+                new_project.get("flaky_runs"),
+            )
+
+            has_stable_changes = (
                 file_diffs["added_files"]
                 or file_diffs["removed_files"]
                 or file_diffs["modified_files"]
-            ):
-                result["modified_projects"].append(
-                    {
-                        "project": project_name,
-                        "project_location": new_project.get("project_location", ""),
-                        "diffs": file_diffs,
-                    }
-                )
+            )
+            has_flaky_changes = (
+                flaky_diffs["added"]
+                or flaky_diffs["removed"]
+                or flaky_diffs["changed"]
+            )
+
+            if has_stable_changes or has_flaky_changes:
+                entry: dict[str, Any] = {
+                    "project": project_name,
+                    "project_location": new_project.get("project_location", ""),
+                    "diffs": file_diffs,
+                }
+                if has_flaky_changes:
+                    entry["flaky_diffs"] = flaky_diffs
+                    entry["flaky_file_diffs"] = self._organize_flaky_diffs_by_file(flaky_diffs)
+                result["modified_projects"].append(entry)
 
         # Sort failed projects to prioritize abnormal exits over timeouts
         def failed_project_sort_key(project):
@@ -591,6 +773,27 @@ class DiagnosticDiff:
                         removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
                         removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
 
+            # Count flaky location diffs (each location = 1 diagnostic)
+            flaky_diffs = project.get("flaky_diffs", {})
+            for loc in flaky_diffs.get("added", []):
+                total_added += 1
+                # Use the first variant's lint_name as representative
+                lint_name = loc["variants"][0]["diagnostic"]["lint_name"] if loc["variants"] else "unknown"
+                added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+
+            for loc in flaky_diffs.get("removed", []):
+                total_removed += 1
+                lint_name = loc["variants"][0]["diagnostic"]["lint_name"] if loc["variants"] else "unknown"
+                removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+
+            for change in flaky_diffs.get("changed", []):
+                total_changed += 1
+                lint_name = change["old"]["variants"][0]["diagnostic"]["lint_name"] if change["old"]["variants"] else "unknown"
+                changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
+                changed_by_project[project_name] = changed_by_project.get(project_name, 0) + 1
+
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
             set(added_by_lint.keys())
@@ -643,6 +846,32 @@ class DiagnosticDiff:
             )
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
+        merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
+
+        # Identify projects with flaky diagnostics in the new data
+        flaky_project_names: set[str] = set()
+        for output in self.new_data["outputs"]:
+            if output.get("flaky_diagnostics"):
+                flaky_project_names.add(output["project"])
+
+        # Add flaky label to project entries, and include flaky-only projects
+        for project_data in merged_projects:
+            project_data["is_flaky"] = project_data["project_name"] in flaky_project_names
+
+        # Add projects that are flaky but have no diffstat changes
+        projects_in_merged = {p["project_name"] for p in merged_projects}
+        for project_name in sorted(flaky_project_names - projects_in_merged):
+            merged_projects.append({
+                "project_name": project_name,
+                "added": 0,
+                "removed": 0,
+                "changed": 0,
+                "net_change": 0,
+                "total_change": 0,
+                "is_flaky": True,
+            })
+
+        # Re-sort: flaky-only projects (0 total change) go last
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
         return {

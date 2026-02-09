@@ -40,8 +40,10 @@ class Manager:
         target_dir: Path | None,
         project_names: list[str],
         profile: str = "dev",
+        max_flaky_runs: int = 1,
     ) -> None:
         self._ty = Ty(ty_repo, target_dir, profile=profile)
+        self._max_flaky_runs = max_flaky_runs
 
         self._ecosystem_projects = _get_ecosystem_projects()
 
@@ -115,7 +117,10 @@ class Manager:
 
         run_outputs = []
         for project in self._active_projects:
-            output = self._ty.run_on_project(project)
+            if self._max_flaky_runs > 1:
+                output = self._ty.run_on_project_multiple(project, self._max_flaky_runs)
+            else:
+                output = self._ty.run_on_project(project)
             run_outputs.append(output)
 
         return run_outputs

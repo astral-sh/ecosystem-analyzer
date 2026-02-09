@@ -139,6 +139,52 @@
             border-left-color: #ffc107;
         }
 
+        .diagnostic.is-flaky {
+            background-image: repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 8px,
+                rgba(253, 126, 20, 0.06) 8px,
+                rgba(253, 126, 20, 0.06) 16px
+            );
+        }
+
+        .flaky-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #e65100;
+            background: rgba(253, 126, 20, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-right: 4px;
+            cursor: help;
+        }
+
+        .diag-grid {
+            display: grid;
+            grid-template-columns: auto 1fr;
+            column-gap: 12px;
+            row-gap: 1px;
+            align-items: baseline;
+        }
+
+        .diag-grid .col1 {
+            text-align: right;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            white-space: nowrap;
+        }
+
+        .diag-grid .col2 {
+            min-width: 0;
+        }
+
+        .flaky-freq {
+            font-weight: 600;
+            color: #e65100;
+        }
+
         .diff-line {
             font-family: monospace;
             white-space: pre-wrap;
@@ -427,6 +473,49 @@
     </style>
 </head>
 
+{% macro render_diagnostic(diag, change_type, project_name) %}
+<div class="diagnostic {{ change_type }}" data-change-type="{{ change_type }}" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project_name }}">
+    <div class="diag-grid">
+        <div class="col1"><a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a></div>
+        <div class="col2"><span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} - {{ diag.message|e }}</div>
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_flaky_location(loc, change_type, project_name) %}
+<div class="diagnostic {{ change_type }} is-flaky" data-change-type="{{ change_type }}" data-lint-name="{{ loc.variants[0].diagnostic.lint_name }}" data-project-name="{{ project_name }}">
+    <div class="diag-grid">
+        <div class="col1"><a href="{{ loc.variants[0].diagnostic.github_ref|default('') }}" target="_blank">:{{ loc.line }}:{{ loc.column }}</a></div>
+        <div class="col2"><span class="flaky-badge" title="Flaky: nondeterministic across {{ loc.flaky_runs }} runs">flaky</span></div>
+        {% for v in loc.variants %}
+        <div class="col1"><span class="flaky-freq">({{ v.count }}/{{ loc.flaky_runs }})</span></div>
+        <div class="col2"><span class="{{ 'error' if v.diagnostic.level == 'error' else 'warning' }}">[{{ v.diagnostic.level }}]</span> {{ v.diagnostic.lint_name }} - {{ v.diagnostic.message|e }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
+{% macro render_flaky_changed(change, project_name) %}
+<div class="diagnostic modified is-flaky" data-change-type="changed" data-lint-name="{{ change.old.variants[0].diagnostic.lint_name }}" data-project-name="{{ project_name }}">
+    <div class="diag-grid">
+        <div class="col1"><a href="{{ change.old.variants[0].diagnostic.github_ref|default('') }}" target="_blank">:{{ change.old.line }}:{{ change.old.column }}</a></div>
+        <div class="col2"><span class="flaky-badge" title="Flaky: nondeterministic across runs">flaky</span></div>
+        <div class="col1" style="color: #dc3545; font-weight: 600;">old</div>
+        <div class="col2" style="color: #dc3545; font-weight: 600;">({{ change.old.flaky_runs }} runs)</div>
+        {% for v in change.old.variants %}
+        <div class="col1"><span class="flaky-freq">({{ v.count }}/{{ change.old.flaky_runs }})</span></div>
+        <div class="col2"><span class="{{ 'error' if v.diagnostic.level == 'error' else 'warning' }}">[{{ v.diagnostic.level }}]</span> {{ v.diagnostic.lint_name }} - {{ v.diagnostic.message|e }}</div>
+        {% endfor %}
+        <div class="col1" style="color: #28a745; font-weight: 600;">new</div>
+        <div class="col2" style="color: #28a745; font-weight: 600;">({{ change.new.flaky_runs }} runs)</div>
+        {% for v in change.new.variants %}
+        <div class="col1"><span class="flaky-freq">({{ v.count }}/{{ change.new.flaky_runs }})</span></div>
+        <div class="col2"><span class="{{ 'error' if v.diagnostic.level == 'error' else 'warning' }}">[{{ v.diagnostic.level }}]</span> {{ v.diagnostic.lint_name }} - {{ v.diagnostic.message|e }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endmacro %}
+
 <body>
     <div class="container">
         <div class="statistics">
@@ -490,7 +579,7 @@
                             </tr>
                             {% for project_data in statistics.merged_by_project[:20] %}
                             <tr>
-                                <td>{{ project_data.project_name }}</td>
+                                <td>{{ project_data.project_name }}{% if project_data.is_flaky %} <span class="flaky-badge">flaky</span>{% endif %}</td>
                                 <td class="removed-col">{{ project_data.removed }}</td>
                                 <td class="added-col">{{ project_data.added }}</td>
                                 <td class="changed-col">{{ project_data.changed }}</td>
@@ -499,7 +588,7 @@
                             {% if statistics.merged_by_project|length > 20 %}
                             {% for project_data in statistics.merged_by_project[20:] %}
                             <tr class="project-row-hidden" style="display: none;">
-                                <td>{{ project_data.project_name }}</td>
+                                <td>{{ project_data.project_name }}{% if project_data.is_flaky %} <span class="flaky-badge">flaky</span>{% endif %}</td>
                                 <td class="removed-col">{{ project_data.removed }}</td>
                                 <td class="added-col">{{ project_data.added }}</td>
                                 <td class="changed-col">{{ project_data.changed }}</td>
@@ -519,6 +608,7 @@
                 {% endif %}
             </div>
             {% endif %}
+
         </div>
 
         <div class="filter-controls">
@@ -618,11 +708,7 @@
                     <button class="copy-btn" onclick="copyPath(this, '{{ path }}')">📋</button>
                 </div>
                 {% for diag in diagnostics %}
-                <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "added", project.project) }}
                 {% endfor %}
             </div>
             {% endfor %}
@@ -643,11 +729,7 @@
                     <button class="copy-btn" onclick="copyPath(this, '{{ path }}')">📋</button>
                 </div>
                 {% for diag in diagnostics %}
-                <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "removed", project.project) }}
                 {% endfor %}
             </div>
             {% endfor %}
@@ -667,12 +749,14 @@
                     <button class="copy-btn" onclick="copyPath(this, '{{ file_data.path }}')">📋</button>
                 </div>
                 {% for diag in file_data.diagnostics %}
-                <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "added", project.project) }}
                 {% endfor %}
+                {# Flaky locations in this added file #}
+                {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
+                {% for loc in project.flaky_file_diffs[file_data.path].get("added", []) %}
+                {{ render_flaky_location(loc, "added", project.project) }}
+                {% endfor %}
+                {% endif %}
             </div>
             {% endfor %}
             {% endif %}
@@ -685,12 +769,14 @@
                     <button class="copy-btn" onclick="copyPath(this, '{{ file_data.path }}')">📋</button>
                 </div>
                 {% for diag in file_data.diagnostics %}
-                <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "removed", project.project) }}
                 {% endfor %}
+                {# Flaky locations in this removed file #}
+                {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
+                {% for loc in project.flaky_file_diffs[file_data.path].get("removed", []) %}
+                {{ render_flaky_location(loc, "removed", project.project) }}
+                {% endfor %}
+                {% endif %}
             </div>
             {% endfor %}
             {% endif %}
@@ -705,22 +791,14 @@
                 {% if file_data.diffs.added_lines %}
                 {% for line_data in file_data.diffs.added_lines %}
                 {% for diag in line_data.diagnostics %}
-                <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "added", project.project) }}
                 {% endfor %}
                 {% endfor %}
                 {% endif %}
                 {% if file_data.diffs.removed_lines %}
                 {% for line_data in file_data.diffs.removed_lines %}
                 {% for diag in line_data.diagnostics %}
-                <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "removed", project.project) }}
                 {% endfor %}
                 {% endfor %}
                 {% endif %}
@@ -728,42 +806,74 @@
                 {% for line_data in file_data.diffs.modified_lines %}
                 {% for diff_item in line_data.text_diffs %}
                 <div class="diagnostic modified" data-change-type="changed" data-lint-name="{{ diff_item.old.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diff_item.old.level == 'error' else 'warning' }}">[{{ diff_item.old.level }}]</span> {{ diff_item.old.lint_name }} -
-                    <a href="{{ diff_item.old.github_ref|default('') }}" target="_blank">:{{ diff_item.old.line }}</a> -
-                    {% if diff_item.old.message == diff_item.new.message %}
-                    <div style="margin-top: 4px;">
-                        <span>{{ diff_item.old.message|e }}</span>
-                        <div style="margin-top: 4px; font-size: 12px; color: var(--rock);">
-                            <span style="color: #dc3545;">Old column: {{ diff_item.old.column }}</span>
-                            <span style="margin: 0 8px;">→</span>
-                            <span style="color: #28a745;">New column: {{ diff_item.new.column }}</span>
+                    <div class="diag-grid">
+                        <div class="col1"><a href="{{ diff_item.old.github_ref|default('') }}" target="_blank">:{{ diff_item.old.line }}:{{ diff_item.old.column }}</a></div>
+                        {% if diff_item.old.message == diff_item.new.message %}
+                        <div class="col2">
+                            <span class="{{ 'error' if diff_item.old.level == 'error' else 'warning' }}">[{{ diff_item.old.level }}]</span> {{ diff_item.old.lint_name }} - {{ diff_item.old.message|e }}
+                            <div style="margin-top: 4px; font-size: 12px; color: var(--rock);">
+                                <span style="color: #dc3545;">Old column: {{ diff_item.old.column }}</span>
+                                <span style="margin: 0 8px;">→</span>
+                                <span style="color: #28a745;">New column: {{ diff_item.new.column }}</span>
+                            </div>
                         </div>
+                        {% else %}
+                        <div class="col2" style="color: #dc3545;"><span class="{{ 'error' if diff_item.old.level == 'error' else 'warning' }}">[{{ diff_item.old.level }}]</span> {{ diff_item.old.lint_name }} - {{ diff_item.old.message|e }}</div>
+                        <div class="col1"></div>
+                        <div class="col2" style="color: #28a745;"><span class="{{ 'error' if diff_item.new.level == 'error' else 'warning' }}">[{{ diff_item.new.level }}]</span> {{ diff_item.new.lint_name }} - {{ diff_item.new.message|e }}</div>
+                        {% endif %}
                     </div>
-                    {% else %}
-                    <div style="margin-top: 4px;">
-                        <div style="color: #dc3545;">Old: {{ diff_item.old.message|e }}</div>
-                        <div style="color: #28a745;">New: {{ diff_item.new.message|e }}</div>
-                    </div>
-                    {% endif %}
                 </div>
                 {% endfor %}
                 {% for diag in line_data.removed %}
-                <div class="diagnostic removed" data-change-type="removed" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "removed", project.project) }}
                 {% endfor %}
                 {% for diag in line_data.added %}
-                <div class="diagnostic added" data-change-type="added" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project.project }}">
-                    <span class="{{ 'error' if diag.level == 'error' else 'warning' }}">[{{ diag.level }}]</span> {{ diag.lint_name }} -
-                    <a href="{{ diag.github_ref|default('') }}" target="_blank">:{{ diag.line }}:{{ diag.column }}</a> -
-                    {{ diag.message|e }}
-                </div>
+                {{ render_diagnostic(diag, "added", project.project) }}
                 {% endfor %}
                 {% endfor %}
                 {% endif %}
+                {# Flaky locations in this modified file #}
+                {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
+                {% set ffd = project.flaky_file_diffs[file_data.path] %}
+                {% for loc in ffd.get("added", []) %}
+                {{ render_flaky_location(loc, "added", project.project) }}
+                {% endfor %}
+                {% for loc in ffd.get("removed", []) %}
+                {{ render_flaky_location(loc, "removed", project.project) }}
+                {% endfor %}
+                {% for change in ffd.get("changed", []) %}
+                {{ render_flaky_changed(change, project.project) }}
+                {% endfor %}
+                {% endif %}
             </div>
+            {% endfor %}
+            {% endif %}
+
+            {# Files that only have flaky changes (no stable diagnostic changes) #}
+            {% if project.flaky_file_diffs is defined %}
+            {% set stable_files = [] %}
+            {% for f in project.diffs.get("added_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for f in project.diffs.get("removed_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for f in project.diffs.get("modified_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for flaky_path, ffd in project.flaky_file_diffs.items()|sort %}
+            {% if flaky_path not in stable_files %}
+            <div class="file modified">
+                <div class="file-header-with-copy">
+                    <h4 style="margin: 0;">{{ flaky_path }}</h4>
+                    <button class="copy-btn" onclick="copyPath(this, '{{ flaky_path }}')">📋</button>
+                </div>
+                {% for loc in ffd.get("added", []) %}
+                {{ render_flaky_location(loc, "added", project.project) }}
+                {% endfor %}
+                {% for loc in ffd.get("removed", []) %}
+                {{ render_flaky_location(loc, "removed", project.project) }}
+                {% endfor %}
+                {% for change in ffd.get("changed", []) %}
+                {{ render_flaky_changed(change, project.project) }}
+                {% endfor %}
+            </div>
+            {% endif %}
             {% endfor %}
             {% endif %}
         </div>

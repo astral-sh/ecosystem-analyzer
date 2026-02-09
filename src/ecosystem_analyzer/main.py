@@ -40,8 +40,14 @@ def setup_logging(verbose: bool = False) -> None:
     is_flag=True,
     help="Enable verbose logging",
 )
+@click.option(
+    "--max-flaky-runs",
+    help="Maximum number of times to run ty for flaky detection (1 = no detection, stops early if stable)",
+    type=int,
+    default=1,
+)
 @click.pass_context
-def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose: bool) -> None:
+def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose: bool, max_flaky_runs: int) -> None:
     """
     Command-line interface for analyzing Python projects with ty.
     """
@@ -49,6 +55,7 @@ def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose
     ctx.obj["repository"] = resolve_ty_repo(repository) if repository else None
     ctx.obj["target"] = target
     ctx.obj["verbose"] = verbose
+    ctx.obj["max_flaky_runs"] = max_flaky_runs
     setup_logging(verbose)
 
 
@@ -92,6 +99,7 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
         target_dir=ctx.obj["target"],
         project_names=[project_name],
         profile=profile,
+        max_flaky_runs=ctx.obj["max_flaky_runs"],
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -139,6 +147,7 @@ def analyze(ctx, commit: str, projects: str, output: str, profile: str) -> None:
         target_dir=ctx.obj["target"],
         project_names=project_names,
         profile=profile,
+        max_flaky_runs=ctx.obj["max_flaky_runs"],
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -216,6 +225,7 @@ def diff(
         target_dir=ctx.obj["target"],
         project_names=all_project_names,
         profile=profile,
+        max_flaky_runs=ctx.obj["max_flaky_runs"],
     )
 
     # Run for old commit with old projects
@@ -331,6 +341,7 @@ def history(ctx, projects: str, num_commits: int, output: str, profile: str) -> 
         target_dir=ctx.obj["target"],
         project_names=project_names,
         profile=profile,
+        max_flaky_runs=ctx.obj["max_flaky_runs"],
     )
 
     statistics = []
