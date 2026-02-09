@@ -6,14 +6,19 @@ from jinja2 import Environment, FileSystemLoader, PackageLoader
 
 
 def process_diagnostics(data, max_diagnostics_per_project=None):
-    """Process the JSON data to extract all diagnostics."""
+    """Process the JSON data to extract all diagnostics (stable and flaky)."""
     all_diagnostics = []
 
     total_diagnostics = 0
     for output in data["outputs"]:
         project = output["project"]
+        flaky_runs = output.get("flaky_runs")
 
-        num_diagnostics = len(output["diagnostics"])
+        # Count stable + flaky locations for the per-project limit
+        num_stable = len(output.get("diagnostics", []))
+        num_flaky_locs = len(output.get("flaky_diagnostics", []))
+        num_diagnostics = num_stable + num_flaky_locs
+
         if (
             max_diagnostics_per_project is not None
             and num_diagnostics > max_diagnostics_per_project
@@ -25,11 +30,30 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
 
         total_diagnostics += num_diagnostics
 
+        # Add stable diagnostics
         for diagnostic in output.get("diagnostics", []):
-            # Add project metadata to each diagnostic for easier sorting/filtering
             diagnostic["project"] = project
             diagnostic["project_location"] = output.get("project_location")
             all_diagnostics.append(diagnostic)
+
+        # Add flaky locations as entries with flaky metadata
+        for loc in output.get("flaky_diagnostics", []):
+            entry = {
+                "project": project,
+                "project_location": output.get("project_location"),
+                "path": loc["path"],
+                "line": loc["line"],
+                "column": loc["column"],
+                "is_flaky": True,
+                "flaky_runs": flaky_runs,
+                "variants": loc["variants"],
+                # Use the first variant for top-level fields (sorting/filtering)
+                "level": loc["variants"][0]["diagnostic"]["level"],
+                "lint_name": loc["variants"][0]["diagnostic"]["lint_name"],
+                "message": loc["variants"][0]["diagnostic"]["message"],
+                "github_ref": loc["variants"][0]["diagnostic"].get("github_ref"),
+            }
+            all_diagnostics.append(entry)
 
     logging.info(f"Total diagnostics included: {total_diagnostics}")
 

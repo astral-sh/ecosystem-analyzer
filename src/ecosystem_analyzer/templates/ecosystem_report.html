@@ -176,6 +176,48 @@
             font-weight: 500;
         }
 
+        /* Flaky diagnostic styling */
+        tr.is-flaky {
+            background: repeating-linear-gradient(
+                -45deg,
+                transparent,
+                transparent 4px,
+                rgba(253, 126, 20, 0.06) 4px,
+                rgba(253, 126, 20, 0.06) 8px
+            ) !important;
+        }
+
+        tr.is-flaky:hover {
+            background: repeating-linear-gradient(
+                -45deg,
+                rgba(99, 64, 172, 0.08),
+                rgba(99, 64, 172, 0.08) 4px,
+                rgba(253, 126, 20, 0.10) 4px,
+                rgba(253, 126, 20, 0.10) 8px
+            ) !important;
+        }
+
+        .flaky-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            color: #e65100;
+            background: rgba(253, 126, 20, 0.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+
+        .flaky-freq {
+            font-weight: 600;
+            color: #e65100;
+            font-size: 12px;
+        }
+
+        .flaky-variant {
+            padding: 2px 0;
+        }
+
         /* Add subtle animations */
         * {
             transition: background-color 0.2s ease, border-color 0.2s ease;
@@ -250,7 +292,7 @@
         </thead>
         <tbody>
             {% for diagnostic in diagnostics %}
-            <tr class="diagnostic-row" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
+            <tr class="diagnostic-row{% if diagnostic.is_flaky is defined and diagnostic.is_flaky %} is-flaky{% endif %}" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
                 data-level="{{ diagnostic.level }}">
                 <td>
                     {% if diagnostic.project_location %}
@@ -259,7 +301,12 @@
                         {{ diagnostic.project }}
                     {% endif %}
                 </td>
-                <td class="{{ diagnostic.level }}">{{ diagnostic.lint_name }}</td>
+                <td class="{{ diagnostic.level }}">
+                    {{ diagnostic.lint_name }}
+                    {% if diagnostic.is_flaky is defined and diagnostic.is_flaky %}
+                    <span class="flaky-badge" title="Flaky: nondeterministic across {{ diagnostic.flaky_runs }} runs">flaky</span>
+                    {% endif %}
+                </td>
                 <td>
                     {% if diagnostic.github_ref %}
                         <a href="{{ diagnostic.github_ref }}" target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a>
@@ -267,7 +314,21 @@
                         {{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}
                     {% endif %}
                 </td>
-                <td>{{ diagnostic.message | e }}</td>
+                <td>
+                    {% if diagnostic.is_flaky is defined and diagnostic.is_flaky %}
+                        {% for v in diagnostic.variants %}
+                        <div class="flaky-variant">
+                            <span class="flaky-freq">({{ v.count }}/{{ diagnostic.flaky_runs }})</span>
+                            {% if v.diagnostic.lint_name != diagnostic.lint_name %}
+                            <span class="{{ 'error' if v.diagnostic.level == 'error' else 'warning' }}">[{{ v.diagnostic.level }}]</span> {{ v.diagnostic.lint_name }} -
+                            {% endif %}
+                            {{ v.diagnostic.message | e }}
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        {{ diagnostic.message | e }}
+                    {% endif %}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
