@@ -60,16 +60,24 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
     return all_diagnostics
 
 
-def generate_html_report(diagnostics, ty_commit, output_path):
+def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_names=None):
     """Generate an HTML report using Jinja2 template."""
-    projects = sorted(set(d["project"] for d in diagnostics))
+    if flaky_project_names is None:
+        flaky_project_names = set()
+
+    all_projects = sorted(set(d["project"] for d in diagnostics))
     lints = sorted(set(d["lint_name"] for d in diagnostics))
     levels = sorted(set(d["level"] for d in diagnostics))
 
-    projects = [
-        (project, sum(1 for d in diagnostics if d["project"] == project))
-        for project in projects
-    ]
+    projects = []
+    for project in all_projects:
+        count = sum(1 for d in diagnostics if d["project"] == project)
+        is_flaky = project in flaky_project_names
+        projects.append((project, count, is_flaky))
+
+    # Sort: flaky projects first, then by name
+    projects.sort(key=lambda x: (not x[2], x[0]))
+
     lints = [
         (lint, sum(1 for d in diagnostics if d["lint_name"] == lint)) for lint in lints
     ]
@@ -77,6 +85,8 @@ def generate_html_report(diagnostics, ty_commit, output_path):
     levels = [
         (level, sum(1 for d in diagnostics if d["level"] == level)) for level in levels
     ]
+
+    num_flaky_projects = len(flaky_project_names)
 
     # Set up Jinja2 environment with package loader
     try:
@@ -97,6 +107,7 @@ def generate_html_report(diagnostics, ty_commit, output_path):
         lints=lints,
         levels=levels,
         ty_commit=ty_commit,
+        num_flaky_projects=num_flaky_projects,
     )
 
     # Write output file
@@ -127,6 +138,11 @@ def generate(
         )
     ty_commit = ty_commits.pop() if ty_commits else "unknown"
 
-    output_file = generate_html_report(diagnostics, ty_commit, output_path)
+    flaky_project_names = set()
+    for output in data["outputs"]:
+        if output.get("flaky_diagnostics"):
+            flaky_project_names.add(output["project"])
+
+    output_file = generate_html_report(diagnostics, ty_commit, output_path, flaky_project_names)
 
     logging.info(f"Report generated successfully: {output_file}")

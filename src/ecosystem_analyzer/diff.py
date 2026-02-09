@@ -848,6 +848,32 @@ class DiagnosticDiff:
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
+        # Identify projects with flaky diagnostics in the new data
+        flaky_project_names: set[str] = set()
+        for output in self.new_data["outputs"]:
+            if output.get("flaky_diagnostics"):
+                flaky_project_names.add(output["project"])
+
+        # Add flaky label to project entries, and include flaky-only projects
+        for project_data in merged_projects:
+            project_data["is_flaky"] = project_data["project_name"] in flaky_project_names
+
+        # Add projects that are flaky but have no diffstat changes
+        projects_in_merged = {p["project_name"] for p in merged_projects}
+        for project_name in sorted(flaky_project_names - projects_in_merged):
+            merged_projects.append({
+                "project_name": project_name,
+                "added": 0,
+                "removed": 0,
+                "changed": 0,
+                "net_change": 0,
+                "total_change": 0,
+                "is_flaky": True,
+            })
+
+        # Re-sort: flaky-only projects (0 total change) go last
+        merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
+
         return {
             "total_added": total_added,
             "total_removed": total_removed,
