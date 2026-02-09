@@ -194,7 +194,10 @@ class Ty:
                 new_variants = run_keys - all_seen
                 newly_flaky = stable_so_far - run_keys
 
-                if not new_variants and not newly_flaky:
+                # Require at least 3 runs before stopping early, to reduce
+                # the chance of missing a rare variant that only appears in
+                # ~1/3 of runs.
+                if actual_runs >= 3 and not new_variants and not newly_flaky:
                     logging.info(
                         f"  '{project.name}': run {i + 1} unchanged, "
                         f"stopping early after {actual_runs} runs"
