@@ -70,8 +70,8 @@ class DiagnosticsParser:
 
     def parse(self, content: str) -> list[Diagnostic]:
         messages = []
-        for line in content.splitlines():
-            line = line.strip()
+        for raw_line in content.splitlines():
+            line = raw_line.strip()
             if not line:
                 continue
 

@@ -563,9 +563,9 @@ class DiagnosticDiff:
                 result[line] = []
             result[line].append(diag)
         # Sort diagnostics within each line by column, message
-        for line_num in result:
+        for line_num, diags in result.items():
             result[line_num] = sorted(
-                result[line_num],
+                diags,
                 key=lambda d: (d.get("column", 0), d.get("message", "")),
             )
         return result
@@ -913,18 +913,18 @@ class DiagnosticDiff:
 
         # Add projects that are flaky but have no diffstat changes
         projects_in_merged = {p["project_name"] for p in merged_projects}
-        for project_name in sorted(flaky_project_names - projects_in_merged):
-            merged_projects.append(
-                {
-                    "project_name": project_name,
-                    "added": 0,
-                    "removed": 0,
-                    "changed": 0,
-                    "net_change": 0,
-                    "total_change": 0,
-                    "is_flaky": True,
-                }
-            )
+        merged_projects.extend(
+            {
+                "project_name": project_name,
+                "added": 0,
+                "removed": 0,
+                "changed": 0,
+                "net_change": 0,
+                "total_change": 0,
+                "is_flaky": True,
+            }
+            for project_name in sorted(flaky_project_names - projects_in_merged)
+        )
 
         # Re-sort: flaky-only projects (0 total change) go last
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))

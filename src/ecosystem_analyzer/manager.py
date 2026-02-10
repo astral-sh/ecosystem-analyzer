@@ -30,8 +30,8 @@ def _get_ecosystem_projects() -> dict[str, Project]:
 
 class Manager:
     _project_names: list[str]
-    _installed_projects: list[InstalledProject] = []
-    _active_projects: list[InstalledProject] = []
+    _installed_projects: list[InstalledProject]
+    _active_projects: list[InstalledProject]
 
     _ty: Ty
 
@@ -45,6 +45,8 @@ class Manager:
         flaky_runs: int = 1,
         flaky_projects: set[str] | None = None,
     ) -> None:
+        self._installed_projects = []
+        self._active_projects = []
         self._ty = Ty(ty_repo, target_dir, profile=profile)
         self._flaky_runs = flaky_runs
         self._flaky_projects = flaky_projects or set()

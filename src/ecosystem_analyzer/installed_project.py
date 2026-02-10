@@ -5,7 +5,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from git import Repo
+from git import GitError, Repo
 from mypy_primer.model import Project
 
 from .config import PYTHON_VERSION
@@ -96,7 +96,7 @@ class InstalledProject:
                     to_path=self._cache_path,
                     recurse_submodules=True,
                 )
-        except Exception as e:
+        except GitError as e:
             logger.error(f"Error cloning/updating repository: {e}")
             return
 
