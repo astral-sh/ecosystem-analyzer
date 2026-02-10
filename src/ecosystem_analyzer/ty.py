@@ -14,6 +14,8 @@ from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
 from .run_output import RunOutput
 
+logger = logging.getLogger(__name__)
+
 
 class Ty:
     def __init__(
@@ -26,16 +28,16 @@ class Ty:
 
     def compile_for_commit(self, commit: str | Commit):
         # Checkout the commit
-        logging.debug(f"Checking out ty commit '{commit}'")
+        logger.debug(f"Checking out ty commit '{commit}'")
         self.repository.git.checkout(commit)
 
         # Compile ty
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = self.cargo_target_dir.as_posix()
 
-        logging.info(f"Compiling ty ({self.profile})")
+        logger.info(f"Compiling ty ({self.profile})")
         cargo_cmd = ["cargo", "build", "--package", "ty", "--profile", self.profile]
-        logging.debug(
+        logger.debug(
             f"Executing: {' '.join(cargo_cmd)} (CARGO_TARGET_DIR={self.cargo_target_dir})"
         )
         subprocess.run(
@@ -52,7 +54,7 @@ class Ty:
         self.executable = self.cargo_target_dir / target_dir / "ty"
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
-        logging.info(f"Running ty on project '{project.name}'")
+        logger.info(f"Running ty on project '{project.name}'")
 
         # Standard flags to add to all ty check commands
         standard_flags = [
@@ -83,7 +85,7 @@ class Ty:
                 *standard_flags,
                 *project.paths,
             ]
-        logging.debug(f"Executing: {' '.join(cmd)}")
+        logger.debug(f"Executing: {' '.join(cmd)}")
         start_time = time.time()
         try:
             result = subprocess.run(
@@ -99,7 +101,7 @@ class Ty:
             return_code = result.returncode
 
             if result.returncode not in (0, 1):
-                logging.error(
+                logger.error(
                     f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
                 )
                 if result.stderr:
@@ -138,7 +140,7 @@ class Ty:
         diagnostics and `flaky_diagnostics` contains grouped flaky ones.
         """
         assert n >= 2, "Use run_on_project for single runs"
-        logging.info(
+        logger.info(
             f"Running ty on project '{project.name}' {n} times for flaky detection"
         )
 
@@ -147,7 +149,7 @@ class Ty:
         return_codes: list[int | None] = []
 
         for i in range(n):
-            logging.info(f"  Run {i + 1}/{n} for '{project.name}'")
+            logger.info(f"  Run {i + 1}/{n} for '{project.name}'")
             output = self.run_on_project(project)
 
             # If any run fails abnormally, bail out and return the failure
@@ -155,14 +157,14 @@ class Ty:
                 0,
                 1,
             ):
-                logging.warning(
+                logger.warning(
                     f"Run {i + 1}/{n} for '{project.name}' failed with return code "
                     f"{output['return_code']}; aborting flaky detection"
                 )
                 return output
             if output.get("return_code") is None:
                 # Timeout
-                logging.warning(
+                logger.warning(
                     f"Run {i + 1}/{n} for '{project.name}' timed out; aborting flaky detection"
                 )
                 return output
@@ -201,7 +203,7 @@ class Ty:
             result["flaky_diagnostics"] = flaky_locations
 
         flaky_count = sum(len(loc["variants"]) for loc in flaky_locations)
-        logging.info(
+        logger.info(
             f"  '{project.name}': {len(stable)} stable diagnostics, "
             f"{flaky_count} flaky diagnostics at {len(flaky_locations)} locations"
             f" ({n} runs)"

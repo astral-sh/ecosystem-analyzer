@@ -11,6 +11,8 @@ from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
 from .manager import Manager
 
+logger = logging.getLogger(__name__)
+
 
 def setup_logging(verbose: bool = False) -> None:
     """Configure logging for the application."""
@@ -380,7 +382,7 @@ def history(
 
     for commit in last_commits:
         message = commit.message.splitlines()[0]
-        logging.debug(f"Found commit: {message}")
+        logger.debug(f"Found commit: {message}")
 
     project_names = Path(projects).read_text().splitlines()
 
@@ -402,14 +404,14 @@ def history(
     for idx, commit in enumerate(last_commits):
         message = commit.message.splitlines()[0]
         sha = commit.hexsha[:7]
-        logging.debug(f"Analyzing commit: {message}")
+        logger.debug(f"Analyzing commit: {message}")
 
         run_outputs = manager.run_for_commit(commit)
         manager.write_run_outputs(run_outputs, f"history-diagnostics-{idx}-{sha}.json")
 
         total_diagnostics = sum(len(output["diagnostics"]) for output in run_outputs)
 
-        logging.info(f"Total diagnostics for commit '{sha}': {total_diagnostics}")
+        logger.info(f"Total diagnostics for commit '{sha}': {total_diagnostics}")
 
         statistics.append(
             {
@@ -649,7 +651,7 @@ def parse_diagnostics(
     with output_path.open("w") as json_file:
         json.dump(output_data, json_file, indent=4)
 
-    logging.info(f"Parsed {len(diagnostics)} diagnostics and wrote to {output_path}")
+    logger.info(f"Parsed {len(diagnostics)} diagnostics and wrote to {output_path}")
     click.echo(f"Parsed {len(diagnostics)} diagnostics and wrote to {output_path}")
 
 

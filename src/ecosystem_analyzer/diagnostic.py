@@ -42,7 +42,9 @@ class DiagnosticsParser:
             r"(?P<message>.+)$"
         )
 
-        if (match := re.match(old_pattern, line)) or (match := re.match(new_pattern, line)):
+        if (match := re.match(old_pattern, line)) or (
+            match := re.match(new_pattern, line)
+        ):
             path = str(match.group("path"))
             line_num = str(match.group("line"))
 

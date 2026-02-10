@@ -4,6 +4,8 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
+logger = logging.getLogger(__name__)
+
 
 def process_diagnostics(data, max_diagnostics_per_project=None):
     """Process the JSON data to extract all diagnostics (stable and flaky)."""
@@ -23,7 +25,7 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
             max_diagnostics_per_project is not None
             and num_diagnostics > max_diagnostics_per_project
         ):
-            logging.info(
+            logger.info(
                 f"Skipping project '{project}' ({num_diagnostics} diagnostics, limit: {max_diagnostics_per_project})"
             )
             continue
@@ -55,7 +57,7 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
             }
             all_diagnostics.append(entry)
 
-    logging.info(f"Total diagnostics included: {total_diagnostics}")
+    logger.info(f"Total diagnostics included: {total_diagnostics}")
 
     return all_diagnostics
 
@@ -147,4 +149,4 @@ def generate(
         diagnostics, ty_commit, output_path, flaky_project_names
     )
 
-    logging.info(f"Report generated successfully: {output_file}")
+    logger.info(f"Report generated successfully: {output_file}")

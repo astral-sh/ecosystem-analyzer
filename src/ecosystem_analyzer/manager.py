@@ -11,6 +11,8 @@ from .installed_project import InstalledProject
 from .run_output import RunOutput
 from .ty import Ty
 
+logger = logging.getLogger(__name__)
+
 
 def _get_ecosystem_projects() -> dict[str, Project]:
     projects: dict[str, Project] = {}
@@ -51,7 +53,7 @@ class Manager:
 
         unavailable_projects = set(project_names) - set(self._ecosystem_projects.keys())
         if unavailable_projects:
-            logging.warning(
+            logger.warning(
                 f'Project(s) "{", ".join(sorted(unavailable_projects))}" not found in available projects. Skipping.'
             )
 
@@ -69,7 +71,7 @@ class Manager:
 
     def _install_projects(self) -> None:
         def install_single_project(project_name: str) -> InstalledProject:
-            logging.info(f"Processing project: {project_name}")
+            logger.info(f"Processing project: {project_name}")
             project = self._ecosystem_projects[project_name]
             return InstalledProject(project)
 
@@ -88,9 +90,9 @@ class Manager:
                 try:
                     installed_project = future.result()
                     self._installed_projects.append(installed_project)
-                    logging.debug(f"Successfully installed project: {project_name}")
+                    logger.debug(f"Successfully installed project: {project_name}")
                 except Exception as e:
-                    logging.error(f"Failed to install project {project_name}: {e}")
+                    logger.error(f"Failed to install project {project_name}: {e}")
                     raise
 
     def activate(self, project_names: list[str]) -> None:
@@ -100,7 +102,7 @@ class Manager:
 
         unavailable_projects = set(project_names) - installed_project_names
         if unavailable_projects:
-            logging.warning(
+            logger.warning(
                 f'Project(s) "{", ".join(sorted(unavailable_projects))}" not found in installed projects. Skipping.'
             )
 
@@ -143,4 +145,4 @@ class Manager:
         output_path = Path(output_path)
         with output_path.open("w") as json_file:
             json.dump({"outputs": run_outputs}, json_file, indent=4)
-        logging.info(f"Output written to {output_path}")
+        logger.info(f"Output written to {output_path}")
