@@ -4,7 +4,12 @@ import tempfile
 from ecosystem_analyzer.diff import DiagnosticDiff
 
 
-def _make_output(project: str, diagnostics: list, flaky_diagnostics: list | None = None, flaky_runs: int | None = None):
+def _make_output(
+    project: str,
+    diagnostics: list,
+    flaky_diagnostics: list | None = None,
+    flaky_runs: int | None = None,
+):
     entry = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
@@ -20,7 +25,9 @@ def _make_output(project: str, diagnostics: list, flaky_diagnostics: list | None
     return entry
 
 
-def _make_variant(path, line, column, message, count, lint_name="some-lint", level="error"):
+def _make_variant(
+    path, line, column, message, count, lint_name="some-lint", level="error"
+):
     return {
         "diagnostic": {
             "level": level,
@@ -64,8 +71,19 @@ class TestJsonRoundtrip:
 
     def test_flaky_same_on_both_sides_no_diff(self):
         """When flaky locations have identical variants on both sides, no diff."""
-        diag = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "stable"}
-        flaky = [_make_flaky_loc("b.py", 10, 1, [_make_variant("b.py", 10, 1, "variant A", count=2)])]
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        flaky = [
+            _make_flaky_loc(
+                "b.py", 10, 1, [_make_variant("b.py", 10, 1, "variant A", count=2)]
+            )
+        ]
 
         data = {"outputs": [_make_output("proj", [diag], flaky, flaky_runs=3)]}
 
@@ -81,11 +99,25 @@ class TestJsonRoundtrip:
 
     def test_flaky_added_counts_as_one(self):
         """A new flaky location counts as 1 added diagnostic regardless of variant count."""
-        diag = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "stable"}
-        new_flaky = [_make_flaky_loc("b.py", 10, 1, [
-            _make_variant("b.py", 10, 1, "variant A", count=2),
-            _make_variant("b.py", 10, 1, "variant B", count=1),
-        ])]
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        new_flaky = [
+            _make_flaky_loc(
+                "b.py",
+                10,
+                1,
+                [
+                    _make_variant("b.py", 10, 1, "variant A", count=2),
+                    _make_variant("b.py", 10, 1, "variant B", count=1),
+                ],
+            )
+        ]
 
         old_data = {"outputs": [_make_output("proj", [diag])]}
         new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
@@ -103,11 +135,32 @@ class TestJsonRoundtrip:
 
     def test_flaky_same_location_different_variants_suppressed(self):
         """Flaky locations at the same position are suppressed even with different variants."""
-        diag = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "stable"}
-        old_flaky = [_make_flaky_loc("b.py", 10, 1, [_make_variant("b.py", 10, 1, "only old variant", count=1)])]
-        new_flaky = [_make_flaky_loc("b.py", 10, 1, [
-            _make_variant("b.py", 10, 1, "only new variant", count=2),
-        ])]
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        old_flaky = [
+            _make_flaky_loc(
+                "b.py",
+                10,
+                1,
+                [_make_variant("b.py", 10, 1, "only old variant", count=1)],
+            )
+        ]
+        new_flaky = [
+            _make_flaky_loc(
+                "b.py",
+                10,
+                1,
+                [
+                    _make_variant("b.py", 10, 1, "only new variant", count=2),
+                ],
+            )
+        ]
 
         old_data = {"outputs": [_make_output("proj", [diag], old_flaky, flaky_runs=3)]}
         new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
@@ -128,10 +181,24 @@ class TestJsonRoundtrip:
 
     def test_flaky_genuinely_new_location(self):
         """A flaky location at a position not seen on the other side counts as added."""
-        diag = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "stable"}
-        new_flaky = [_make_flaky_loc("c.py", 50, 1, [
-            _make_variant("c.py", 50, 1, "new variant", count=2),
-        ])]
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        new_flaky = [
+            _make_flaky_loc(
+                "c.py",
+                50,
+                1,
+                [
+                    _make_variant("c.py", 50, 1, "new variant", count=2),
+                ],
+            )
+        ]
 
         old_data = {"outputs": [_make_output("proj", [diag])]}
         new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
@@ -151,8 +218,12 @@ class TestJsonRoundtrip:
         """Flaky diffs are organized by file path for inline rendering."""
         old_data = {"outputs": [_make_output("proj", [])]}
         new_flaky = [
-            _make_flaky_loc("a.py", 10, 1, [_make_variant("a.py", 10, 1, "msg1", count=1)]),
-            _make_flaky_loc("b.py", 20, 1, [_make_variant("b.py", 20, 1, "msg2", count=2)]),
+            _make_flaky_loc(
+                "a.py", 10, 1, [_make_variant("a.py", 10, 1, "msg1", count=1)]
+            ),
+            _make_flaky_loc(
+                "b.py", 20, 1, [_make_variant("b.py", 20, 1, "msg2", count=2)]
+            ),
         ]
         new_data = {"outputs": [_make_output("proj", [], new_flaky, flaky_runs=3)]}
 
@@ -173,8 +244,22 @@ class TestJsonRoundtrip:
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""
-        diag1 = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "old"}
-        diag2 = {"level": "error", "lint_name": "some-lint", "path": "a.py", "line": 1, "column": 1, "message": "new"}
+        diag1 = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "old",
+        }
+        diag2 = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "new",
+        }
 
         old_data = {"outputs": [_make_output("proj", [diag1])]}
         new_data = {"outputs": [_make_output("proj", [diag2])]}

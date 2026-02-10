@@ -136,7 +136,8 @@ class DiagnosticDiff:
             flaky_locs.add((loc["path"], loc["line"], loc["column"]))
 
         return [
-            d for d in diagnostics
+            d
+            for d in diagnostics
             if (d["path"], d["line"], d["column"]) not in flaky_locs
         ]
 
@@ -182,7 +183,8 @@ class DiagnosticDiff:
             return flaky_locations
 
         return [
-            loc for loc in flaky_locations
+            loc
+            for loc in flaky_locations
             if (loc["path"], loc["line"], loc["column"]) not in other_all_locations
         ]
 
@@ -209,8 +211,12 @@ class DiagnosticDiff:
         """
         result: dict[str, list] = {"added": [], "removed": [], "changed": []}
 
-        old_by_loc = {(loc["path"], loc["line"], loc["column"]): loc for loc in old_flaky}
-        new_by_loc = {(loc["path"], loc["line"], loc["column"]): loc for loc in new_flaky}
+        old_by_loc = {
+            (loc["path"], loc["line"], loc["column"]): loc for loc in old_flaky
+        }
+        new_by_loc = {
+            (loc["path"], loc["line"], loc["column"]): loc for loc in new_flaky
+        }
 
         old_keys = set(old_by_loc.keys())
         new_keys = set(new_by_loc.keys())
@@ -228,7 +234,9 @@ class DiagnosticDiff:
         for key in sorted(old_keys & new_keys):
             old_loc = old_by_loc[key]
             new_loc = new_by_loc[key]
-            if self._flaky_location_variant_set(old_loc) != self._flaky_location_variant_set(new_loc):
+            if self._flaky_location_variant_set(
+                old_loc
+            ) != self._flaky_location_variant_set(new_loc):
                 old_annotated = dict(old_loc)
                 old_annotated["flaky_runs"] = old_flaky_runs
                 new_annotated = dict(new_loc)
@@ -237,7 +245,9 @@ class DiagnosticDiff:
 
         return result
 
-    def _organize_flaky_diffs_by_file(self, flaky_diffs: dict[str, list]) -> dict[str, dict[str, list]]:
+    def _organize_flaky_diffs_by_file(
+        self, flaky_diffs: dict[str, list]
+    ) -> dict[str, dict[str, list]]:
         """Organize flaky diffs by file path for inline rendering.
 
         Returns {path: {"added": [...], "removed": [...], "changed": [...]}}.
@@ -395,11 +405,13 @@ class DiagnosticDiff:
                 all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
 
             old_diagnostics = [
-                d for d in old_project.get("diagnostics", [])
+                d
+                for d in old_project.get("diagnostics", [])
                 if (d["path"], d["line"], d["column"]) not in all_flaky_locs
             ]
             new_diagnostics = [
-                d for d in new_project.get("diagnostics", [])
+                d
+                for d in new_project.get("diagnostics", [])
                 if (d["path"], d["line"], d["column"]) not in all_flaky_locs
             ]
 
@@ -420,7 +432,8 @@ class DiagnosticDiff:
 
             # Compare flaky locations as grouped units
             flaky_diffs = self._compare_flaky_locations(
-                old_flaky_filtered, new_flaky_filtered,
+                old_flaky_filtered,
+                new_flaky_filtered,
                 old_project.get("flaky_runs"),
                 new_project.get("flaky_runs"),
             )
@@ -431,9 +444,7 @@ class DiagnosticDiff:
                 or file_diffs["modified_files"]
             )
             has_flaky_changes = (
-                flaky_diffs["added"]
-                or flaky_diffs["removed"]
-                or flaky_diffs["changed"]
+                flaky_diffs["added"] or flaky_diffs["removed"] or flaky_diffs["changed"]
             )
 
             if has_stable_changes or has_flaky_changes:
@@ -444,7 +455,9 @@ class DiagnosticDiff:
                 }
                 if has_flaky_changes:
                     entry["flaky_diffs"] = flaky_diffs
-                    entry["flaky_file_diffs"] = self._organize_flaky_diffs_by_file(flaky_diffs)
+                    entry["flaky_file_diffs"] = self._organize_flaky_diffs_by_file(
+                        flaky_diffs
+                    )
                 result["modified_projects"].append(entry)
 
         # Sort failed projects to prioritize abnormal exits over timeouts
@@ -703,7 +716,9 @@ class DiagnosticDiff:
                 total_added += 1
                 lint_name = diag.get("lint_name", "unknown")
                 added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+                added_by_project[project_name] = (
+                    added_by_project.get(project_name, 0) + 1
+                )
 
         # Count diagnostics from removed projects
         for project in self.diffs["removed_projects"]:
@@ -712,7 +727,9 @@ class DiagnosticDiff:
                 total_removed += 1
                 lint_name = diag.get("lint_name", "unknown")
                 removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+                removed_by_project[project_name] = (
+                    removed_by_project.get(project_name, 0) + 1
+                )
 
         # Count diagnostics from modified projects
         for project in self.diffs["modified_projects"]:
@@ -723,7 +740,9 @@ class DiagnosticDiff:
                     total_added += 1
                     lint_name = diag.get("lint_name", "unknown")
                     added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                    added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+                    added_by_project[project_name] = (
+                        added_by_project.get(project_name, 0) + 1
+                    )
 
             # Removed files in modified projects
             for file_data in project["diffs"].get("removed_files", []):
@@ -731,7 +750,9 @@ class DiagnosticDiff:
                     total_removed += 1
                     lint_name = diag.get("lint_name", "unknown")
                     removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                    removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+                    removed_by_project[project_name] = (
+                        removed_by_project.get(project_name, 0) + 1
+                    )
 
             # Modified files in modified projects
             for file_data in project["diffs"].get("modified_files", []):
@@ -741,15 +762,21 @@ class DiagnosticDiff:
                         total_added += 1
                         lint_name = diag.get("lint_name", "unknown")
                         added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                        added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+                        added_by_project[project_name] = (
+                            added_by_project.get(project_name, 0) + 1
+                        )
 
                 # Removed lines
                 for line_data in file_data["diffs"].get("removed_lines", []):
                     for diag in line_data["diagnostics"]:
                         total_removed += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                        removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+                        removed_by_lint[lint_name] = (
+                            removed_by_lint.get(lint_name, 0) + 1
+                        )
+                        removed_by_project[project_name] = (
+                            removed_by_project.get(project_name, 0) + 1
+                        )
 
                 # Modified lines
                 for line_data in file_data["diffs"].get("modified_lines", []):
@@ -757,42 +784,70 @@ class DiagnosticDiff:
                     for diff_item in line_data.get("text_diffs", []):
                         total_changed += 1
                         lint_name = diff_item["old"].get("lint_name", "unknown")
-                        changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
-                        changed_by_project[project_name] = changed_by_project.get(project_name, 0) + 1
+                        changed_by_lint[lint_name] = (
+                            changed_by_lint.get(lint_name, 0) + 1
+                        )
+                        changed_by_project[project_name] = (
+                            changed_by_project.get(project_name, 0) + 1
+                        )
 
                     # Count pure additions and removals (already filtered in diff computation)
                     for diag in line_data["added"]:
                         total_added += 1
                         lint_name = diag.get("lint_name", "unknown")
                         added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                        added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+                        added_by_project[project_name] = (
+                            added_by_project.get(project_name, 0) + 1
+                        )
 
                     for diag in line_data["removed"]:
                         total_removed += 1
                         lint_name = diag.get("lint_name", "unknown")
-                        removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                        removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+                        removed_by_lint[lint_name] = (
+                            removed_by_lint.get(lint_name, 0) + 1
+                        )
+                        removed_by_project[project_name] = (
+                            removed_by_project.get(project_name, 0) + 1
+                        )
 
             # Count flaky location diffs (each location = 1 diagnostic)
             flaky_diffs = project.get("flaky_diffs", {})
             for loc in flaky_diffs.get("added", []):
                 total_added += 1
                 # Use the first variant's lint_name as representative
-                lint_name = loc["variants"][0]["diagnostic"]["lint_name"] if loc["variants"] else "unknown"
+                lint_name = (
+                    loc["variants"][0]["diagnostic"]["lint_name"]
+                    if loc["variants"]
+                    else "unknown"
+                )
                 added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                added_by_project[project_name] = added_by_project.get(project_name, 0) + 1
+                added_by_project[project_name] = (
+                    added_by_project.get(project_name, 0) + 1
+                )
 
             for loc in flaky_diffs.get("removed", []):
                 total_removed += 1
-                lint_name = loc["variants"][0]["diagnostic"]["lint_name"] if loc["variants"] else "unknown"
+                lint_name = (
+                    loc["variants"][0]["diagnostic"]["lint_name"]
+                    if loc["variants"]
+                    else "unknown"
+                )
                 removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                removed_by_project[project_name] = removed_by_project.get(project_name, 0) + 1
+                removed_by_project[project_name] = (
+                    removed_by_project.get(project_name, 0) + 1
+                )
 
             for change in flaky_diffs.get("changed", []):
                 total_changed += 1
-                lint_name = change["old"]["variants"][0]["diagnostic"]["lint_name"] if change["old"]["variants"] else "unknown"
+                lint_name = (
+                    change["old"]["variants"][0]["diagnostic"]["lint_name"]
+                    if change["old"]["variants"]
+                    else "unknown"
+                )
                 changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
-                changed_by_project[project_name] = changed_by_project.get(project_name, 0) + 1
+                changed_by_project[project_name] = (
+                    changed_by_project.get(project_name, 0) + 1
+                )
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
@@ -856,20 +911,24 @@ class DiagnosticDiff:
 
         # Add flaky label to project entries, and include flaky-only projects
         for project_data in merged_projects:
-            project_data["is_flaky"] = project_data["project_name"] in flaky_project_names
+            project_data["is_flaky"] = (
+                project_data["project_name"] in flaky_project_names
+            )
 
         # Add projects that are flaky but have no diffstat changes
         projects_in_merged = {p["project_name"] for p in merged_projects}
         for project_name in sorted(flaky_project_names - projects_in_merged):
-            merged_projects.append({
-                "project_name": project_name,
-                "added": 0,
-                "removed": 0,
-                "changed": 0,
-                "net_change": 0,
-                "total_change": 0,
-                "is_flaky": True,
-            })
+            merged_projects.append(
+                {
+                    "project_name": project_name,
+                    "added": 0,
+                    "removed": 0,
+                    "changed": 0,
+                    "net_change": 0,
+                    "total_change": 0,
+                    "is_flaky": True,
+                }
+            )
 
         # Re-sort: flaky-only projects (0 total change) go last
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))

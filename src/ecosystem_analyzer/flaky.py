@@ -64,9 +64,7 @@ def classify_diagnostics(
             loc = _location_key(diag)
             if loc not in flaky_by_location:
                 flaky_by_location[loc] = []
-            flaky_by_location[loc].append(
-                FlakyVariant(diagnostic=diag, count=count)
-            )
+            flaky_by_location[loc].append(FlakyVariant(diagnostic=diag, count=count))
 
     # Sort stable diagnostics by path, line, column, message
     stable.sort(
@@ -75,7 +73,7 @@ def classify_diagnostics(
 
     # Build sorted FlakyLocation list
     flaky_locations: list[FlakyLocation] = []
-    for (path, line, column) in sorted(flaky_by_location.keys()):
+    for path, line, column in sorted(flaky_by_location.keys()):
         variants = flaky_by_location[(path, line, column)]
         # Sort variants by lint_name, message
         variants.sort(

@@ -119,10 +119,16 @@ class Manager:
 
         run_outputs = []
         for project in self._active_projects:
-            n = self._flaky_runs if (
-                self._flaky_runs > 1
-                and (not self._flaky_projects or project.name in self._flaky_projects)
-            ) else 1
+            n = (
+                self._flaky_runs
+                if (
+                    self._flaky_runs > 1
+                    and (
+                        not self._flaky_projects or project.name in self._flaky_projects
+                    )
+                )
+                else 1
+            )
             if n > 1:
                 output = self._ty.run_on_project_multiple(project, n)
             else:

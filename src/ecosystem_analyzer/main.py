@@ -47,7 +47,13 @@ def setup_logging(verbose: bool = False) -> None:
     default=1,
 )
 @click.pass_context
-def cli(ctx: click.Context, repository: str | None, target: Path | None, verbose: bool, flaky_runs: int) -> None:
+def cli(
+    ctx: click.Context,
+    repository: str | None,
+    target: Path | None,
+    verbose: bool,
+    flaky_runs: int,
+) -> None:
     """
     Command-line interface for analyzing Python projects with ty.
     """
@@ -138,7 +144,14 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     required=False,
 )
 @click.pass_context
-def analyze(ctx, commit: str, projects: str, output: str, profile: str, projects_flaky: str | None) -> None:
+def analyze(
+    ctx,
+    commit: str,
+    projects: str,
+    output: str,
+    profile: str,
+    projects_flaky: str | None,
+) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
     """
@@ -345,7 +358,14 @@ def generate_diff(
     required=False,
 )
 @click.pass_context
-def history(ctx, projects: str, num_commits: int, output: str, profile: str, projects_flaky: str | None) -> None:
+def history(
+    ctx,
+    projects: str,
+    num_commits: int,
+    output: str,
+    profile: str,
+    projects_flaky: str | None,
+) -> None:
     """
     Analyze diagnostics across a range of commits.
     """

@@ -16,7 +16,9 @@ from .run_output import RunOutput
 
 
 class Ty:
-    def __init__(self, repository: Repo, target_dir: Path | None, profile: str = "dev") -> None:
+    def __init__(
+        self, repository: Repo, target_dir: Path | None, profile: str = "dev"
+    ) -> None:
         self.repository: Repo = repository
         self.working_dir: Path = Path(self.repository.working_dir)
         self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
@@ -136,7 +138,9 @@ class Ty:
         diagnostics and `flaky_diagnostics` contains grouped flaky ones.
         """
         assert n >= 2, "Use run_on_project for single runs"
-        logging.info(f"Running ty on project '{project.name}' {n} times for flaky detection")
+        logging.info(
+            f"Running ty on project '{project.name}' {n} times for flaky detection"
+        )
 
         all_diagnostics: list[list] = []
         times: list[float] = []
@@ -147,7 +151,10 @@ class Ty:
             output = self.run_on_project(project)
 
             # If any run fails abnormally, bail out and return the failure
-            if output.get("return_code") is not None and output["return_code"] not in (0, 1):
+            if output.get("return_code") is not None and output["return_code"] not in (
+                0,
+                1,
+            ):
                 logging.warning(
                     f"Run {i + 1}/{n} for '{project.name}' failed with return code "
                     f"{output['return_code']}; aborting flaky detection"

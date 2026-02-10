@@ -33,9 +33,7 @@ def resolve_ty_repo(repo_path: str | Path) -> Repo:
         logging.info(f"Using cached ty repository at {cache_path}")
         cached_repo = Repo(cache_path)
     else:
-        logging.info(
-            f"Cloning bare ty repository from {resolved_path} to {cache_path}"
-        )
+        logging.info(f"Cloning bare ty repository from {resolved_path} to {cache_path}")
         cached_repo = Repo.clone_from(resolved_path.as_posix(), cache_path)
 
     try:

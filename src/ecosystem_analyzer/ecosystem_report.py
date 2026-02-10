@@ -143,6 +143,8 @@ def generate(
         if output.get("flaky_diagnostics"):
             flaky_project_names.add(output["project"])
 
-    output_file = generate_html_report(diagnostics, ty_commit, output_path, flaky_project_names)
+    output_file = generate_html_report(
+        diagnostics, ty_commit, output_path, flaky_project_names
+    )
 
     logging.info(f"Report generated successfully: {output_file}")
