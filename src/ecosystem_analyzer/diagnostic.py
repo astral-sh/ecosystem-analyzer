@@ -42,31 +42,7 @@ class DiagnosticsParser:
             r"(?P<message>.+)$"
         )
 
-        # Try old format first
-        if match := re.match(old_pattern, line):
-            path = str(match.group("path"))
-            line_num = str(match.group("line"))
-
-            diagnostic: Diagnostic = {
-                "level": str(match.group("level")),
-                "lint_name": str(match.group("lint_name")),
-                "path": path,
-                "line": int(line_num),
-                "column": int(match.group("column")),
-                "message": str(match.group("message")),
-            }
-
-            # Only include github_ref if we have valid repo location and commit
-            if self.repo_location and self.repo_commit:
-                github_ref = (
-                    f"{self.repo_location}/blob/{self.repo_commit}/{path}#L{line_num}"
-                )
-                diagnostic["github_ref"] = github_ref
-
-            return diagnostic
-
-        # Try new format
-        elif match := re.match(new_pattern, line):
+        if (match := re.match(old_pattern, line)) or (match := re.match(new_pattern, line)):
             path = str(match.group("path"))
             line_num = str(match.group("line"))
 

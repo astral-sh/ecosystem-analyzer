@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import click
+
 from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate

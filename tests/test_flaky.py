@@ -86,7 +86,7 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 10, 1, "variant A")
         d2 = _diag("a.py", 10, 1, "variant B")
 
-        stable, flaky = classify_diagnostics(
+        _stable, flaky = classify_diagnostics(
             [
                 [d1],
                 [d1],
@@ -133,7 +133,7 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 10, 1, "msg")
         d2 = _diag("a.py", 10, 5, "msg")
 
-        stable, flaky = classify_diagnostics(
+        _stable, flaky = classify_diagnostics(
             [
                 [d1],
                 [d2],

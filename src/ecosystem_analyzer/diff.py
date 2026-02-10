@@ -94,11 +94,11 @@ class DiagnosticDiff:
         return data
 
     def _get_commit(self, data: JsonData) -> str:
-        ty_commits = set(
+        ty_commits = {
             output.get("ty_commit", "unknown")
             for output in data["outputs"]
             if output.get("ty_commit") is not None
-        )
+        }
 
         # If no ty_commit fields are present, return "unknown"
         if not ty_commits:
@@ -287,12 +287,9 @@ class DiagnosticDiff:
 
         if return_code is None:
             return True, "timeout"
-        elif return_code not in (0, 1):
+        if return_code not in (0, 1) or time_s is None:
             return True, "abnormal exit"
-        elif time_s is None:
-            return True, "abnormal exit"
-        else:
-            return False, "success"
+        return False, "success"
 
     def _compute_diffs(self) -> dict[str, Any]:
         """Compute differences between the old and new diagnostic data."""
@@ -469,10 +466,9 @@ class DiagnosticDiff:
 
             if old_abnormal or new_abnormal:
                 return (2, project["project"])  # Abnormal exits first
-            elif old_timeout or new_timeout:
+            if old_timeout or new_timeout:
                 return (1, project["project"])  # Timeouts second
-            else:
-                return (0, project["project"])  # Other failures last
+            return (0, project["project"])  # Other failures last
 
         result["failed_projects"].sort(key=failed_project_sort_key, reverse=True)
 
@@ -1113,13 +1109,12 @@ class DiagnosticDiff:
         def sort_key(x):
             if x["old_is_abnormal"] or x["new_is_abnormal"]:
                 return (2, 0)  # Abnormal exits first
-            elif x["old_is_timeout"] or x["new_is_timeout"]:
+            if x["old_is_timeout"] or x["new_is_timeout"]:
                 return (1, 0)  # Timeouts second
-            else:
-                return (
-                    0,
-                    abs(x["factor"] - 1.0),
-                )  # Normal projects by factor significance
+            return (
+                0,
+                abs(x["factor"] - 1.0),
+            )  # Normal projects by factor significance
 
         timing_data.sort(key=sort_key, reverse=True)
 

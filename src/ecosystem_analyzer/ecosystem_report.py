@@ -65,9 +65,9 @@ def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_name
     if flaky_project_names is None:
         flaky_project_names = set()
 
-    all_projects = sorted(set(d["project"] for d in diagnostics))
-    lints = sorted(set(d["lint_name"] for d in diagnostics))
-    levels = sorted(set(d["level"] for d in diagnostics))
+    all_projects = sorted({d["project"] for d in diagnostics})
+    lints = sorted({d["lint_name"] for d in diagnostics})
+    levels = sorted({d["level"] for d in diagnostics})
 
     projects = []
     for project in all_projects:
@@ -129,9 +129,9 @@ def generate(
         data = json.load(f)
     diagnostics = process_diagnostics(data, max_diagnostics_per_project)
 
-    ty_commits = set(
+    ty_commits = {
         output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit")
-    )
+    }
     if len(ty_commits) > 1:
         raise RuntimeError(
             "Error: The JSON file must contain diagnostics from a single ty commit."

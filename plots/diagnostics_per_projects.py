@@ -24,7 +24,7 @@ def read_from_json_and_plot(filename: str) -> None:
     bottom_counts = counts[-15:]
 
     # Create a figure with two vertically stacked subplots
-    fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12), sharex=False)
+    _fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 12), sharex=False)
 
     # Top 15 projects bar chart
     ax1.barh(top_projects[::-1], top_counts[::-1], color="#6340AC")
