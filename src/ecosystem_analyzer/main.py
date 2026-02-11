@@ -249,14 +249,18 @@ def diff(
         flaky_projects=flaky_project_names,
     )
 
+    # Build old ty first — this overlaps with background project installation
+    manager.build(old)
+
     # Run for old commit with old projects
     manager.activate(project_names_old)
-    run_outputs_old = manager.run_for_commit(old)
+    run_outputs_old = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_old, output_old)
 
-    # Run for new commit with new projects
+    # Run for new commit with new projects (incremental build, near-instant)
+    manager.build(new)
     manager.activate(project_names_new)
-    run_outputs_new = manager.run_for_commit(new)
+    run_outputs_new = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_new, output_new)
 
 

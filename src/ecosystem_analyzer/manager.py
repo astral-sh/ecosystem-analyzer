@@ -1,6 +1,7 @@
 import json
 import logging
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from git import Commit, Repo
@@ -63,9 +64,13 @@ class Manager:
         if not self._project_names:
             raise RuntimeError("No valid projects found to analyze.")
 
-        self._install_projects()
-        # By default, activate all installed projects
-        self._active_projects = self._installed_projects.copy()
+        # Start project installation in the background so it can overlap
+        # with the first ty build.
+        self._install_start_time = time.monotonic()
+        self._install_executor = ThreadPoolExecutor(max_workers=1)
+        self._install_future: Future[None] | None = self._install_executor.submit(
+            self._install_projects
+        )
 
     def _install_projects(self) -> None:
         def install_single_project(project_name: str) -> InstalledProject:
@@ -93,8 +98,29 @@ class Manager:
                     logging.error(f"Failed to install project {project_name}: {e}")
                     raise
 
+    def _ensure_installed(self) -> None:
+        """Block until project installation is complete."""
+        if self._install_future is not None:
+            wait_start = time.monotonic()
+            self._install_future.result()
+            self._install_future = None
+            self._install_executor.shutdown(wait=False)
+
+            install_total = time.monotonic() - self._install_start_time
+            wait_time = time.monotonic() - wait_start
+            logging.info(
+                f"Project installation took {install_total:.1f}s"
+                f" (waited {wait_time:.1f}s,"
+                f" {install_total - wait_time:.1f}s overlapped with build)"
+            )
+
+            # Set default activation now that projects are ready
+            self._active_projects = self._installed_projects.copy()
+
     def activate(self, project_names: list[str]) -> None:
         """Activate a subset of installed projects for running."""
+        self._ensure_installed()
+
         # Validate that all requested projects are installed
         installed_project_names = {project.name for project in self._installed_projects}
 
@@ -114,9 +140,26 @@ class Manager:
             if project.name in available_project_names
         ]
 
-    def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
+    def build(self, commit: str | Commit) -> None:
+        """Build ty for a commit. Can be called while projects are still installing."""
         self._ty.compile_for_commit(commit)
 
+    def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
+        """Build ty for a commit and run it on active projects.
+
+        The build runs first and can overlap with background project
+        installation. We only block on installation before running ty.
+        """
+        self.build(commit)
+        self._ensure_installed()
+        return self._run_active_projects()
+
+    def run_active_projects(self) -> list[RunOutput]:
+        """Run the current ty build on active projects."""
+        self._ensure_installed()
+        return self._run_active_projects()
+
+    def _run_active_projects(self) -> list[RunOutput]:
         run_outputs = []
         for project in self._active_projects:
             n = self._flaky_runs if (
