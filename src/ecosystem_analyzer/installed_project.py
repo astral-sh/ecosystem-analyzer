@@ -84,17 +84,21 @@ class InstalledProject:
                 self._repo = Repo(self._cache_path)
                 # Update the repository to latest
                 logger.debug("Updating cached repository")
-                self._repo.remote().fetch()
+                self._repo.remote().fetch(depth=1)
                 self._repo.git.reset("--hard", "origin/HEAD")
                 # Update submodules
                 for submodule in self._repo.submodules:
-                    submodule.update(recursive=True)
+                    submodule.update(
+                        recursive=True,
+                        clone_multi_options=["--depth", "1"],
+                    )
             else:
                 logger.info(f"Cloning {self._project.location} into {self._cache_path}")
                 self._repo = Repo.clone_from(
                     url=self._project.location,
                     to_path=self._cache_path,
                     recurse_submodules=True,
+                    depth=1,
                 )
         except GitError as e:
             logger.error(f"Error cloning/updating repository: {e}")
