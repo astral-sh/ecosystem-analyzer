@@ -169,7 +169,9 @@ class Ty:
         # which defaults to num-cpus threads; without this cap 10 instances on
         # a 32-core machine would create 320 threads, causing severe cache
         # thrashing and context-switch overhead.
-        extra_env = {"RAYON_NUM_THREADS": "1"}
+        num_cpus = os.cpu_count() or 1
+        threads_per_instance = max(1, num_cpus // n)
+        extra_env = {"RAYON_NUM_THREADS": str(threads_per_instance)}
 
         with ThreadPoolExecutor(max_workers=n) as executor:
             futures = [
