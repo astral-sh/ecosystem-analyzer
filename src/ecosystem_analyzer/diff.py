@@ -119,28 +119,6 @@ class DiagnosticDiff:
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
 
-    def _exclude_flaky_overlaps(
-        self, diagnostics: list[Diagnostic], other_flaky: list
-    ) -> list[Diagnostic]:
-        """Remove stable diagnostics at locations that are flaky on the other side.
-
-        A diagnostic at a location that's nondeterministic on the other side
-        should not appear in the stable diff — it's the same underlying
-        flaky behavior, just with different classification luck.
-        """
-        if not other_flaky:
-            return diagnostics
-
-        flaky_locs: set[tuple] = set()
-        for loc in other_flaky:
-            flaky_locs.add((loc["path"], loc["line"], loc["column"]))
-
-        return [
-            d
-            for d in diagnostics
-            if (d["path"], d["line"], d["column"]) not in flaky_locs
-        ]
-
     def _all_diagnostic_locations(self, project: dict) -> set[tuple]:
         """Build a set of (path, line, column) locations from all diagnostics.
 
@@ -152,20 +130,6 @@ class DiagnosticDiff:
         for loc in project.get("flaky_diagnostics", []):
             locs.add((loc["path"], loc["line"], loc["column"]))
         return locs
-
-    def _all_diagnostic_keys(self, project: dict) -> set[tuple]:
-        """Build a set of (path, line, column, message) keys from all diagnostics.
-
-        Includes both stable diagnostics and all flaky variants.
-        """
-        keys: set[tuple] = set()
-        for d in project.get("diagnostics", []):
-            keys.add((d["path"], d["line"], d["column"], d["message"]))
-        for loc in project.get("flaky_diagnostics", []):
-            for v in loc["variants"]:
-                d = v["diagnostic"]
-                keys.add((d["path"], d["line"], d["column"], d["message"]))
-        return keys
 
     def _exclude_known_overlaps(
         self, flaky_locations: list, other_all_locations: set[tuple]
