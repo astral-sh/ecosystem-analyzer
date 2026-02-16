@@ -54,12 +54,7 @@ class Ty:
         target_dir = "debug" if self.profile == "dev" else self.profile
         self.executable = self.cargo_target_dir / target_dir / "ty"
 
-    def run_on_project(
-        self,
-        project: InstalledProject,
-        *,
-        extra_env: dict[str, str] | None = None,
-    ) -> RunOutput:
+    def run_on_project(self, project: InstalledProject) -> RunOutput:
         logger.info(f"Running ty on project '{project.name}'")
 
         # Standard flags to add to all ty check commands
@@ -91,12 +86,6 @@ class Ty:
                 *standard_flags,
                 *project.paths,
             ]
-
-        env = None
-        if extra_env:
-            env = os.environ.copy()
-            env.update(extra_env)
-
         logger.debug(f"Executing: {' '.join(cmd)}")
         start_time = time.time()
         try:
@@ -107,7 +96,6 @@ class Ty:
                 capture_output=True,
                 text=True,
                 timeout=30 if self.profile == "release" else 180,
-                env=env,
             )
 
             execution_time = time.time() - start_time
@@ -164,20 +152,8 @@ class Ty:
         times: list[float] = []
         return_codes: list[int | None] = []
 
-        # Limit per-instance thread count so that N concurrent ty processes
-        # don't massively oversubscribe CPU cores.  ty uses Rayon internally,
-        # which defaults to num-cpus threads; without this cap 10 instances on
-        # a 32-core machine would create 320 threads, causing severe cache
-        # thrashing and context-switch overhead.
-        num_cpus = os.cpu_count() or 1
-        threads_per_instance = max(1, num_cpus // n)
-        extra_env = {"RAYON_NUM_THREADS": str(threads_per_instance)}
-
         with ThreadPoolExecutor(max_workers=n) as executor:
-            futures = [
-                executor.submit(self.run_on_project, project, extra_env=extra_env)
-                for _ in range(n)
-            ]
+            futures = [executor.submit(self.run_on_project, project) for _ in range(n)]
             outputs = [f.result() for f in futures]
 
         for idx, output in enumerate(outputs):
