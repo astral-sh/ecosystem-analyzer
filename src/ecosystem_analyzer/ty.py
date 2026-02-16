@@ -5,7 +5,6 @@ import subprocess
 import sys
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from git import Commit, Repo
@@ -54,12 +53,7 @@ class Ty:
         target_dir = "debug" if self.profile == "dev" else self.profile
         self.executable = self.cargo_target_dir / target_dir / "ty"
 
-    def run_on_project(
-        self,
-        project: InstalledProject,
-        *,
-        extra_env: dict[str, str] | None = None,
-    ) -> RunOutput:
+    def run_on_project(self, project: InstalledProject) -> RunOutput:
         logger.info(f"Running ty on project '{project.name}'")
 
         # Standard flags to add to all ty check commands
@@ -91,12 +85,6 @@ class Ty:
                 *standard_flags,
                 *project.paths,
             ]
-
-        env = None
-        if extra_env:
-            env = os.environ.copy()
-            env.update(extra_env)
-
         logger.debug(f"Executing: {' '.join(cmd)}")
         start_time = time.time()
         try:
@@ -107,7 +95,6 @@ class Ty:
                 capture_output=True,
                 text=True,
                 timeout=30 if self.profile == "release" else 180,
-                env=env,
             )
 
             execution_time = time.time() - start_time
@@ -149,54 +136,43 @@ class Ty:
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
         """Run ty on a project N times and classify diagnostics as stable/flaky.
 
-        All N invocations run in parallel via ThreadPoolExecutor so that
-        wall-clock time is approximately that of a single run.
-
-        Returns a single RunOutput where ``diagnostics`` contains only stable
-        diagnostics and ``flaky_diagnostics`` contains grouped flaky ones.
+        Returns a single RunOutput where `diagnostics` contains only stable
+        diagnostics and `flaky_diagnostics` contains grouped flaky ones.
         """
         assert n >= 2, "Use run_on_project for single runs"
         logger.info(
-            f"Running ty on project '{project.name}' {n} times (parallel) for flaky detection"
+            f"Running ty on project '{project.name}' {n} times for flaky detection"
         )
 
         all_diagnostics: list[list] = []
         times: list[float] = []
         return_codes: list[int | None] = []
 
-        # Limit per-instance thread count so that N concurrent ty processes
-        # don't massively oversubscribe CPU cores.  ty uses Rayon internally,
-        # which defaults to num-cpus threads; without this cap 10 instances on
-        # a 32-core machine would create 320 threads, causing severe cache
-        # thrashing and context-switch overhead.
-        extra_env = {"RAYON_NUM_THREADS": "1"}
+        for i in range(n):
+            logger.info(f"  Run {i + 1}/{n} for '{project.name}'")
+            output = self.run_on_project(project)
 
-        with ThreadPoolExecutor(max_workers=n) as executor:
-            futures = [
-                executor.submit(self.run_on_project, project, extra_env=extra_env)
-                for _ in range(n)
-            ]
-            outputs = [f.result() for f in futures]
-
-        for idx, output in enumerate(outputs):
-            rc = output.get("return_code")
-            if rc is not None and rc not in (0, 1):
+            # If any run fails abnormally, bail out and return the failure
+            if output.get("return_code") is not None and output["return_code"] not in (
+                0,
+                1,
+            ):
                 logger.warning(
-                    f"Run {idx + 1}/{n} for '{project.name}' failed with return "
-                    f"code {rc}; aborting flaky detection"
+                    f"Run {i + 1}/{n} for '{project.name}' failed with return code "
+                    f"{output['return_code']}; aborting flaky detection"
                 )
                 return output
-            if rc is None:
+            if output.get("return_code") is None:
+                # Timeout
                 logger.warning(
-                    f"Run {idx + 1}/{n} for '{project.name}' timed out; "
-                    f"aborting flaky detection"
+                    f"Run {i + 1}/{n} for '{project.name}' timed out; aborting flaky detection"
                 )
                 return output
 
             all_diagnostics.append(output["diagnostics"])
             if output.get("time_s") is not None:
                 times.append(output["time_s"])
-            return_codes.append(rc)
+            return_codes.append(output.get("return_code"))
 
         stable, flaky_locations = classify_diagnostics(all_diagnostics)
 
