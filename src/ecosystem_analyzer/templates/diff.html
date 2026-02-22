@@ -417,6 +417,34 @@
             box-shadow: 0 0 0 3px rgba(99, 64, 172, 0.1);
         }
 
+        .filter-toggle {
+            padding: 8px 16px;
+            border: 1px solid rgba(253, 126, 20, 0.3);
+            border-radius: 6px;
+            background: white;
+            color: var(--galaxy);
+            cursor: pointer;
+            font-family: 'Fira Code', monospace;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-left: 8px;
+        }
+
+        .filter-toggle:hover {
+            background: rgba(253, 126, 20, 0.1);
+            border-color: #e65100;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .filter-toggle.active {
+            background: #e65100;
+            color: white;
+            border-color: #e65100;
+            box-shadow: 0 2px 6px rgba(230, 81, 0, 0.3);
+        }
+
         .file-header-with-copy {
             display: flex;
             align-items: center;
@@ -617,6 +645,7 @@
                 <button class="filter-btn" data-filter="removed">Removed Only</button>
                 <button class="filter-btn" data-filter="added">Added Only</button>
                 <button class="filter-btn" data-filter="changed">Changed Only</button>
+                <button class="filter-toggle" id="hide-flaky-btn">Hide Flaky</button>
                 <select class="filter-select" id="lint-filter">
                     <option value="all">All Lint Types</option>
                     {% if statistics.merged_by_lint %}
@@ -923,10 +952,12 @@
             const filterButtons = document.querySelectorAll('.filter-btn');
             const lintFilter = document.getElementById('lint-filter');
             const projectFilter = document.getElementById('project-filter');
+            const hideFlakyBtn = document.getElementById('hide-flaky-btn');
 
             let activeChangeFilter = 'all';
             let activeLintFilter = 'all';
             let activeProjectFilter = 'all';
+            let hideFlaky = false;
 
             // Change type filter buttons
             filterButtons.forEach(button => {
@@ -953,6 +984,13 @@
                 applyFilters();
             });
 
+            // Hide Flaky toggle
+            hideFlakyBtn.addEventListener('click', function() {
+                hideFlaky = !hideFlaky;
+                this.classList.toggle('active', hideFlaky);
+                applyFilters();
+            });
+
             function applyFilters() {
                 const diagnostics = document.querySelectorAll('.diagnostic');
 
@@ -964,6 +1002,7 @@
                     let showByChange = true;
                     let showByLint = true;
                     let showByProject = true;
+                    let showByFlaky = true;
 
                     // Apply change type filter
                     if (activeChangeFilter !== 'all') {
@@ -980,8 +1019,13 @@
                         showByProject = projectName === activeProjectFilter;
                     }
 
+                    // Apply flaky filter
+                    if (hideFlaky) {
+                        showByFlaky = !diagnostic.classList.contains('is-flaky');
+                    }
+
                     // Show/hide diagnostic
-                    if (showByChange && showByLint && showByProject) {
+                    if (showByChange && showByLint && showByProject && showByFlaky) {
                         diagnostic.style.display = '';
                         diagnostic.closest('.file').style.display = '';
                         diagnostic.closest('.project').style.display = '';
