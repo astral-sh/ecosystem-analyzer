@@ -119,7 +119,7 @@ class DiagnosticDiff:
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
 
-    def _all_diagnostic_locations(self, project: dict) -> set[tuple]:
+    def _all_diagnostic_locations(self, project: RunOutput) -> set[tuple]:
         """Build a set of (path, line, column) locations from all diagnostics.
 
         Includes locations from both stable diagnostics and flaky variants.

@@ -170,8 +170,8 @@ class Ty:
                 return output
 
             all_diagnostics.append(output["diagnostics"])
-            if output.get("time_s") is not None:
-                times.append(output["time_s"])
+            if (time_s := output.get("time_s")) is not None:
+                times.append(time_s)
             return_codes.append(output.get("return_code"))
 
         stable, flaky_locations = classify_diagnostics(all_diagnostics)
