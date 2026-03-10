@@ -88,7 +88,7 @@ def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_name
         (level, sum(1 for d in diagnostics if d["level"] == level)) for level in levels
     ]
 
-    num_flaky_projects = len(flaky_project_names)
+    sorted_flaky_project_names = sorted(flaky_project_names)
 
     # Set up Jinja2 environment with package loader
     try:
@@ -109,7 +109,7 @@ def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_name
         lints=lints,
         levels=levels,
         ty_commit=ty_commit,
-        num_flaky_projects=num_flaky_projects,
+        flaky_project_names=sorted_flaky_project_names,
     )
 
     # Write output file

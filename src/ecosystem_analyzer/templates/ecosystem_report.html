@@ -232,9 +232,9 @@
     <div style="margin-bottom: 20px; font-size: 14px; color: #666;">
         ty @ <a href="https://github.com/astral-sh/ruff/commit/{{ ty_commit }}" target="_blank">{{
             ty_commit[0:7] }}</a>
-        {% if num_flaky_projects > 0 %}
+        {% if flaky_project_names|length > 0 %}
         <span style="margin-left: 16px;">·</span>
-        <span style="margin-left: 16px; color: #e65100; font-weight: 600;">{{ num_flaky_projects }} flaky project{{ 's' if num_flaky_projects != 1 }}</span>
+        <span style="margin-left: 16px; color: #e65100; font-weight: 600;" title="{{ flaky_project_names | join('&#10;') }}">{{ flaky_project_names|length }} flaky project{{ 's' if flaky_project_names|length != 1 }}</span>
         {% endif %}
     </div>
     {% endif %}
