@@ -112,7 +112,7 @@ class Manager:
 
             install_total = time.monotonic() - self._install_start_time
             wait_time = time.monotonic() - wait_start
-            logging.info(
+            logger.info(
                 f"Project installation took {install_total:.1f}s"
                 f" (waited {wait_time:.1f}s,"
                 f" {install_total - wait_time:.1f}s overlapped with build)"
