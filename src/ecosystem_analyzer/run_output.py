@@ -28,3 +28,4 @@ class RunOutput(TypedDict):
     flaky_runs: NotRequired[int]  # Total number of runs used for flaky detection
     time_s: float | None
     return_code: int | None
+    stderr: NotRequired[str]
