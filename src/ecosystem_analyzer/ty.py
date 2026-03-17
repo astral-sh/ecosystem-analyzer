@@ -17,6 +17,11 @@ from .run_output import RunOutput
 logger = logging.getLogger(__name__)
 
 
+def _normalize_stderr(stderr: str) -> str | None:
+    stderr = stderr.strip()
+    return stderr or None
+
+
 class Ty:
     def __init__(
         self, repository: Repo, target_dir: Path | None, profile: str = "dev"
@@ -99,14 +104,15 @@ class Ty:
 
             execution_time = time.time() - start_time
             return_code = result.returncode
+            stderr = _normalize_stderr(result.stderr)
 
             if result.returncode not in (0, 1):
                 logger.error(
                     f"ty failed with error code {result.returncode} for project '{project.name}' ... panic?"
                 )
-                if result.stderr:
+                if stderr:
                     print("ty stderr output:", file=sys.stderr)
-                    print(result.stderr, file=sys.stderr)
+                    print(stderr, file=sys.stderr)
                 # Don't trust execution time for abnormal exits
                 execution_time = None
 
@@ -121,8 +127,9 @@ class Ty:
             diagnostics = []
             execution_time = None
             return_code = None
+            stderr = None
 
-        return RunOutput(
+        output = RunOutput(
             {
                 "project": project.name,
                 "project_location": project.location,
@@ -132,6 +139,9 @@ class Ty:
                 "return_code": return_code,
             }
         )
+        if stderr:
+            output["stderr"] = stderr
+        return output
 
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
         """Run ty on a project N times and classify diagnostics as stable/flaky.

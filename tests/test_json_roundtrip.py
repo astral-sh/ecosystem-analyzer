@@ -9,19 +9,24 @@ def _make_output(
     diagnostics: list,
     flaky_diagnostics: list | None = None,
     flaky_runs: int | None = None,
+    stderr: str | None = None,
+    time_s: float | None = 1.5,
+    return_code: int | None = 1,
 ):
     entry = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
         "ty_commit": "abc123def456",
         "diagnostics": diagnostics,
-        "time_s": 1.5,
-        "return_code": 1,
+        "time_s": time_s,
+        "return_code": return_code,
     }
     if flaky_diagnostics is not None:
         entry["flaky_diagnostics"] = flaky_diagnostics
     if flaky_runs is not None:
         entry["flaky_runs"] = flaky_runs
+    if stderr is not None:
+        entry["stderr"] = stderr
     return entry
 
 
@@ -241,6 +246,42 @@ class TestJsonRoundtrip:
         assert "b.py" in proj["flaky_file_diffs"]
         assert len(proj["flaky_file_diffs"]["a.py"]["added"]) == 1
         assert len(proj["flaky_file_diffs"]["b.py"]["added"]) == 1
+
+    def test_failed_project_preserves_stderr(self):
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "proj",
+                    [],
+                    stderr="thread 'main' panicked at old panic",
+                    time_s=None,
+                    return_code=101,
+                )
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "proj",
+                    [],
+                    stderr="thread 'main' panicked at new panic",
+                    time_s=None,
+                    return_code=101,
+                )
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        failed = diff.diffs["failed_projects"][0]
+        assert failed["old_stderr"] == "thread 'main' panicked at old panic"
+        assert failed["new_stderr"] == "thread 'main' panicked at new panic"
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""

@@ -200,6 +200,28 @@
             background-color: #ffeef0;
         }
 
+        .stderr-block {
+            margin-top: 8px;
+            padding: 10px 12px;
+            background: rgba(38, 18, 48, 0.06);
+            border-radius: 6px;
+            border: 1px solid rgba(38, 18, 48, 0.12);
+        }
+
+        .stderr-block summary {
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .stderr-block pre {
+            margin: 10px 0 0 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.5;
+        }
+
         .error {
             color: var(--cosmic);
             font-weight: 600;
@@ -689,6 +711,24 @@
                             {% endif %}
                         </td>
                     </tr>
+                    {% if project.old_stderr or project.new_stderr %}
+                    <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1); background: rgba(200, 50, 50, 0.04);">
+                        <td colspan="5" style="padding: 12px;">
+                            {% if project.old_stderr %}
+                            <details class="stderr-block">
+                                <summary>Old stderr / panic output</summary>
+                                <pre>{{ project.old_stderr }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if project.new_stderr %}
+                            <details class="stderr-block">
+                                <summary>New stderr / panic output</summary>
+                                <pre>{{ project.new_stderr }}</pre>
+                            </details>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endif %}
                     {% endfor %}
                 </tbody>
             </table>
