@@ -491,6 +491,20 @@ def generate_timing_diff(
     help="Path for the Markdown statistics file",
 )
 @click.option(
+    "--inline-threshold",
+    type=int,
+    default=10,
+    show_default=True,
+    help="Show the raw diff inline when it has fewer than this many lines",
+)
+@click.option(
+    "--max-raw-diff-lines",
+    type=int,
+    default=100,
+    show_default=True,
+    help="Maximum number of raw diff lines to include in Markdown before sampling",
+)
+@click.option(
     "--old-name",
     type=str,
     help="Label for the old version (e.g., branch name, commit, or description)",
@@ -504,6 +518,8 @@ def generate_diff_statistics(
     old_file: str,
     new_file: str,
     output: str,
+    inline_threshold: int,
+    max_raw_diff_lines: int,
     old_name: str | None,
     new_name: str | None,
 ) -> None:
@@ -514,47 +530,10 @@ def generate_diff_statistics(
     NEW_FILE: Path to the new JSON file.
     """
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
-    statistics = diff._calculate_statistics()
-    failed_projects = diff.diffs.get("failed_projects", [])
-
-    markdown_content = ""
-
-    # Add failed projects section if any
-    if failed_projects:
-        markdown_content += "**Failing projects**:\n\n"
-        markdown_content += "| Project | Old Status | New Status | Old Return Code | New Return Code |\n"
-        markdown_content += "|---------|------------|------------|-----------------|------------------|\n"
-
-        for project in failed_projects:
-            old_status = project["old_status"]
-            new_status = project["new_status"]
-            old_rc = project.get("old_return_code", "None")
-            new_rc = project.get("new_return_code", "None")
-
-            markdown_content += f"| `{project['project']}` | {old_status} | {new_status} | `{old_rc}` | `{new_rc}` |\n"
-
-        markdown_content += "\n"
-
-    # Add diagnostic changes section
-    if (
-        statistics["total_added"] == 0
-        and statistics["total_removed"] == 0
-        and statistics["total_changed"] == 0
-    ):
-        markdown_content += "No diagnostic changes detected ✅"
-    else:
-        if failed_projects:
-            markdown_content += "**Diagnostic changes:**\n"
-
-        markdown_content += """
-| Lint rule | Added | Removed | Changed |
-|-----------|------:|--------:|--------:|
-"""
-
-        for lint_data in statistics["merged_by_lint"]:
-            markdown_content += f"| `{lint_data['lint_name']}` | {lint_data['added']:,} | {lint_data['removed']:,} | {lint_data['changed']:,} |\n"
-
-        markdown_content += f"| **Total** | **{statistics['total_added']:,}** | **{statistics['total_removed']:,}** | **{statistics['total_changed']:,}** |\n"
+    markdown_content = diff.render_statistics_markdown(
+        inline_threshold=inline_threshold,
+        max_raw_diff_lines=max_raw_diff_lines,
+    )
 
     with open(output, "w") as f:
         f.write(markdown_content)
