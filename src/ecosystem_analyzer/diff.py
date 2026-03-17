@@ -920,7 +920,9 @@ class DiagnosticDiff:
         )
         return f"{loc['path']}:{loc['line']}:{loc['column']} {{{variants}}}"
 
-    def _project_header(self, project_name: str, project_location: str | None, *, is_flaky: bool) -> str:
+    def _project_header(
+        self, project_name: str, project_location: str | None, *, is_flaky: bool
+    ) -> str:
         if project_location:
             location = f"FLAKY, {project_location}" if is_flaky else project_location
             return f"{project_name} ({location})"
@@ -1208,7 +1210,9 @@ class DiagnosticDiff:
         else:
             summary = "Raw diff"
             if sampled:
-                summary += f" sample ({len(displayed_lines)} of {total_raw_diff_lines} lines)"
+                summary += (
+                    f" sample ({len(displayed_lines)} of {total_raw_diff_lines} lines)"
+                )
             else:
                 summary += f" ({total_raw_diff_lines} lines)"
             markdown_content += f"<details>\n<summary>{summary}</summary>\n\n"
