@@ -477,7 +477,10 @@ class DiagnosticDiff:
                     ),
                 )
                 result["removed_files"].append(
-                    {"path": file_path, "diagnostics": diagnostics}
+                    {
+                        "path": file_path,
+                        "diagnostics": diagnostics,
+                    }
                 )
 
         # Find added files
@@ -494,7 +497,10 @@ class DiagnosticDiff:
                     ),
                 )
                 result["added_files"].append(
-                    {"path": file_path, "diagnostics": diagnostics}
+                    {
+                        "path": file_path,
+                        "diagnostics": diagnostics,
+                    }
                 )
 
         # Find modified files
@@ -516,7 +522,10 @@ class DiagnosticDiff:
                 or line_diffs["modified_lines"]
             ):
                 result["modified_files"].append(
-                    {"path": file_path, "diffs": line_diffs}
+                    {
+                        "path": file_path,
+                        "diffs": line_diffs,
+                    }
                 )
 
         return result
@@ -557,7 +566,10 @@ class DiagnosticDiff:
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
                 result["removed_lines"].append(
-                    {"line": line_num, "diagnostics": diagnostics}
+                    {
+                        "line": line_num,
+                        "diagnostics": diagnostics,
+                    }
                 )
 
         # Find added lines
@@ -570,7 +582,10 @@ class DiagnosticDiff:
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
                 result["added_lines"].append(
-                    {"line": line_num, "diagnostics": diagnostics}
+                    {
+                        "line": line_num,
+                        "diagnostics": diagnostics,
+                    }
                 )
 
         # Find modified lines
@@ -610,7 +625,11 @@ class DiagnosticDiff:
                                 diff = self._generate_text_diff(old_str, new_str)
                                 if diff:
                                     text_diffs.append(
-                                        {"old": old_diag, "new": new_diag, "diff": diff}
+                                        {
+                                            "old": old_diag,
+                                            "new": new_diag,
+                                            "diff": diff,
+                                        }
                                     )
                                     changed_old_formatted.add(old_str)
                                     changed_new_formatted.add(new_str)
@@ -1193,13 +1212,9 @@ class DiagnosticDiff:
 
         if sampled:
             markdown_content += (
-                f"_Showing a deterministic random sample of "
+                f"_Showing a random sample of "
                 f"{len(displayed_lines)} of {total_raw_diff_lines} diff lines. "
-                "See the HTML diff report artifact for the full diff._\n\n"
-            )
-        elif total_raw_diff_lines >= inline_threshold:
-            markdown_content += (
-                "_See the HTML diff report artifact for the full interactive diff._\n\n"
+                "See the HTML report for the full diff._\n\n"
             )
 
         raw_diff_block = "```diff\n" + "\n".join(displayed_lines) + "\n```"
