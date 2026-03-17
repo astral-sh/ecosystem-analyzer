@@ -1102,6 +1102,10 @@ class DiagnosticDiff:
         for header in sorted(sections):
             lines.append(header)
             lines.extend(sections[header])
+            lines.append("")
+
+        if lines:
+            lines.pop()
 
         return lines, omitted_flaky_projects
 
