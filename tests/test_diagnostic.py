@@ -179,3 +179,21 @@ error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assigna
         ]
         assert len(diagnostics) == 1
         assert diagnostics[0]["lint_name"] == "invalid-assignment"
+
+    def test_parse_multiline_panic_message_with_wrapped_first_line(self):
+        parser = DiagnosticsParser()
+        content = """error[panic]: Panicked at somewhere: `prefix parameters must be positional-only or positional-or
+-keyword`
+info: This indicates a bug in ty.
+info: query stacktrace:
+   0: infer_definition_types(Id(b633))"""
+
+        panic_messages = parser.parse_panic_messages(content)
+
+        assert panic_messages == [
+            """Panicked at somewhere: `prefix parameters must be positional-only or positional-or
+-keyword`
+info: This indicates a bug in ty.
+info: query stacktrace:
+   0: infer_definition_types(Id(b633))"""
+        ]

@@ -96,11 +96,11 @@ class DiagnosticsParser:
                     stripped
                 ):
                     break
-                if raw_line.startswith(("info:", " ", "\t")):
-                    panic_parts.append(stripped if raw_line.startswith("info:") else raw_line)
-                    index += 1
-                    continue
-                break
+                if raw_line.startswith((" ", "\t")):
+                    panic_parts.append(raw_line)
+                else:
+                    panic_parts.append(stripped)
+                index += 1
 
             panic_messages.append("\n".join(panic_parts))
 
