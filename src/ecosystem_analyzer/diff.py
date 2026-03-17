@@ -949,16 +949,34 @@ class DiagnosticDiff:
             return f"{project_name} (FLAKY)"
         return project_name
 
-    def _raw_diff_lines(self) -> tuple[list[str], bool]:
-        sections: dict[str, list[str]] = {}
+    def _render_raw_diff_sections(
+        self, sections: dict[str, list[tuple[list[str], bool]]]
+    ) -> list[str]:
+        lines: list[str] = []
+        for header in sorted(sections):
+            lines.append(header)
+            for entry_lines, _counts_as_change in sections[header]:
+                lines.extend(entry_lines)
+            lines.append("")
+
+        if lines:
+            lines.pop()
+
+        return lines
+
+    def _raw_diff_sections(
+        self,
+    ) -> tuple[dict[str, list[tuple[list[str], bool]]], int, bool]:
+        sections: dict[str, list[tuple[list[str], bool]]] = {}
         omitted_flaky_projects = False
 
-        def add_line(
+        def add_entry(
             project_name: str,
             project_location: str | None,
-            line: str,
+            lines: list[str],
             *,
             is_flaky: bool = False,
+            counts_as_change: bool = True,
         ) -> None:
             nonlocal omitted_flaky_projects
             if is_flaky:
@@ -967,15 +985,18 @@ class DiagnosticDiff:
             header = self._project_header(
                 project_name, project_location, is_flaky=is_flaky
             )
-            sections.setdefault(header, []).append(line)
+            sections.setdefault(header, []).append((lines, counts_as_change))
 
         for project in self.diffs["failed_projects"]:
-            add_line(
+            add_entry(
                 project["project"],
                 project.get("project_location"),
-                "- "
-                f"FAILED old={project['old_status']}({project.get('old_return_code')}) "
-                f"new={project['new_status']}({project.get('new_return_code')})",
+                [
+                    "- "
+                    f"FAILED old={project['old_status']}({project.get('old_return_code')}) "
+                    f"new={project['new_status']}({project.get('new_return_code')})"
+                ],
+                counts_as_change=False,
             )
 
         for project in self.diffs["removed_projects"]:
@@ -983,17 +1004,17 @@ class DiagnosticDiff:
             project_location = project.get("project_location")
             is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"- {self._format_short_diagnostic(diag)}",
+                    [f"- {self._format_short_diagnostic(diag)}"],
                     is_flaky=is_flaky,
                 )
             for loc in project.get("flaky_diagnostics", []):
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"- {self._format_flaky_location(loc)}",
+                    [f"- {self._format_flaky_location(loc)}"],
                     is_flaky=True,
                 )
 
@@ -1002,17 +1023,17 @@ class DiagnosticDiff:
             project_location = project.get("project_location")
             is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"+ {self._format_short_diagnostic(diag)}",
+                    [f"+ {self._format_short_diagnostic(diag)}"],
                     is_flaky=is_flaky,
                 )
             for loc in project.get("flaky_diagnostics", []):
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"+ {self._format_flaky_location(loc)}",
+                    [f"+ {self._format_flaky_location(loc)}"],
                     is_flaky=True,
                 )
 
@@ -1024,111 +1045,102 @@ class DiagnosticDiff:
 
             for file_data in diffs.get("removed_files", []):
                 for diag in file_data["diagnostics"]:
-                    add_line(
+                    add_entry(
                         project_name,
                         project_location,
-                        f"- {self._format_short_diagnostic(diag)}",
+                        [f"- {self._format_short_diagnostic(diag)}"],
                         is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("added_files", []):
                 for diag in file_data["diagnostics"]:
-                    add_line(
+                    add_entry(
                         project_name,
                         project_location,
-                        f"+ {self._format_short_diagnostic(diag)}",
+                        [f"+ {self._format_short_diagnostic(diag)}"],
                         is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("modified_files", []):
                 for line_data in file_data["diffs"].get("removed_lines", []):
                     for diag in line_data["diagnostics"]:
-                        add_line(
+                        add_entry(
                             project_name,
                             project_location,
-                            f"- {self._format_short_diagnostic(diag)}",
+                            [f"- {self._format_short_diagnostic(diag)}"],
                             is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("added_lines", []):
                     for diag in line_data["diagnostics"]:
-                        add_line(
+                        add_entry(
                             project_name,
                             project_location,
-                            f"+ {self._format_short_diagnostic(diag)}",
+                            [f"+ {self._format_short_diagnostic(diag)}"],
                             is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("modified_lines", []):
                     for diff_item in line_data.get("text_diffs", []):
-                        add_line(
+                        add_entry(
                             project_name,
                             project_location,
-                            f"- {self._format_short_diagnostic(diff_item['old'])}",
-                            is_flaky=is_flaky,
-                        )
-                        add_line(
-                            project_name,
-                            project_location,
-                            f"+ {self._format_short_diagnostic(diff_item['new'])}",
+                            [
+                                f"- {self._format_short_diagnostic(diff_item['old'])}",
+                                f"+ {self._format_short_diagnostic(diff_item['new'])}",
+                            ],
                             is_flaky=is_flaky,
                         )
                     for diag in line_data["removed"]:
-                        add_line(
+                        add_entry(
                             project_name,
                             project_location,
-                            f"- {self._format_short_diagnostic(diag)}",
+                            [f"- {self._format_short_diagnostic(diag)}"],
                             is_flaky=is_flaky,
                         )
                     for diag in line_data["added"]:
-                        add_line(
+                        add_entry(
                             project_name,
                             project_location,
-                            f"+ {self._format_short_diagnostic(diag)}",
+                            [f"+ {self._format_short_diagnostic(diag)}"],
                             is_flaky=is_flaky,
                         )
 
             flaky_diffs = project.get("flaky_diffs", {})
             for loc in flaky_diffs.get("removed", []):
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"- {self._format_flaky_location(loc)}",
+                    [f"- {self._format_flaky_location(loc)}"],
                     is_flaky=True,
                 )
 
             for loc in flaky_diffs.get("added", []):
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"+ {self._format_flaky_location(loc)}",
+                    [f"+ {self._format_flaky_location(loc)}"],
                     is_flaky=True,
                 )
 
             for change in flaky_diffs.get("changed", []):
-                add_line(
+                add_entry(
                     project_name,
                     project_location,
-                    f"- {self._format_flaky_location(change['old'])}",
-                    is_flaky=True,
-                )
-                add_line(
-                    project_name,
-                    project_location,
-                    f"+ {self._format_flaky_location(change['new'])}",
+                    [
+                        f"- {self._format_flaky_location(change['old'])}",
+                        f"+ {self._format_flaky_location(change['new'])}",
+                    ],
                     is_flaky=True,
                 )
 
-        lines: list[str] = []
-        for header in sorted(sections):
-            lines.append(header)
-            lines.extend(sections[header])
-            lines.append("")
-
-        if lines:
-            lines.pop()
-
-        return lines, omitted_flaky_projects
+        total_changes = sum(
+            1
+            for entries in sections.values()
+            for _lines, counts_as_change in entries
+            if counts_as_change
+        )
+        return sections, total_changes, omitted_flaky_projects
 
     def render_statistics_markdown(
         self,
@@ -1186,8 +1198,10 @@ class DiagnosticDiff:
                 f"**{statistics['total_changed']:,}** |\n"
             )
 
-        raw_diff_lines, omitted_flaky_projects = self._raw_diff_lines()
-        total_raw_diff_lines = len(raw_diff_lines)
+        raw_diff_sections, total_raw_diff_changes, omitted_flaky_projects = (
+            self._raw_diff_sections()
+        )
+        raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
         if omitted_flaky_projects:
             markdown_content += (
@@ -1202,34 +1216,49 @@ class DiagnosticDiff:
 
         displayed_lines = raw_diff_lines
         sampled = False
-        if total_raw_diff_lines > max_raw_diff_lines:
-            rng = random.Random(self.RAW_DIFF_SAMPLE_SEED)
-            selected_indexes = sorted(
-                rng.sample(range(total_raw_diff_lines), k=max_raw_diff_lines)
-            )
-            displayed_lines = [raw_diff_lines[index] for index in selected_indexes]
+        if total_raw_diff_changes > max_raw_diff_lines:
             sampled = True
+            rng = random.Random(self.RAW_DIFF_SAMPLE_SEED)
+            change_entries = [
+                (header, index)
+                for header, entries in sorted(raw_diff_sections.items())
+                for index, (_lines, counts_as_change) in enumerate(entries)
+                if counts_as_change
+            ]
+            selected_entries = {
+                sampled_entry
+                for sampled_entry in rng.sample(change_entries, k=max_raw_diff_lines)
+            }
+            displayed_sections: dict[str, list[tuple[list[str], bool]]] = {}
+            for header, entries in sorted(raw_diff_sections.items()):
+                kept_entries = []
+                for index, entry in enumerate(entries):
+                    entry_lines, counts_as_change = entry
+                    if not counts_as_change or (header, index) in selected_entries:
+                        kept_entries.append((entry_lines, counts_as_change))
+                if kept_entries:
+                    displayed_sections[header] = kept_entries
+
+            displayed_lines = self._render_raw_diff_sections(displayed_sections)
 
         if sampled:
             markdown_content += (
                 f"_Showing a random sample of "
-                f"{len(displayed_lines)} of {total_raw_diff_lines} diff lines. "
+                f"{max_raw_diff_lines} of {total_raw_diff_changes} changes. "
                 "See the HTML report for the full diff._\n\n"
             )
 
         raw_diff_block = "```diff\n" + "\n".join(displayed_lines) + "\n```"
 
-        if total_raw_diff_lines < inline_threshold:
+        if total_raw_diff_changes < inline_threshold:
             markdown_content += "**Raw diff:**\n\n"
             markdown_content += raw_diff_block
         else:
             summary = "Raw diff"
             if sampled:
-                summary += (
-                    f" sample ({len(displayed_lines)} of {total_raw_diff_lines} lines)"
-                )
+                summary += f" sample ({max_raw_diff_lines} of {total_raw_diff_changes} changes)"
             else:
-                summary += f" ({total_raw_diff_lines} lines)"
+                summary += f" ({total_raw_diff_changes} changes)"
             markdown_content += f"<details>\n<summary>{summary}</summary>\n\n"
             markdown_content += raw_diff_block
             markdown_content += "\n</details>"

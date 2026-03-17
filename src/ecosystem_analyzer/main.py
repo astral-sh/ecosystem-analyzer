@@ -495,14 +495,14 @@ def generate_timing_diff(
     type=int,
     default=15,
     show_default=True,
-    help="Show the raw diff inline when it has fewer than this many lines",
+    help="Show the raw diff inline when it has fewer than this many changes",
 )
 @click.option(
     "--max-raw-diff-lines",
     type=int,
     default=100,
     show_default=True,
-    help="Maximum number of raw diff lines to include in Markdown before sampling",
+    help="Maximum number of raw diff changes to include in Markdown before sampling",
 )
 @click.option(
     "--old-name",
