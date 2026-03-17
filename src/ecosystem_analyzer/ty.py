@@ -20,8 +20,6 @@ logger = logging.getLogger(__name__)
 def _normalize_stderr(stderr: str) -> str | None:
     stderr = stderr.strip()
     return stderr or None
-
-
 class Ty:
     def __init__(
         self, repository: Repo, target_dir: Path | None, profile: str = "dev"
@@ -105,6 +103,7 @@ class Ty:
             execution_time = time.time() - start_time
             return_code = result.returncode
             stderr = _normalize_stderr(result.stderr)
+            panic_messages = _extract_panic_messages(result.stdout)
 
             if result.returncode not in (0, 1):
                 logger.error(
@@ -122,12 +121,14 @@ class Ty:
                 repo_working_dir=project.root_directory,
             )
 
+            panic_messages = parser.parse_panic_messages(result.stdout)
             diagnostics = parser.parse(result.stdout)
         except subprocess.TimeoutExpired:
             diagnostics = []
             execution_time = None
             return_code = None
             stderr = None
+            panic_messages = []
 
         output = RunOutput(
             {
@@ -141,6 +142,8 @@ class Ty:
         )
         if stderr:
             output["stderr"] = stderr
+        if panic_messages:
+            output["panic_messages"] = panic_messages
         return output
 
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:

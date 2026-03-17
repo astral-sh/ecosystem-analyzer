@@ -3,6 +3,19 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 
+OLD_DIAGNOSTIC_PATTERN = re.compile(
+    r"^(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
+    r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
+    r"(?P<message>.+)$"
+)
+NEW_DIAGNOSTIC_PATTERN = re.compile(
+    r"^(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
+    r"(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
+    r"(?P<message>.+)$"
+)
+PANIC_PATTERN = re.compile(r"^error\[panic\]: (?P<message>.+)$")
+
+
 class Diagnostic(TypedDict):
     level: str
     lint_name: str
@@ -28,22 +41,8 @@ class DiagnosticsParser:
         self.repo_working_dir = repo_working_dir
 
     def _parse_diagnostic_message(self, line: str) -> Diagnostic | None:
-        # Old format: error[lint-name] path:line:column: message
-        old_pattern = (
-            r"^(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
-            r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
-            r"(?P<message>.+)$"
-        )
-
-        # New format: path:line:column: error[lint-name] message
-        new_pattern = (
-            r"^(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
-            r"(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
-            r"(?P<message>.+)$"
-        )
-
-        if (match := re.match(old_pattern, line)) or (
-            match := re.match(new_pattern, line)
+        if (match := OLD_DIAGNOSTIC_PATTERN.match(line)) or (
+            match := NEW_DIAGNOSTIC_PATTERN.match(line)
         ):
             path = str(match.group("path"))
             line_num = str(match.group("line"))
@@ -67,6 +66,45 @@ class DiagnosticsParser:
             return diagnostic
 
         return None
+
+    def _is_regular_diagnostic_start(self, line: str) -> bool:
+        return bool(
+            OLD_DIAGNOSTIC_PATTERN.match(line) or NEW_DIAGNOSTIC_PATTERN.match(line)
+        )
+
+    def parse_panic_messages(self, content: str) -> list[str]:
+        panic_messages = []
+        lines = content.splitlines()
+        index = 0
+
+        while index < len(lines):
+            line = lines[index].strip()
+            if not (match := PANIC_PATTERN.match(line)):
+                index += 1
+                continue
+
+            panic_parts = [match.group("message")]
+            index += 1
+
+            while index < len(lines):
+                raw_line = lines[index].rstrip()
+                stripped = raw_line.strip()
+
+                if not stripped:
+                    break
+                if PANIC_PATTERN.match(stripped) or self._is_regular_diagnostic_start(
+                    stripped
+                ):
+                    break
+                if raw_line.startswith(("info:", " ", "\t")):
+                    panic_parts.append(stripped if raw_line.startswith("info:") else raw_line)
+                    index += 1
+                    continue
+                break
+
+            panic_messages.append("\n".join(panic_parts))
+
+        return panic_messages
 
     def parse(self, content: str) -> list[Diagnostic]:
         messages = []

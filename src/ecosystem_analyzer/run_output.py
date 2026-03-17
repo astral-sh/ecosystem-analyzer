@@ -29,3 +29,4 @@ class RunOutput(TypedDict):
     time_s: float | None
     return_code: int | None
     stderr: NotRequired[str]
+    panic_messages: NotRequired[list[str]]

@@ -9,7 +9,7 @@ def _make_output(
     diagnostics: list,
     flaky_diagnostics: list | None = None,
     flaky_runs: int | None = None,
-    stderr: str | None = None,
+    panic_messages: list[str] | None = None,
     time_s: float | None = 1.5,
     return_code: int | None = 1,
 ):
@@ -25,8 +25,8 @@ def _make_output(
         entry["flaky_diagnostics"] = flaky_diagnostics
     if flaky_runs is not None:
         entry["flaky_runs"] = flaky_runs
-    if stderr is not None:
-        entry["stderr"] = stderr
+    if panic_messages is not None:
+        entry["panic_messages"] = panic_messages
     return entry
 
 
@@ -247,13 +247,13 @@ class TestJsonRoundtrip:
         assert len(proj["flaky_file_diffs"]["a.py"]["added"]) == 1
         assert len(proj["flaky_file_diffs"]["b.py"]["added"]) == 1
 
-    def test_failed_project_preserves_stderr(self):
+    def test_failed_project_preserves_panic_messages(self):
         old_data = {
             "outputs": [
                 _make_output(
                     "proj",
                     [],
-                    stderr="thread 'main' panicked at old panic",
+                    panic_messages=["thread 'main' panicked at old panic"],
                     time_s=None,
                     return_code=101,
                 )
@@ -264,7 +264,7 @@ class TestJsonRoundtrip:
                 _make_output(
                     "proj",
                     [],
-                    stderr="thread 'main' panicked at new panic",
+                    panic_messages=["thread 'main' panicked at new panic"],
                     time_s=None,
                     return_code=101,
                 )
@@ -280,8 +280,8 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
         failed = diff.diffs["failed_projects"][0]
-        assert failed["old_stderr"] == "thread 'main' panicked at old panic"
-        assert failed["new_stderr"] == "thread 'main' panicked at new panic"
+        assert failed["old_panic_messages"] == ["thread 'main' panicked at old panic"]
+        assert failed["new_panic_messages"] == ["thread 'main' panicked at new panic"]
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""

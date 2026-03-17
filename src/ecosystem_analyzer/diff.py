@@ -289,8 +289,8 @@ class DiagnosticDiff:
                         "new_status": new_status,
                         "old_return_code": old_project.get("return_code"),
                         "new_return_code": new_project.get("return_code"),
-                        "old_stderr": old_project.get("stderr"),
-                        "new_stderr": new_project.get("stderr"),
+                        "old_panic_messages": old_project.get("panic_messages", []),
+                        "new_panic_messages": new_project.get("panic_messages", []),
                     }
                 )
                 # Skip detailed diff analysis for failed projects

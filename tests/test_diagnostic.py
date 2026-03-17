@@ -144,3 +144,38 @@ info: This is just info, not an error or warning"""
             diagnostic["github_ref"]
             == "https://github.com/user/repo/blob/abc123/src/module.py#L25"
         )
+
+    def test_parse_multiline_panic_message(self):
+        parser = DiagnosticsParser()
+        content = """error[panic]: Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
+info: This indicates a bug in ty.
+info: Platform: linux x86_64
+info: query stacktrace:
+   0: infer_definition_types(Id(b633))
+             at crates/ty_python_semantic/src/types/infer.rs:70"""
+
+        panic_messages = parser.parse_panic_messages(content)
+
+        assert panic_messages == [
+            """Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
+info: This indicates a bug in ty.
+info: Platform: linux x86_64
+info: query stacktrace:
+   0: infer_definition_types(Id(b633))
+             at crates/ty_python_semantic/src/types/infer.rs:70"""
+        ]
+
+    def test_parse_multiline_panic_message_stops_at_next_diagnostic(self):
+        parser = DiagnosticsParser()
+        content = """error[panic]: Panicked at somewhere: `internal error`
+info: This indicates a bug in ty.
+error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assignable to `str`"""
+
+        panic_messages = parser.parse_panic_messages(content)
+        diagnostics = parser.parse(content)
+
+        assert panic_messages == [
+            "Panicked at somewhere: `internal error`\ninfo: This indicates a bug in ty."
+        ]
+        assert len(diagnostics) == 1
+        assert diagnostics[0]["lint_name"] == "invalid-assignment"
