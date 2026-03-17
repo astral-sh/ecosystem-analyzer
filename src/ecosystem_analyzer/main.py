@@ -493,7 +493,7 @@ def generate_timing_diff(
 @click.option(
     "--inline-threshold",
     type=int,
-    default=10,
+    default=15,
     show_default=True,
     help="Show the raw diff inline when it has fewer than this many lines",
 )

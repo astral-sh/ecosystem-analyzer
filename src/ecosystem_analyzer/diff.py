@@ -910,7 +910,7 @@ class DiagnosticDiff:
     def _format_short_diagnostic(self, diag: Diagnostic) -> str:
         return (
             f"{diag['path']}:{diag['line']}:{diag['column']} "
-            f"[{diag['level']}][{diag['lint_name']}] {diag['message']}"
+            f"[{diag['level']}] [{diag['lint_name']}] {diag['message']}"
         )
 
     def _format_flaky_location(self, loc: dict) -> str:
@@ -1112,7 +1112,7 @@ class DiagnosticDiff:
     def render_statistics_markdown(
         self,
         *,
-        inline_threshold: int = 10,
+        inline_threshold: int = 15,
         max_raw_diff_lines: int = 100,
     ) -> str:
         statistics = self._calculate_statistics()
