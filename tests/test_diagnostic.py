@@ -147,7 +147,7 @@ info: This is just info, not an error or warning"""
 
     def test_parse_multiline_panic_message(self):
         parser = DiagnosticsParser()
-        content = """error[panic]: Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
+        content = """fatal[panic] Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
 info: This indicates a bug in ty.
 info: Platform: linux x86_64
 info: query stacktrace:
@@ -167,7 +167,7 @@ info: query stacktrace:
 
     def test_parse_multiline_panic_message_stops_at_next_diagnostic(self):
         parser = DiagnosticsParser()
-        content = """error[panic]: Panicked at somewhere: `internal error`
+        content = """fatal[panic] Panicked at somewhere: `internal error`
 info: This indicates a bug in ty.
 error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assignable to `str`"""
 
@@ -182,7 +182,7 @@ error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assigna
 
     def test_parse_multiline_panic_message_with_wrapped_first_line(self):
         parser = DiagnosticsParser()
-        content = """error[panic]: Panicked at somewhere: `prefix parameters must be positional-only or positional-or
+        content = """fatal[panic] Panicked at somewhere: `prefix parameters must be positional-only or positional-or
 -keyword`
 info: This indicates a bug in ty.
 info: query stacktrace:

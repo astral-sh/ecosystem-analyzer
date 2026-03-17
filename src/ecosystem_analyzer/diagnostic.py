@@ -4,16 +4,16 @@ from typing import NotRequired, TypedDict
 
 
 OLD_DIAGNOSTIC_PATTERN = re.compile(
-    r"^(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
+    r"^(?P<level>error|warning|fatal)\[(?P<lint_name>.+?)\] "
     r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
     r"(?P<message>.+)$"
 )
 NEW_DIAGNOSTIC_PATTERN = re.compile(
     r"^(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
-    r"(?P<level>error|warning)\[(?P<lint_name>.+?)\] "
+    r"(?P<level>error|warning|fatal)\[(?P<lint_name>.+?)\] "
     r"(?P<message>.+)$"
 )
-PANIC_PATTERN = re.compile(r"^error\[panic\]: (?P<message>.+)$")
+PANIC_PATTERN = re.compile(r"^(?:error|fatal)\[panic\](?::)? (?P<message>.+)$")
 
 
 class Diagnostic(TypedDict):
