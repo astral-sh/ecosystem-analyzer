@@ -103,7 +103,6 @@ class Ty:
             execution_time = time.time() - start_time
             return_code = result.returncode
             stderr = _normalize_stderr(result.stderr)
-            panic_messages = _extract_panic_messages(result.stdout)
 
             if result.returncode not in (0, 1):
                 logger.error(
