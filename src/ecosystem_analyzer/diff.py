@@ -281,16 +281,18 @@ class DiagnosticDiff:
             new_failed, new_status = self._is_project_failed(new_project)
 
             if old_failed or new_failed:
-                result["failed_projects"].append({
-                    "project": project_name,
-                    "project_location": new_project.get("project_location", ""),
-                    "old_status": old_status,
-                    "new_status": new_status,
-                    "old_return_code": old_project.get("return_code"),
-                    "new_return_code": new_project.get("return_code"),
-                    "old_panic_messages": old_project.get("panic_messages", []),
-                    "new_panic_messages": new_project.get("panic_messages", []),
-                })
+                result["failed_projects"].append(
+                    {
+                        "project": project_name,
+                        "project_location": new_project.get("project_location", ""),
+                        "old_status": old_status,
+                        "new_status": new_status,
+                        "old_return_code": old_project.get("return_code"),
+                        "new_return_code": new_project.get("return_code"),
+                        "old_panic_messages": old_project.get("panic_messages", []),
+                        "new_panic_messages": new_project.get("panic_messages", []),
+                    }
+                )
                 # Skip detailed diff analysis for failed projects
                 continue
 
@@ -474,10 +476,12 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["removed_files"].append({
-                    "path": file_path,
-                    "diagnostics": diagnostics,
-                })
+                result["removed_files"].append(
+                    {
+                        "path": file_path,
+                        "diagnostics": diagnostics,
+                    }
+                )
 
         # Find added files
         for file_path in sorted(new_files.keys()):
@@ -492,10 +496,12 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["added_files"].append({
-                    "path": file_path,
-                    "diagnostics": diagnostics,
-                })
+                result["added_files"].append(
+                    {
+                        "path": file_path,
+                        "diagnostics": diagnostics,
+                    }
+                )
 
         # Find modified files
         for file_path in sorted(set(old_files.keys()) & set(new_files.keys())):
@@ -515,10 +521,12 @@ class DiagnosticDiff:
                 or line_diffs["removed_lines"]
                 or line_diffs["modified_lines"]
             ):
-                result["modified_files"].append({
-                    "path": file_path,
-                    "diffs": line_diffs,
-                })
+                result["modified_files"].append(
+                    {
+                        "path": file_path,
+                        "diffs": line_diffs,
+                    }
+                )
 
         return result
 
@@ -557,10 +565,12 @@ class DiagnosticDiff:
                     diagnostics,
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
-                result["removed_lines"].append({
-                    "line": line_num,
-                    "diagnostics": diagnostics,
-                })
+                result["removed_lines"].append(
+                    {
+                        "line": line_num,
+                        "diagnostics": diagnostics,
+                    }
+                )
 
         # Find added lines
         for line_num in sorted(new_lines.keys()):
@@ -571,10 +581,12 @@ class DiagnosticDiff:
                     diagnostics,
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
-                result["added_lines"].append({
-                    "line": line_num,
-                    "diagnostics": diagnostics,
-                })
+                result["added_lines"].append(
+                    {
+                        "line": line_num,
+                        "diagnostics": diagnostics,
+                    }
+                )
 
         # Find modified lines
         for line_num in sorted(set(old_lines.keys()) & set(new_lines.keys())):
@@ -612,11 +624,13 @@ class DiagnosticDiff:
                                 # Generate line diff
                                 diff = self._generate_text_diff(old_str, new_str)
                                 if diff:
-                                    text_diffs.append({
-                                        "old": old_diag,
-                                        "new": new_diag,
-                                        "diff": diff,
-                                    })
+                                    text_diffs.append(
+                                        {
+                                            "old": old_diag,
+                                            "new": new_diag,
+                                            "diff": diff,
+                                        }
+                                    )
                                     changed_old_formatted.add(old_str)
                                     changed_new_formatted.add(new_str)
                                     matched_new_strs.add(new_str)
@@ -645,12 +659,14 @@ class DiagnosticDiff:
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
 
-                result["modified_lines"].append({
-                    "line": line_num,
-                    "removed": removed_diagnostics,
-                    "added": added_diagnostics,
-                    "text_diffs": text_diffs,
-                })
+                result["modified_lines"].append(
+                    {
+                        "line": line_num,
+                        "removed": removed_diagnostics,
+                        "added": added_diagnostics,
+                        "text_diffs": text_diffs,
+                    }
+                )
 
         return result
 
@@ -830,14 +846,16 @@ class DiagnosticDiff:
             removed_count = removed_by_lint.get(lint_name, 0)
             changed_count = changed_by_lint.get(lint_name, 0)
             total_change = added_count + removed_count + changed_count
-            merged_lints.append({
-                "lint_name": lint_name,
-                "added": added_count,
-                "removed": removed_count,
-                "changed": changed_count,
-                "net_change": added_count - removed_count,
-                "total_change": total_change,
-            })
+            merged_lints.append(
+                {
+                    "lint_name": lint_name,
+                    "added": added_count,
+                    "removed": removed_count,
+                    "changed": changed_count,
+                    "net_change": added_count - removed_count,
+                    "total_change": total_change,
+                }
+            )
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
@@ -855,14 +873,16 @@ class DiagnosticDiff:
             removed_count = removed_by_project.get(project_name, 0)
             changed_count = changed_by_project.get(project_name, 0)
             total_change = added_count + removed_count + changed_count
-            merged_projects.append({
-                "project_name": project_name,
-                "added": added_count,
-                "removed": removed_count,
-                "changed": changed_count,
-                "net_change": added_count - removed_count,
-                "total_change": total_change,
-            })
+            merged_projects.append(
+                {
+                    "project_name": project_name,
+                    "added": added_count,
+                    "removed": removed_count,
+                    "changed": changed_count,
+                    "net_change": added_count - removed_count,
+                    "total_change": total_change,
+                }
+            )
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
@@ -1395,20 +1415,22 @@ class DiagnosticDiff:
                 is_failed = False
                 failure_type = None
 
-            timing_data.append({
-                "project": project_name,
-                "old_time": old_time,
-                "new_time": new_time,
-                "old_return_code": old_return_code,
-                "new_return_code": new_return_code,
-                "factor": factor,
-                "is_failed": is_failed,
-                "failure_type": failure_type,
-                "old_is_timeout": old_is_timeout,
-                "new_is_timeout": new_is_timeout,
-                "old_is_abnormal": old_is_abnormal,
-                "new_is_abnormal": new_is_abnormal,
-            })
+            timing_data.append(
+                {
+                    "project": project_name,
+                    "old_time": old_time,
+                    "new_time": new_time,
+                    "old_return_code": old_return_code,
+                    "new_return_code": new_return_code,
+                    "factor": factor,
+                    "is_failed": is_failed,
+                    "failure_type": failure_type,
+                    "old_is_timeout": old_is_timeout,
+                    "new_is_timeout": new_is_timeout,
+                    "old_is_abnormal": old_is_abnormal,
+                    "new_is_abnormal": new_is_abnormal,
+                }
+            )
 
         # Sort by failure type first (abnormal exits, then timeouts, then normal), then by factor significance
         def sort_key(x):

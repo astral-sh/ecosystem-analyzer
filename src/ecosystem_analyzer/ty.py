@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 def _normalize_stderr(stderr: str) -> str | None:
     stderr = stderr.strip()
     return stderr or None
+
+
 class Ty:
     def __init__(
         self, repository: Repo, target_dir: Path | None, profile: str = "dev"
