@@ -283,6 +283,56 @@ class TestJsonRoundtrip:
         assert failed["old_panic_messages"] == ["thread 'main' panicked at old panic"]
         assert failed["new_panic_messages"] == ["thread 'main' panicked at new panic"]
 
+    def test_introduced_abnormal_exits_detects_new_abnormal_exit_code(self):
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "proj",
+                    [],
+                    time_s=1.5,
+                    return_code=1,
+                )
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "proj",
+                    [],
+                    panic_messages=["thread 'main' panicked at new panic"],
+                    time_s=None,
+                    return_code=101,
+                )
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        introduced_abnormal_exits = diff.introduced_abnormal_exits()
+
+        assert introduced_abnormal_exits == ["proj"]
+
+    def test_introduced_abnormal_exits_ignores_timeouts(self):
+        old_data = {"outputs": [_make_output("proj", [], time_s=1.5, return_code=0)]}
+        new_data = {"outputs": [_make_output("proj", [], time_s=None, return_code=None)]}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+
+        assert diff.introduced_abnormal_exits() == []
+
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""
         diag1 = {

@@ -933,6 +933,23 @@ class DiagnosticDiff:
             f"[{diag['level']}] [{diag['lint_name']}] {diag['message']}"
         )
 
+    def introduced_abnormal_exits(self) -> list[str]:
+        """Return project names that regressed from a normal to abnormal exit code."""
+        introduced: list[str] = []
+
+        for project in self.diffs.get("failed_projects", []):
+            old_return_code = project.get("old_return_code")
+            new_return_code = project.get("new_return_code")
+
+            if old_return_code not in (0, 1):
+                continue
+            if new_return_code in (0, 1) or new_return_code is None:
+                continue
+
+            introduced.append(project["project"])
+
+        return introduced
+
     def _format_flaky_location(self, loc: dict) -> str:
         variants = " | ".join(
             self._format_short_diagnostic(variant["diagnostic"])

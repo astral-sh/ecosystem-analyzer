@@ -514,6 +514,12 @@ def generate_timing_diff(
     type=str,
     help="Label for the new version (e.g., branch name, commit, or description)",
 )
+@click.option(
+    "--fail-on-new-abnormal-exits/--no-fail-on-new-abnormal-exits",
+    default=False,
+    show_default=True,
+    help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code.",
+)
 def generate_diff_statistics(
     old_file: str,
     new_file: str,
@@ -522,6 +528,7 @@ def generate_diff_statistics(
     max_raw_diff_lines: int,
     old_name: str | None,
     new_name: str | None,
+    fail_on_new_abnormal_exits: bool,
 ) -> None:
     """
     Generate a Markdown statistics report of diagnostic differences between two JSON files.
@@ -539,6 +546,14 @@ def generate_diff_statistics(
         f.write(markdown_content)
 
     print(f"Markdown statistics report generated at: {output}")
+
+    if fail_on_new_abnormal_exits:
+        introduced_abnormal_exits = diff.introduced_abnormal_exits()
+        if introduced_abnormal_exits:
+            projects = ", ".join(introduced_abnormal_exits)
+            raise click.ClickException(
+                f"New abnormal exits introduced in: {projects}"
+            )
 
 
 @cli.command()
