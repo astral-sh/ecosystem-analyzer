@@ -52,6 +52,7 @@ class DiagnosticDiff:
     """Class for comparing diagnostic data between two JSON files."""
 
     RAW_DIFF_SAMPLE_SEED = 137
+    LARGE_TIMING_CHANGE_THRESHOLD = 0.5
 
     def __init__(
         self,
@@ -1198,6 +1199,20 @@ class DiagnosticDiff:
                 f"**{statistics['total_changed']:,}** |\n"
             )
 
+        large_timing_changes = self._large_timing_changes()
+        if large_timing_changes:
+            markdown_content += (
+                "\n\n**Large timing changes**:\n\n"
+                "| Project | Old Time | New Time | Change |\n"
+                "|---------|---------:|---------:|-------:|\n"
+            )
+
+            for row in large_timing_changes:
+                markdown_content += (
+                    f"| `{row['project']}` | {row['old_time']:.2f}s | "
+                    f"{row['new_time']:.2f}s | {row['change_percent']:+.0f}% |\n"
+                )
+
         raw_diff_sections, total_raw_diff_changes, omitted_flaky_projects = (
             self._raw_diff_sections()
         )
@@ -1486,3 +1501,35 @@ class DiagnosticDiff:
             "abnormal_exits": abnormal_exits,
             "avg_factor": avg_factor,
         }
+
+    def _large_timing_changes(self) -> list[dict[str, Any]]:
+        """Return projects whose runtime changed substantially between runs."""
+        threshold = self.LARGE_TIMING_CHANGE_THRESHOLD
+        timing_data = self._compute_timing_comparison()
+        large_changes = []
+
+        for row in timing_data:
+            if row.get("is_failed", False):
+                continue
+
+            factor = row["factor"]
+            if abs(factor - 1.0) < threshold:
+                continue
+
+            old_time = row["old_time"]
+            new_time = row["new_time"]
+            if old_time is None or new_time is None:
+                continue
+
+            large_changes.append(
+                {
+                    "project": row["project"],
+                    "old_time": old_time,
+                    "new_time": new_time,
+                    "factor": factor,
+                    "change_percent": (factor - 1.0) * 100,
+                }
+            )
+
+        large_changes.sort(key=lambda row: abs(row["factor"] - 1.0), reverse=True)
+        return large_changes

@@ -316,3 +316,59 @@ class TestJsonRoundtrip:
         proj = diff.diffs["modified_projects"][0]
         assert "flaky_diffs" not in proj
         assert "flaky_file_diffs" not in proj
+
+    def test_statistics_markdown_includes_large_timing_changes(self):
+        old_data = {
+            "outputs": [
+                _make_output("slow-project", [], time_s=10.0, return_code=0),
+                _make_output("very-fast-project", [], time_s=10.0, return_code=0),
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output("slow-project", [], time_s=15.0, return_code=0),
+                _make_output("very-fast-project", [], time_s=5.0, return_code=0),
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        markdown = diff.render_statistics_markdown()
+
+        assert "**Large timing changes**:" in markdown
+        assert "| `slow-project` | 10.00s | 15.00s | +50% |" in markdown
+        assert "| `very-fast-project` | 10.00s | 5.00s | -50% |" in markdown
+
+    def test_statistics_markdown_omits_small_or_failed_timing_changes(self):
+        old_data = {
+            "outputs": [
+                _make_output("medium-change", [], time_s=10.0, return_code=0),
+                _make_output("timed-out", [], time_s=10.0, return_code=0),
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output("medium-change", [], time_s=14.0, return_code=0),
+                _make_output("timed-out", [], time_s=None, return_code=101),
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        markdown = diff.render_statistics_markdown()
+
+        assert "**Large timing changes**:" not in markdown
+        assert "medium-change" not in markdown
+        assert "| Project | Old Time | New Time | Change |" not in markdown
