@@ -318,7 +318,7 @@ class TestJsonRoundtrip:
 
         assert introduced_abnormal_exits == ["proj"]
 
-    def test_introduced_abnormal_exits_ignores_timeouts(self):
+    def test_introduced_abnormal_exits_includes_timeouts(self):
         old_data = {"outputs": [_make_output("proj", [], time_s=1.5, return_code=0)]}
         new_data = {"outputs": [_make_output("proj", [], time_s=None, return_code=None)]}
 
@@ -331,7 +331,7 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
 
-        assert diff.introduced_abnormal_exits() == []
+        assert diff.introduced_abnormal_exits() == ["proj"]
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""

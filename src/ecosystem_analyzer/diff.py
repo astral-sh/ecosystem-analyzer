@@ -943,7 +943,7 @@ class DiagnosticDiff:
 
             if old_return_code not in (0, 1):
                 continue
-            if new_return_code in (0, 1) or new_return_code is None:
+            if new_return_code in (0, 1):
                 continue
 
             introduced.append(project["project"])

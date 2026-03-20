@@ -518,7 +518,7 @@ def generate_timing_diff(
     "--fail-on-new-abnormal-exits/--no-fail-on-new-abnormal-exits",
     default=False,
     show_default=True,
-    help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code.",
+    help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code or a timeout.",
 )
 def generate_diff_statistics(
     old_file: str,
