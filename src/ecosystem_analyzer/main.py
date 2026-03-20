@@ -548,11 +548,11 @@ def generate_diff_statistics(
     print(f"Markdown statistics report generated at: {output}")
 
     if fail_on_new_abnormal_exits:
-        introduced_abnormal_exits = diff.introduced_abnormal_exits()
-        if introduced_abnormal_exits:
-            projects = ", ".join(introduced_abnormal_exits)
+        introduced_failures = diff.introduced_project_failures()
+        if introduced_failures:
+            projects = ", ".join(introduced_failures)
             raise click.ClickException(
-                f"New abnormal exits introduced in: {projects}"
+                f"New project failures introduced in: {projects}"
             )
 
 

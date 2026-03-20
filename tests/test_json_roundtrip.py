@@ -283,7 +283,7 @@ class TestJsonRoundtrip:
         assert failed["old_panic_messages"] == ["thread 'main' panicked at old panic"]
         assert failed["new_panic_messages"] == ["thread 'main' panicked at new panic"]
 
-    def test_introduced_abnormal_exits_detects_new_abnormal_exit_code(self):
+    def test_introduced_project_failures_detects_new_abnormal_exit_code(self):
         old_data = {
             "outputs": [
                 _make_output(
@@ -314,11 +314,11 @@ class TestJsonRoundtrip:
             new_path = f2.name
 
         diff = DiagnosticDiff(old_path, new_path)
-        introduced_abnormal_exits = diff.introduced_abnormal_exits()
+        introduced_failures = diff.introduced_project_failures()
 
-        assert introduced_abnormal_exits == ["proj"]
+        assert introduced_failures == ["proj"]
 
-    def test_introduced_abnormal_exits_includes_timeouts(self):
+    def test_introduced_project_failures_detects_new_timeouts(self):
         old_data = {"outputs": [_make_output("proj", [], time_s=1.5, return_code=0)]}
         new_data = {"outputs": [_make_output("proj", [], time_s=None, return_code=None)]}
 
@@ -331,7 +331,7 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
 
-        assert diff.introduced_abnormal_exits() == ["proj"]
+        assert diff.introduced_project_failures() == ["proj"]
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""

@@ -933,8 +933,8 @@ class DiagnosticDiff:
             f"[{diag['level']}] [{diag['lint_name']}] {diag['message']}"
         )
 
-    def introduced_abnormal_exits(self) -> list[str]:
-        """Return project names that regressed from a normal to abnormal exit code."""
+    def introduced_project_failures(self) -> list[str]:
+        """Return project names that regressed from a normal exit to an abnormal exit or timeout."""
         introduced: list[str] = []
 
         for project in self.diffs.get("failed_projects", []):
