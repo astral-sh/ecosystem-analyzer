@@ -518,7 +518,7 @@ def generate_timing_diff(
     "--fail-on-new-abnormal-exits/--no-fail-on-new-abnormal-exits",
     default=False,
     show_default=True,
-    help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code.",
+    help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code or a timeout.",
 )
 def generate_diff_statistics(
     old_file: str,
@@ -548,11 +548,11 @@ def generate_diff_statistics(
     print(f"Markdown statistics report generated at: {output}")
 
     if fail_on_new_abnormal_exits:
-        introduced_abnormal_exits = diff.introduced_abnormal_exits()
-        if introduced_abnormal_exits:
-            projects = ", ".join(introduced_abnormal_exits)
+        introduced_failures = diff.introduced_project_failures()
+        if introduced_failures:
+            projects = ", ".join(introduced_failures)
             raise click.ClickException(
-                f"New abnormal exits introduced in: {projects}"
+                f"New project failures introduced in: {projects}"
             )
 
 
