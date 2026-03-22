@@ -680,8 +680,16 @@ class DiagnosticDiff:
         diff = difflib.ndiff(old_text.splitlines(), new_text.splitlines())
         return list(diff)
 
-    def _calculate_statistics(self) -> DiffStatistics:
-        """Calculate statistics about added, removed, and changed diagnostics."""
+    def _calculate_statistics(
+        self, *, exclude_flaky: bool = False
+    ) -> DiffStatistics:
+        """Calculate statistics about added, removed, and changed diagnostics.
+
+        If *exclude_flaky* is True, flaky diagnostic diffs are excluded from
+        the per-lint and per-project tables as well as the totals.  Stable
+        diagnostics from projects that happen to also have flaky data are
+        still counted.
+        """
         # Intermediate dictionaries (local variables)
         added_by_lint: dict[str, int] = {}
         removed_by_lint: dict[str, int] = {}
@@ -795,44 +803,46 @@ class DiagnosticDiff:
                             removed_by_project.get(project_name, 0) + 1
                         )
 
-            # Count flaky location diffs (each location = 1 diagnostic)
-            flaky_diffs = project.get("flaky_diffs", {})
-            for loc in flaky_diffs.get("added", []):
-                total_added += 1
-                # Use the first variant's lint_name as representative
-                lint_name = (
-                    loc["variants"][0]["diagnostic"]["lint_name"]
-                    if loc["variants"]
-                    else "unknown"
-                )
-                added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                added_by_project[project_name] = (
-                    added_by_project.get(project_name, 0) + 1
-                )
+            # Count flaky location diffs (each location = 1 diagnostic).
+            # When exclude_flaky is set, skip these entirely.
+            if not exclude_flaky:
+                flaky_diffs = project.get("flaky_diffs", {})
+                for loc in flaky_diffs.get("added", []):
+                    total_added += 1
+                    # Use the first variant's lint_name as representative
+                    lint_name = (
+                        loc["variants"][0]["diagnostic"]["lint_name"]
+                        if loc["variants"]
+                        else "unknown"
+                    )
+                    added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
+                    added_by_project[project_name] = (
+                        added_by_project.get(project_name, 0) + 1
+                    )
 
-            for loc in flaky_diffs.get("removed", []):
-                total_removed += 1
-                lint_name = (
-                    loc["variants"][0]["diagnostic"]["lint_name"]
-                    if loc["variants"]
-                    else "unknown"
-                )
-                removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                removed_by_project[project_name] = (
-                    removed_by_project.get(project_name, 0) + 1
-                )
+                for loc in flaky_diffs.get("removed", []):
+                    total_removed += 1
+                    lint_name = (
+                        loc["variants"][0]["diagnostic"]["lint_name"]
+                        if loc["variants"]
+                        else "unknown"
+                    )
+                    removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
+                    removed_by_project[project_name] = (
+                        removed_by_project.get(project_name, 0) + 1
+                    )
 
-            for change in flaky_diffs.get("changed", []):
-                total_changed += 1
-                lint_name = (
-                    change["old"]["variants"][0]["diagnostic"]["lint_name"]
-                    if change["old"]["variants"]
-                    else "unknown"
-                )
-                changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
-                changed_by_project[project_name] = (
-                    changed_by_project.get(project_name, 0) + 1
-                )
+                for change in flaky_diffs.get("changed", []):
+                    total_changed += 1
+                    lint_name = (
+                        change["old"]["variants"][0]["diagnostic"]["lint_name"]
+                        if change["old"]["variants"]
+                        else "unknown"
+                    )
+                    changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
+                    changed_by_project[project_name] = (
+                        changed_by_project.get(project_name, 0) + 1
+                    )
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
@@ -1165,8 +1175,9 @@ class DiagnosticDiff:
         *,
         inline_threshold: int = 15,
         max_raw_diff_lines: int = 100,
+        exclude_flaky: bool = False,
     ) -> str:
-        statistics = self._calculate_statistics()
+        statistics = self._calculate_statistics(exclude_flaky=exclude_flaky)
         failed_projects = self.diffs.get("failed_projects", [])
 
         markdown_content = ""

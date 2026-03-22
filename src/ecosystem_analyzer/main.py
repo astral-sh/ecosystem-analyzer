@@ -520,6 +520,12 @@ def generate_timing_diff(
     show_default=True,
     help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code or a timeout.",
 )
+@click.option(
+    "--exclude-flaky/--no-exclude-flaky",
+    default=False,
+    show_default=True,
+    help="Exclude flaky diagnostics from the summary table.",
+)
 def generate_diff_statistics(
     old_file: str,
     new_file: str,
@@ -529,6 +535,7 @@ def generate_diff_statistics(
     old_name: str | None,
     new_name: str | None,
     fail_on_new_abnormal_exits: bool,
+    exclude_flaky: bool,
 ) -> None:
     """
     Generate a Markdown statistics report of diagnostic differences between two JSON files.
@@ -540,6 +547,7 @@ def generate_diff_statistics(
     markdown_content = diff.render_statistics_markdown(
         inline_threshold=inline_threshold,
         max_raw_diff_lines=max_raw_diff_lines,
+        exclude_flaky=exclude_flaky,
     )
 
     with open(output, "w") as f:
