@@ -1246,10 +1246,24 @@ class DiagnosticDiff:
         )
         raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
-        if omitted_flaky_projects:
+        # Check whether any flaky diagnostic diffs were excluded from the
+        # summary table so we can tell the reader.
+        excluded_flaky_from_table = False
+        if exclude_flaky:
+            for project in self.diffs["modified_projects"]:
+                flaky_diffs = project.get("flaky_diffs", {})
+                if (
+                    flaky_diffs.get("added")
+                    or flaky_diffs.get("removed")
+                    or flaky_diffs.get("changed")
+                ):
+                    excluded_flaky_from_table = True
+                    break
+
+        if omitted_flaky_projects or excluded_flaky_from_table:
             markdown_content += (
                 "\n\n_Changes in flaky projects detected. "
-                "Raw diff output excludes flaky projects; see the HTML report for details._"
+                "This PR summary excludes flaky changes; see the HTML report for details._"
             )
 
         if not raw_diff_lines:
