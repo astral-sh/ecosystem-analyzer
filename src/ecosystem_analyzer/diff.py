@@ -950,6 +950,35 @@ class DiagnosticDiff:
 
         return introduced
 
+    def has_new_panics(self) -> bool:
+        """Check if any project has new panic messages that weren't present before."""
+        for project in self.diffs.get("failed_projects", []):
+            old_panics = project.get("old_panic_messages", [])
+            new_panics = project.get("new_panic_messages", [])
+            if set(new_panics) - set(old_panics):
+                return True
+        return False
+
+    def has_new_timeouts(self) -> bool:
+        """Check if any project newly timed out (was not a timeout before)."""
+        return any(
+            project["new_status"] == "timeout" and project["old_status"] != "timeout"
+            for project in self.diffs.get("failed_projects", [])
+        )
+
+    def generate_comment_title(self) -> str:
+        """Generate the PR comment title with status indicators for panics and timeouts."""
+        title = "## `ecosystem-analyzer` results"
+        new_panics = self.has_new_panics()
+        new_timeouts = self.has_new_timeouts()
+        if new_panics and not new_timeouts:
+            title += ": new panics detected ❌"
+        elif new_timeouts and not new_panics:
+            title += ": new timeouts detected ❌"
+        elif new_panics and new_timeouts:
+            title += ": new panics/timeouts detected ❌"
+        return title
+
     def _format_flaky_location(self, loc: dict) -> str:
         variants = " | ".join(
             self._format_short_diagnostic(variant["diagnostic"])
@@ -1169,7 +1198,7 @@ class DiagnosticDiff:
         statistics = self._calculate_statistics()
         failed_projects = self.diffs.get("failed_projects", [])
 
-        markdown_content = ""
+        markdown_content = self.generate_comment_title() + "\n\n"
 
         if failed_projects:
             markdown_content += "**Failing projects**:\n\n"
