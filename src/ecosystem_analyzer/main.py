@@ -500,9 +500,11 @@ def generate_timing_diff(
 @click.option(
     "--max-raw-diff-lines",
     type=int,
-    default=100,
+    default=None,
     show_default=True,
-    help="Maximum number of raw diff changes to include in Markdown before sampling",
+    help="Maximum number of raw diff changes to include in Markdown before sampling. "
+    "By default, as many changes as possible are included while staying within "
+    "GitHub's comment character limit.",
 )
 @click.option(
     "--old-name",
