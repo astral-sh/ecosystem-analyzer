@@ -1169,7 +1169,6 @@ class DiagnosticDiff:
         self,
         *,
         inline_threshold: int = 15,
-        max_raw_diff_lines: int | None = None,
     ) -> str:
         statistics = self._calculate_statistics()
         failed_projects = self.diffs.get("failed_projects", [])
@@ -1276,10 +1275,7 @@ class DiagnosticDiff:
         displayed_change_count = total_raw_diff_changes
 
         full_diff_text = "\n".join(raw_diff_lines)
-        if max_raw_diff_lines is not None:
-            needs_sampling = total_raw_diff_changes > max_raw_diff_lines
-        else:
-            needs_sampling = len(full_diff_text) > char_budget
+        needs_sampling = len(full_diff_text) > char_budget
 
         if needs_sampling:
             sampled = True
@@ -1314,8 +1310,6 @@ class DiagnosticDiff:
             remaining = char_budget - non_change_cost
             selected_entries: set[tuple[str, int]] = set()
             for entry_header, entry_index, cost in change_entries:
-                if max_raw_diff_lines is not None and len(selected_entries) >= max_raw_diff_lines:
-                    break
                 if cost <= remaining:
                     selected_entries.add((entry_header, entry_index))
                     remaining -= cost
