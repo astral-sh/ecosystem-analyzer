@@ -930,7 +930,7 @@ class DiagnosticDiff:
     def _format_short_diagnostic(self, diag: Diagnostic) -> str:
         return (
             f"{diag['path']}:{diag['line']}:{diag['column']} "
-            f"[{diag['level']}] [{diag['lint_name']}] {diag['message']}"
+            f"{diag['level']}[{diag['lint_name']}] {diag['message']}"
         )
 
     def introduced_project_failures(self) -> list[str]:
