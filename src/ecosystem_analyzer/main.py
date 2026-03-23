@@ -498,13 +498,6 @@ def generate_timing_diff(
     help="Show the raw diff inline when it has fewer than this many changes",
 )
 @click.option(
-    "--max-raw-diff-lines",
-    type=int,
-    default=100,
-    show_default=True,
-    help="Maximum number of raw diff changes to include in Markdown before sampling",
-)
-@click.option(
     "--old-name",
     type=str,
     help="Label for the old version (e.g., branch name, commit, or description)",
@@ -525,7 +518,6 @@ def generate_diff_statistics(
     new_file: str,
     output: str,
     inline_threshold: int,
-    max_raw_diff_lines: int,
     old_name: str | None,
     new_name: str | None,
     fail_on_new_abnormal_exits: bool,
@@ -539,7 +531,6 @@ def generate_diff_statistics(
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     markdown_content = diff.render_statistics_markdown(
         inline_threshold=inline_threshold,
-        max_raw_diff_lines=max_raw_diff_lines,
     )
 
     with open(output, "w") as f:

@@ -54,6 +54,13 @@ class DiagnosticDiff:
     RAW_DIFF_SAMPLE_SEED = 137
     LARGE_TIMING_CHANGE_THRESHOLD = 0.5
 
+    # GitHub's comment body limit is 65,536 characters. We keep a small
+    # margin so surrounding markup (details/summary tags, etc.) and any
+    # future additions don't push us over. This margin is effectively a
+    # safety buffer _on top_ of the calculated size of the summary table.
+    GITHUB_COMMENT_CHAR_LIMIT = 65_536
+    GITHUB_COMMENT_CHAR_MARGIN = 1_024
+
     def __init__(
         self,
         old_file: str,
@@ -1193,7 +1200,6 @@ class DiagnosticDiff:
         self,
         *,
         inline_threshold: int = 15,
-        max_raw_diff_lines: int = 100,
     ) -> str:
         statistics = self._calculate_statistics()
         failed_projects = self.diffs.get("failed_projects", [])
@@ -1275,21 +1281,72 @@ class DiagnosticDiff:
 
         markdown_content += "\n\n"
 
+        # Determine the character budget available for the raw diff block.
+        # We account for the wrapping markup (details/summary tags, code
+        # fence, sampling note) so that the final comment stays within
+        # GitHub's character limit.
+        char_budget = (
+            self.GITHUB_COMMENT_CHAR_LIMIT
+            - self.GITHUB_COMMENT_CHAR_MARGIN
+            - len(markdown_content)
+        )
+
+        # Reserve space for the static wrapper markup that surrounds the
+        # diff content.  We estimate generously so the budget refers to
+        # the diff payload itself.
+        #   - code fence: "```diff\n" + "\n```" = 12 chars
+        #   - details/summary (worst case): ~80 chars
+        #   - sampling note (worst case): ~120 chars
+        #   - extra newlines / padding: ~30 chars
+        _wrapper_overhead = 250
+        char_budget -= _wrapper_overhead
+
         displayed_lines = raw_diff_lines
         sampled = False
-        if total_raw_diff_changes > max_raw_diff_lines:
+        displayed_change_count = total_raw_diff_changes
+
+        full_diff_text = "\n".join(raw_diff_lines)
+        needs_sampling = len(full_diff_text) > char_budget
+
+        if needs_sampling:
             sampled = True
             rng = random.Random(self.RAW_DIFF_SAMPLE_SEED)
-            change_entries = [
-                (header, index)
-                for header, entries in sorted(raw_diff_sections.items())
-                for index, (_lines, counts_as_change) in enumerate(entries)
-                if counts_as_change
-            ]
-            selected_entries = {
-                sampled_entry
-                for sampled_entry in rng.sample(change_entries, k=max_raw_diff_lines)
-            }
+
+            # Build a list of (header, index, char_cost) for every
+            # change entry so we can greedily pick as many as fit.
+            change_entries: list[tuple[str, int, int]] = []
+            for header, entries in sorted(raw_diff_sections.items()):
+                for index, (lines, counts_as_change) in enumerate(entries):
+                    if counts_as_change:
+                        # +1 for the newline joining
+                        cost = sum(len(line) + 1 for line in lines)
+                        change_entries.append((header, index, cost))
+
+            # Shuffle deterministically, then greedily pick entries that
+            # fit within the character budget.
+            rng.shuffle(change_entries)
+
+            # Account for non-change lines (headers, etc.) that will
+            # always be included.  Compute their cost first.
+            non_change_cost = 0
+            for header, entries in sorted(raw_diff_sections.items()):
+                # header line + newline
+                non_change_cost += len(header) + 1
+                for _lines, counts_as_change in entries:
+                    if not counts_as_change:
+                        non_change_cost += sum(len(line) + 1 for line in _lines)
+                # trailing blank line between sections
+                non_change_cost += 1
+
+            remaining = char_budget - non_change_cost
+            selected_entries: set[tuple[str, int]] = set()
+            for entry_header, entry_index, cost in change_entries:
+                if cost <= remaining:
+                    selected_entries.add((entry_header, entry_index))
+                    remaining -= cost
+
+            displayed_change_count = len(selected_entries)
+
             displayed_sections: dict[str, list[tuple[list[str], bool]]] = {}
             for header, entries in sorted(raw_diff_sections.items()):
                 kept_entries = []
@@ -1305,7 +1362,7 @@ class DiagnosticDiff:
         if sampled:
             markdown_content += (
                 f"_Showing a random sample of "
-                f"{max_raw_diff_lines} of {total_raw_diff_changes} changes. "
+                f"{displayed_change_count} of {total_raw_diff_changes} changes. "
                 "See the HTML report for the full diff._\n\n"
             )
 
@@ -1317,7 +1374,7 @@ class DiagnosticDiff:
         else:
             summary = "Raw diff"
             if sampled:
-                summary += f" sample ({max_raw_diff_lines} of {total_raw_diff_changes} changes)"
+                summary += f" sample ({displayed_change_count} of {total_raw_diff_changes} changes)"
             else:
                 summary += f" ({total_raw_diff_changes} changes)"
             markdown_content += f"<details>\n<summary>{summary}</summary>\n\n"
