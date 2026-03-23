@@ -53,9 +53,11 @@ class DiagnosticDiff:
 
     RAW_DIFF_SAMPLE_SEED = 137
     LARGE_TIMING_CHANGE_THRESHOLD = 0.5
-    # GitHub comment body limit is 65,536 characters.  Keep a small
+
+    # GitHub's comment body limit is 65,536 characters. We keep a small
     # margin so surrounding markup (details/summary tags, etc.) and any
-    # future additions don't push us over.
+    # future additions don't push us over. This margin is effectively a
+    # safety buffer _on top_ of the calculated size of the summary table.
     GITHUB_COMMENT_CHAR_LIMIT = 65_536
     GITHUB_COMMENT_CHAR_MARGIN = 1_024
 
