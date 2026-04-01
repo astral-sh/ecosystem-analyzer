@@ -997,8 +997,9 @@ class DiagnosticDiff:
         self, project_name: str, project_location: str | None, *, is_flaky: bool
     ) -> str:
         if project_location:
-            location = f"FLAKY, {project_location}" if is_flaky else project_location
-            return f"{project_name} ({location})"
+            if is_flaky:
+                return f"[{project_name}]({project_location}) (FLAKY)"
+            return f"[{project_name}]({project_location})"
         if is_flaky:
             return f"{project_name} (FLAKY)"
         return project_name
