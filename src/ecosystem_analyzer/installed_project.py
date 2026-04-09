@@ -1,3 +1,4 @@
+import datetime as dt
 import hashlib
 import logging
 import os
@@ -34,13 +35,41 @@ def _get_project_cache_path(project: Project) -> Path:
     return cache_dir / f"{project_name}_{location_hash}"
 
 
+def validate_exclude_newer(value: str) -> dt.datetime:
+    """Validate and parse an ISO 8601 timestamp for --exclude-newer.
+
+    Returns a timezone-aware UTC datetime.
+
+    Raises ValueError if the timestamp cannot be parsed or is missing timezone info.
+    """
+    try:
+        res = dt.datetime.fromisoformat(value)
+    except ValueError as e:
+        raise ValueError(
+            f"Invalid --exclude-newer timestamp: {value!r}. "
+            f"Expected an ISO 8601 timestamp (e.g. '2026-04-09T10:00:00Z')."
+        ) from e
+
+    if res.tzinfo is None:
+        raise ValueError(
+            f"--exclude-newer timestamp {value!r} is missing timezone info. "
+            f"Use a UTC timestamp like '2026-04-09T10:00:00Z'."
+        )
+
+    return res.astimezone(dt.UTC)
+
+
 class InstalledProject:
     _repo: Repo
 
-    def __init__(self, project: Project) -> None:
+    def __init__(self, project: Project, exclude_newer: str | None = None) -> None:
         self._project = project
+        self._exclude_newer = exclude_newer
         self._cache_path = _get_project_cache_path(project)
         self._temp_dir = tempfile.TemporaryDirectory()
+
+        if exclude_newer is not None:
+            validate_exclude_newer(exclude_newer)
 
         self._clone_or_update()
         self._install_dependencies()
@@ -104,6 +133,61 @@ class InstalledProject:
             logger.error(f"Error cloning/updating repository: {e}")
             return
 
+        if self._exclude_newer is not None:
+            self._pin_to_timestamp()
+
+    def _pin_to_timestamp(self) -> None:
+        """Checkout the latest commit at or before the exclude-newer timestamp."""
+        assert self._exclude_newer is not None
+
+        cutoff = validate_exclude_newer(self._exclude_newer)
+        head_date = self._repo.head.commit.committed_datetime.astimezone(dt.UTC)
+
+        if head_date <= cutoff:
+            logger.debug(
+                f"'{self.name}': HEAD ({head_date.isoformat()}) is already "
+                f"at or before {self._exclude_newer}"
+            )
+            return
+
+        logger.info(
+            f"'{self.name}': HEAD ({head_date.isoformat()}) is newer than "
+            f"{self._exclude_newer}, searching for older commit"
+        )
+
+        # Deepen the shallow clone to find a commit before the cutoff
+        try:
+            self._repo.git.fetch("--deepen", "20")
+        except GitError:
+            logger.warning(
+                f"'{self.name}': failed to deepen clone, using HEAD as-is"
+            )
+            return
+
+        try:
+            commit_hash = self._repo.git.rev_list(
+                "HEAD", "--before", self._exclude_newer, "-1"
+            )
+        except GitError:
+            logger.warning(
+                f"'{self.name}': failed to find commit before "
+                f"{self._exclude_newer}, using HEAD as-is"
+            )
+            return
+
+        if not commit_hash.strip():
+            logger.warning(
+                f"'{self.name}': no commit found before "
+                f"{self._exclude_newer}, using HEAD as-is"
+            )
+            return
+
+        logger.info(
+            f"'{self.name}': checking out {commit_hash[:12]} "
+            f"(latest before {self._exclude_newer})"
+        )
+        self._repo.git.checkout(commit_hash)
+
     def _install_dependencies(self) -> None:
         # Create venv in temporary directory
         venv_cmd = ["uv", "venv", "--quiet", "--python", PYTHON_VERSION]
@@ -118,6 +202,8 @@ class InstalledProject:
 
             # Use absolute path to venv python for install commands
             install_placeholder = f"uv pip install --python {venv_python}"
+            if self._exclude_newer:
+                install_placeholder += f" --exclude-newer {self._exclude_newer}"
             install_cmd = self._project.install_cmd.format(install=install_placeholder)
 
             logger.debug(f"Executing: '{install_cmd}'")
@@ -131,6 +217,7 @@ class InstalledProject:
         elif self._project.deps:
             logger.info(f"Installing dependencies: {', '.join(self._project.deps)}")
 
+            exclude_newer_args = ["--exclude-newer", self._exclude_newer] if self._exclude_newer else []
             pip_cmd = [
                 "uv",
                 "pip",
@@ -138,6 +225,7 @@ class InstalledProject:
                 "--python",
                 str(venv_python),
                 "--link-mode=copy",
+                *exclude_newer_args,
                 *self._project.deps,
             ]
             logger.debug(f"Executing: {' '.join(pip_cmd)}")
