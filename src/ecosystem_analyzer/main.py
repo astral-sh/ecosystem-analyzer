@@ -146,6 +146,13 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=False,
 )
+@click.option(
+    "--exclude-newer",
+    help="ISO 8601 timestamp cutoff for reproducibility: pin git repos to the latest commit "
+    "at or before this time, and pass --exclude-newer to uv pip install",
+    type=str,
+    required=False,
+)
 @click.pass_context
 def analyze(
     ctx,
@@ -154,6 +161,7 @@ def analyze(
     output: str,
     profile: str,
     projects_flaky: str | None,
+    exclude_newer: str | None,
 ) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
@@ -174,6 +182,7 @@ def analyze(
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
+        exclude_newer=exclude_newer,
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -228,6 +237,13 @@ def analyze(
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=False,
 )
+@click.option(
+    "--exclude-newer",
+    help="ISO 8601 timestamp cutoff for reproducibility: pin git repos to the latest commit "
+    "at or before this time, and pass --exclude-newer to uv pip install",
+    type=str,
+    required=False,
+)
 @click.pass_context
 def diff(
     ctx,
@@ -239,6 +255,7 @@ def diff(
     output_new: str,
     profile: str,
     projects_flaky: str | None,
+    exclude_newer: str | None,
 ) -> None:
     """
     Compare diagnostics between two commits.
@@ -263,6 +280,7 @@ def diff(
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
+        exclude_newer=exclude_newer,
     )
 
     # Build old ty first — this overlaps with background project installation

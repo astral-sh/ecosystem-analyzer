@@ -45,12 +45,14 @@ class Manager:
         profile: str = "dev",
         flaky_runs: int = 1,
         flaky_projects: set[str] | None = None,
+        exclude_newer: str | None = None,
     ) -> None:
         self._installed_projects = []
         self._active_projects = []
         self._ty = Ty(ty_repo, target_dir, profile=profile)
         self._flaky_runs = flaky_runs
         self._flaky_projects = flaky_projects or set()
+        self._exclude_newer = exclude_newer
 
         self._ecosystem_projects = _get_ecosystem_projects()
 
@@ -80,7 +82,7 @@ class Manager:
         def install_single_project(project_name: str) -> InstalledProject:
             logger.info(f"Processing project: {project_name}")
             project = self._ecosystem_projects[project_name]
-            return InstalledProject(project)
+            return InstalledProject(project, exclude_newer=self._exclude_newer)
 
         max_workers = min(len(self._project_names), 8)
 

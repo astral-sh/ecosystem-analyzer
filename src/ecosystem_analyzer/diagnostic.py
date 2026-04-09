@@ -2,7 +2,6 @@ import re
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-
 OLD_DIAGNOSTIC_PATTERN = re.compile(
     r"^(?P<level>error|warning|fatal)\[(?P<lint_name>.+?)\] "
     r"(?P<path>.+?):(?P<line>\d+):(?P<column>\d+): "
