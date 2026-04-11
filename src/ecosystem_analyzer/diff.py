@@ -2,6 +2,7 @@ import difflib
 import json
 import os
 import random
+from itertools import chain
 from pathlib import Path
 from typing import Any, TypedDict
 
@@ -289,18 +290,16 @@ class DiagnosticDiff:
             new_failed, new_status = self._is_project_failed(new_project)
 
             if old_failed or new_failed:
-                result["failed_projects"].append(
-                    {
-                        "project": project_name,
-                        "project_location": new_project.get("project_location", ""),
-                        "old_status": old_status,
-                        "new_status": new_status,
-                        "old_return_code": old_project.get("return_code"),
-                        "new_return_code": new_project.get("return_code"),
-                        "old_panic_messages": old_project.get("panic_messages", []),
-                        "new_panic_messages": new_project.get("panic_messages", []),
-                    }
-                )
+                result["failed_projects"].append({
+                    "project": project_name,
+                    "project_location": new_project.get("project_location", ""),
+                    "old_status": old_status,
+                    "new_status": new_status,
+                    "old_return_code": old_project.get("return_code"),
+                    "new_return_code": new_project.get("return_code"),
+                    "old_panic_messages": old_project.get("panic_messages", []),
+                    "new_panic_messages": new_project.get("panic_messages", []),
+                })
                 # Skip detailed diff analysis for failed projects
                 continue
 
@@ -484,12 +483,10 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["removed_files"].append(
-                    {
-                        "path": file_path,
-                        "diagnostics": diagnostics,
-                    }
-                )
+                result["removed_files"].append({
+                    "path": file_path,
+                    "diagnostics": diagnostics,
+                })
 
         # Find added files
         for file_path in sorted(new_files.keys()):
@@ -504,12 +501,10 @@ class DiagnosticDiff:
                         d.get("message", ""),
                     ),
                 )
-                result["added_files"].append(
-                    {
-                        "path": file_path,
-                        "diagnostics": diagnostics,
-                    }
-                )
+                result["added_files"].append({
+                    "path": file_path,
+                    "diagnostics": diagnostics,
+                })
 
         # Find modified files
         for file_path in sorted(set(old_files.keys()) & set(new_files.keys())):
@@ -529,12 +524,10 @@ class DiagnosticDiff:
                 or line_diffs["removed_lines"]
                 or line_diffs["modified_lines"]
             ):
-                result["modified_files"].append(
-                    {
-                        "path": file_path,
-                        "diffs": line_diffs,
-                    }
-                )
+                result["modified_files"].append({
+                    "path": file_path,
+                    "diffs": line_diffs,
+                })
 
         return result
 
@@ -573,12 +566,10 @@ class DiagnosticDiff:
                     diagnostics,
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
-                result["removed_lines"].append(
-                    {
-                        "line": line_num,
-                        "diagnostics": diagnostics,
-                    }
-                )
+                result["removed_lines"].append({
+                    "line": line_num,
+                    "diagnostics": diagnostics,
+                })
 
         # Find added lines
         for line_num in sorted(new_lines.keys()):
@@ -589,12 +580,10 @@ class DiagnosticDiff:
                     diagnostics,
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
-                result["added_lines"].append(
-                    {
-                        "line": line_num,
-                        "diagnostics": diagnostics,
-                    }
-                )
+                result["added_lines"].append({
+                    "line": line_num,
+                    "diagnostics": diagnostics,
+                })
 
         # Find modified lines
         for line_num in sorted(set(old_lines.keys()) & set(new_lines.keys())):
@@ -632,13 +621,11 @@ class DiagnosticDiff:
                                 # Generate line diff
                                 diff = self._generate_text_diff(old_str, new_str)
                                 if diff:
-                                    text_diffs.append(
-                                        {
-                                            "old": old_diag,
-                                            "new": new_diag,
-                                            "diff": diff,
-                                        }
-                                    )
+                                    text_diffs.append({
+                                        "old": old_diag,
+                                        "new": new_diag,
+                                        "diff": diff,
+                                    })
                                     changed_old_formatted.add(old_str)
                                     changed_new_formatted.add(new_str)
                                     matched_new_strs.add(new_str)
@@ -667,14 +654,12 @@ class DiagnosticDiff:
                     key=lambda d: (d.get("column", 0), d.get("message", "")),
                 )
 
-                result["modified_lines"].append(
-                    {
-                        "line": line_num,
-                        "removed": removed_diagnostics,
-                        "added": added_diagnostics,
-                        "text_diffs": text_diffs,
-                    }
-                )
+                result["modified_lines"].append({
+                    "line": line_num,
+                    "removed": removed_diagnostics,
+                    "added": added_diagnostics,
+                    "text_diffs": text_diffs,
+                })
 
         return result
 
@@ -688,7 +673,12 @@ class DiagnosticDiff:
         return list(diff)
 
     def _calculate_statistics(self) -> DiffStatistics:
-        """Calculate statistics about added, removed, and changed diagnostics."""
+        """Calculate statistics about added, removed, and changed diagnostics.
+
+        Flaky diagnostic diffs are excluded from the totals and breakdowns.
+        Stable diagnostics from projects that happen to also have flaky data
+        are still counted.
+        """
         # Intermediate dictionaries (local variables)
         added_by_lint: dict[str, int] = {}
         removed_by_lint: dict[str, int] = {}
@@ -802,44 +792,8 @@ class DiagnosticDiff:
                             removed_by_project.get(project_name, 0) + 1
                         )
 
-            # Count flaky location diffs (each location = 1 diagnostic)
-            flaky_diffs = project.get("flaky_diffs", {})
-            for loc in flaky_diffs.get("added", []):
-                total_added += 1
-                # Use the first variant's lint_name as representative
-                lint_name = (
-                    loc["variants"][0]["diagnostic"]["lint_name"]
-                    if loc["variants"]
-                    else "unknown"
-                )
-                added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                added_by_project[project_name] = (
-                    added_by_project.get(project_name, 0) + 1
-                )
-
-            for loc in flaky_diffs.get("removed", []):
-                total_removed += 1
-                lint_name = (
-                    loc["variants"][0]["diagnostic"]["lint_name"]
-                    if loc["variants"]
-                    else "unknown"
-                )
-                removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                removed_by_project[project_name] = (
-                    removed_by_project.get(project_name, 0) + 1
-                )
-
-            for change in flaky_diffs.get("changed", []):
-                total_changed += 1
-                lint_name = (
-                    change["old"]["variants"][0]["diagnostic"]["lint_name"]
-                    if change["old"]["variants"]
-                    else "unknown"
-                )
-                changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
-                changed_by_project[project_name] = (
-                    changed_by_project.get(project_name, 0) + 1
-                )
+            # Flaky location diffs are excluded from statistics — they
+            # are still shown in the HTML report for manual inspection.
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
@@ -854,16 +808,14 @@ class DiagnosticDiff:
             removed_count = removed_by_lint.get(lint_name, 0)
             changed_count = changed_by_lint.get(lint_name, 0)
             total_change = added_count + removed_count + changed_count
-            merged_lints.append(
-                {
-                    "lint_name": lint_name,
-                    "added": added_count,
-                    "removed": removed_count,
-                    "changed": changed_count,
-                    "net_change": added_count - removed_count,
-                    "total_change": total_change,
-                }
-            )
+            merged_lints.append({
+                "lint_name": lint_name,
+                "added": added_count,
+                "removed": removed_count,
+                "changed": changed_count,
+                "net_change": added_count - removed_count,
+                "total_change": total_change,
+            })
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
@@ -881,16 +833,14 @@ class DiagnosticDiff:
             removed_count = removed_by_project.get(project_name, 0)
             changed_count = changed_by_project.get(project_name, 0)
             total_change = added_count + removed_count + changed_count
-            merged_projects.append(
-                {
-                    "project_name": project_name,
-                    "added": added_count,
-                    "removed": removed_count,
-                    "changed": changed_count,
-                    "net_change": added_count - removed_count,
-                    "total_change": total_change,
-                }
-            )
+            merged_projects.append({
+                "project_name": project_name,
+                "added": added_count,
+                "removed": removed_count,
+                "changed": changed_count,
+                "net_change": added_count - removed_count,
+                "total_change": total_change,
+            })
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
@@ -901,29 +851,11 @@ class DiagnosticDiff:
             if output.get("flaky_diagnostics"):
                 flaky_project_names.add(output["project"])
 
-        # Add flaky label to project entries, and include flaky-only projects
+        # Add flaky label to project entries
         for project_data in merged_projects:
             project_data["is_flaky"] = (
                 project_data["project_name"] in flaky_project_names
             )
-
-        # Add projects that are flaky but have no diffstat changes
-        projects_in_merged = {p["project_name"] for p in merged_projects}
-        merged_projects.extend(
-            {
-                "project_name": project_name,
-                "added": 0,
-                "removed": 0,
-                "changed": 0,
-                "net_change": 0,
-                "total_change": 0,
-                "is_flaky": True,
-            }
-            for project_name in sorted(flaky_project_names - projects_in_merged)
-        )
-
-        # Re-sort: flaky-only projects (0 total change) go last
-        merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
         return {
             "total_added": total_added,
@@ -986,23 +918,6 @@ class DiagnosticDiff:
             title += ": new panics/timeouts detected ❌"
         return title
 
-    def _format_flaky_location(self, loc: dict) -> str:
-        variants = " | ".join(
-            self._format_short_diagnostic(variant["diagnostic"])
-            for variant in loc["variants"]
-        )
-        return f"{loc['path']}:{loc['line']}:{loc['column']} {{{variants}}}"
-
-    def _project_header(
-        self, project_name: str, project_location: str | None, *, is_flaky: bool
-    ) -> str:
-        if project_location:
-            location = f"FLAKY, {project_location}" if is_flaky else project_location
-            return f"{project_name} ({location})"
-        if is_flaky:
-            return f"{project_name} (FLAKY)"
-        return project_name
-
     def _render_raw_diff_sections(
         self, sections: dict[str, list[tuple[list[str], bool]]]
     ) -> list[str]:
@@ -1018,27 +933,41 @@ class DiagnosticDiff:
 
         return lines
 
+    def _has_flaky_diagnostics(self) -> bool:
+        """Check whether any flaky diagnostics were omitted from the raw diff."""
+        if any(
+            project.get("flaky_diagnostics")
+            for project in chain(
+                self.diffs["removed_projects"], self.diffs["added_projects"]
+            )
+        ):
+            return True
+        for project in self.diffs["modified_projects"]:
+            flaky_diffs = project.get("flaky_diffs", {})
+            if (
+                flaky_diffs.get("added")
+                or flaky_diffs.get("removed")
+                or flaky_diffs.get("changed")
+            ):
+                return True
+        return False
+
     def _raw_diff_sections(
         self,
-    ) -> tuple[dict[str, list[tuple[list[str], bool]]], int, bool]:
+    ) -> tuple[dict[str, list[tuple[list[str], bool]]], int]:
         sections: dict[str, list[tuple[list[str], bool]]] = {}
-        omitted_flaky_projects = False
 
         def add_entry(
             project_name: str,
             project_location: str | None,
             lines: list[str],
             *,
-            is_flaky: bool = False,
             counts_as_change: bool = True,
         ) -> None:
-            nonlocal omitted_flaky_projects
-            if is_flaky:
-                omitted_flaky_projects = True
-                return
-            header = self._project_header(
-                project_name, project_location, is_flaky=is_flaky
-            )
+            if project_location:
+                header = f"{project_name} ({project_location})"
+            else:
+                header = project_name
             sections.setdefault(header, []).append((lines, counts_as_change))
 
         for project in self.diffs["failed_projects"]:
@@ -1056,45 +985,24 @@ class DiagnosticDiff:
         for project in self.diffs["removed_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
                 add_entry(
                     project_name,
                     project_location,
                     [f"- {self._format_short_diagnostic(diag)}"],
-                    is_flaky=is_flaky,
                 )
-            for loc in project.get("flaky_diagnostics", []):
-                add_entry(
-                    project_name,
-                    project_location,
-                    [f"- {self._format_flaky_location(loc)}"],
-                    is_flaky=True,
-                )
-
         for project in self.diffs["added_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
                 add_entry(
                     project_name,
                     project_location,
                     [f"+ {self._format_short_diagnostic(diag)}"],
-                    is_flaky=is_flaky,
                 )
-            for loc in project.get("flaky_diagnostics", []):
-                add_entry(
-                    project_name,
-                    project_location,
-                    [f"+ {self._format_flaky_location(loc)}"],
-                    is_flaky=True,
-                )
-
         for project in self.diffs["modified_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diffs"))
             diffs = project["diffs"]
 
             for file_data in diffs.get("removed_files", []):
@@ -1103,7 +1011,6 @@ class DiagnosticDiff:
                         project_name,
                         project_location,
                         [f"- {self._format_short_diagnostic(diag)}"],
-                        is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("added_files", []):
@@ -1112,7 +1019,6 @@ class DiagnosticDiff:
                         project_name,
                         project_location,
                         [f"+ {self._format_short_diagnostic(diag)}"],
-                        is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("modified_files", []):
@@ -1122,7 +1028,6 @@ class DiagnosticDiff:
                             project_name,
                             project_location,
                             [f"- {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("added_lines", []):
@@ -1131,7 +1036,6 @@ class DiagnosticDiff:
                             project_name,
                             project_location,
                             [f"+ {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("modified_lines", []):
@@ -1143,50 +1047,19 @@ class DiagnosticDiff:
                                 f"- {self._format_short_diagnostic(diff_item['old'])}",
                                 f"+ {self._format_short_diagnostic(diff_item['new'])}",
                             ],
-                            is_flaky=is_flaky,
                         )
                     for diag in line_data["removed"]:
                         add_entry(
                             project_name,
                             project_location,
                             [f"- {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
                     for diag in line_data["added"]:
                         add_entry(
                             project_name,
                             project_location,
                             [f"+ {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
-
-            flaky_diffs = project.get("flaky_diffs", {})
-            for loc in flaky_diffs.get("removed", []):
-                add_entry(
-                    project_name,
-                    project_location,
-                    [f"- {self._format_flaky_location(loc)}"],
-                    is_flaky=True,
-                )
-
-            for loc in flaky_diffs.get("added", []):
-                add_entry(
-                    project_name,
-                    project_location,
-                    [f"+ {self._format_flaky_location(loc)}"],
-                    is_flaky=True,
-                )
-
-            for change in flaky_diffs.get("changed", []):
-                add_entry(
-                    project_name,
-                    project_location,
-                    [
-                        f"- {self._format_flaky_location(change['old'])}",
-                        f"+ {self._format_flaky_location(change['new'])}",
-                    ],
-                    is_flaky=True,
-                )
 
         total_changes = sum(
             1
@@ -1194,7 +1067,7 @@ class DiagnosticDiff:
             for _lines, counts_as_change in entries
             if counts_as_change
         )
-        return sections, total_changes, omitted_flaky_projects
+        return sections, total_changes
 
     def render_statistics_markdown(
         self,
@@ -1265,15 +1138,13 @@ class DiagnosticDiff:
                     f"{row['new_time']:.2f}s | {row['change_percent']:+.0f}% |\n"
                 )
 
-        raw_diff_sections, total_raw_diff_changes, omitted_flaky_projects = (
-            self._raw_diff_sections()
-        )
+        raw_diff_sections, total_raw_diff_changes = self._raw_diff_sections()
         raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
-        if omitted_flaky_projects:
+        if self._has_flaky_diagnostics():
             markdown_content += (
-                "\n\n_Changes in flaky projects detected. "
-                "Raw diff output excludes flaky projects; see the HTML report for details._"
+                "\n\n_Flaky changes detected. "
+                "This PR summary excludes flaky changes; see the HTML report for details._"
             )
 
         if not raw_diff_lines:
@@ -1533,22 +1404,20 @@ class DiagnosticDiff:
                 is_failed = False
                 failure_type = None
 
-            timing_data.append(
-                {
-                    "project": project_name,
-                    "old_time": old_time,
-                    "new_time": new_time,
-                    "old_return_code": old_return_code,
-                    "new_return_code": new_return_code,
-                    "factor": factor,
-                    "is_failed": is_failed,
-                    "failure_type": failure_type,
-                    "old_is_timeout": old_is_timeout,
-                    "new_is_timeout": new_is_timeout,
-                    "old_is_abnormal": old_is_abnormal,
-                    "new_is_abnormal": new_is_abnormal,
-                }
-            )
+            timing_data.append({
+                "project": project_name,
+                "old_time": old_time,
+                "new_time": new_time,
+                "old_return_code": old_return_code,
+                "new_return_code": new_return_code,
+                "factor": factor,
+                "is_failed": is_failed,
+                "failure_type": failure_type,
+                "old_is_timeout": old_is_timeout,
+                "new_is_timeout": new_is_timeout,
+                "old_is_abnormal": old_is_abnormal,
+                "new_is_abnormal": new_is_abnormal,
+            })
 
         # Sort by failure type first (abnormal exits, then timeouts, then normal), then by factor significance
         def sort_key(x):
@@ -1624,15 +1493,13 @@ class DiagnosticDiff:
             if old_time is None or new_time is None:
                 continue
 
-            large_changes.append(
-                {
-                    "project": row["project"],
-                    "old_time": old_time,
-                    "new_time": new_time,
-                    "factor": factor,
-                    "change_percent": (factor - 1.0) * 100,
-                }
-            )
+            large_changes.append({
+                "project": row["project"],
+                "old_time": old_time,
+                "new_time": new_time,
+                "factor": factor,
+                "change_percent": (factor - 1.0) * 100,
+            })
 
         large_changes.sort(key=lambda row: abs(row["factor"] - 1.0), reverse=True)
         return large_changes
