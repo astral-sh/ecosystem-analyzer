@@ -279,6 +279,18 @@ def analyze(
     type=int,
     required=False,
 )
+@click.option(
+    "--ty-binary-old",
+    help="Path to a pre-built ty binary for the old commit (skips building)",
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    required=False,
+)
+@click.option(
+    "--ty-binary-new",
+    help="Path to a pre-built ty binary for the new commit (skips building)",
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    required=False,
+)
 @click.pass_context
 def diff(
     ctx,
@@ -293,12 +305,19 @@ def diff(
     exclude_newer: str | None,
     shard: int | None,
     num_shards: int | None,
+    ty_binary_old: Path | None,
+    ty_binary_new: Path | None,
 ) -> None:
     """
     Compare diagnostics between two commits.
     """
-    if ctx.obj["repository"] is None:
-        click.echo("Error: --repository is required for this command", err=True)
+    using_prebuilt = ty_binary_old is not None and ty_binary_new is not None
+    if ctx.obj["repository"] is None and not using_prebuilt:
+        click.echo(
+            "Error: --repository is required unless both --ty-binary-old and"
+            " --ty-binary-new are provided",
+            err=True,
+        )
         ctx.exit(1)
 
     if (shard is None) != (num_shards is None):
@@ -340,16 +359,23 @@ def diff(
         exclude_newer=exclude_newer,
     )
 
-    # Build old ty first — this overlaps with background project installation
-    manager.build(old)
+    # Build (or use pre-built) old ty — building overlaps with background
+    # project installation
+    if ty_binary_old is not None:
+        manager.use_prebuilt(ty_binary_old, old)
+    else:
+        manager.build(old)
 
     # Run for old commit with old projects
     manager.activate(project_names_old)
     run_outputs_old = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_old, output_old)
 
-    # Run for new commit with new projects (incremental build, near-instant)
-    manager.build(new)
+    # Build (or use pre-built) new ty — incremental build is near-instant
+    if ty_binary_new is not None:
+        manager.use_prebuilt(ty_binary_new, new)
+    else:
+        manager.build(new)
     manager.activate(project_names_new)
     run_outputs_new = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_new, output_new)

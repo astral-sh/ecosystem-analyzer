@@ -1,7 +1,11 @@
+from pathlib import Path
+
+import pytest
 from click.testing import CliRunner
 from git import Repo
 
 from ecosystem_analyzer.main import cli, shard_project_lists
+from ecosystem_analyzer.ty import Ty
 
 
 def test_two_shards_partition_all_projects():
@@ -126,3 +130,59 @@ def test_num_shards_without_shard_is_error(tmp_path):
     result = _invoke_diff(tmp_path, ["--num-shards", "2"])
     assert result.exit_code != 0
     assert "--shard and --num-shards must be used together" in result.output
+
+
+# -- Prebuilt binary tests --
+
+
+def test_use_prebuilt_sets_executable_and_commit():
+    """use_prebuilt sets the executable path and overrides the commit SHA."""
+    ty = Ty()
+    binary = Path("/tmp/ty-prebuilt")
+    ty.use_prebuilt(binary, "abc123")
+    assert ty.executable == binary.resolve()
+    assert ty.commit_sha == "abc123"
+
+
+def test_use_prebuilt_overrides_previous_commit():
+    """Calling use_prebuilt twice updates the commit SHA."""
+    ty = Ty()
+    ty.use_prebuilt(Path("/tmp/ty-old"), "aaa")
+    ty.use_prebuilt(Path("/tmp/ty-new"), "bbb")
+    assert ty.commit_sha == "bbb"
+
+
+def test_commit_sha_without_repo_or_override_raises():
+    """Accessing commit_sha with no repo and no override is an error."""
+    ty = Ty()
+    with pytest.raises(RuntimeError, match="No commit SHA available"):
+        _ = ty.commit_sha
+
+
+def test_commit_sha_falls_back_to_repo(tmp_path):
+    """Without an override, commit_sha reads from the repository HEAD."""
+    repo = Repo.init(tmp_path)
+    (tmp_path / "f.txt").write_text("x")
+    repo.index.add(["f.txt"])
+    repo.index.commit("init")
+    ty = Ty(repository=repo)
+    assert ty.commit_sha == repo.head.commit.hexsha
+
+
+def test_diff_without_repository_requires_prebuilt_binaries(tmp_path):
+    """Omitting --repository is an error unless both --ty-binary-* are given."""
+    projects = tmp_path / "projects.txt"
+    projects.write_text("a\nb\n")
+    runner = CliRunner()
+    result = runner.invoke(
+        cli,
+        [
+            "diff",
+            "--projects-old", str(projects),
+            "--projects-new", str(projects),
+            "--old", "abc",
+            "--new", "def",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "--repository is required" in result.output

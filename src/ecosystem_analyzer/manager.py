@@ -39,7 +39,7 @@ class Manager:
     def __init__(
         self,
         *,
-        ty_repo: Repo,
+        ty_repo: Repo | None = None,
         target_dir: Path | None,
         project_names: list[str],
         profile: str = "dev",
@@ -149,6 +149,10 @@ class Manager:
     def build(self, commit: str | Commit) -> None:
         """Build ty for a commit. Can be called while projects are still installing."""
         self._ty.compile_for_commit(commit)
+
+    def use_prebuilt(self, binary_path: Path, commit_sha: str) -> None:
+        """Use a pre-built ty binary instead of building from source."""
+        self._ty.use_prebuilt(binary_path, commit_sha)
 
     def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
         """Build ty for a commit and run it on active projects.
