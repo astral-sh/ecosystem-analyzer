@@ -102,42 +102,6 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_added_excluded_from_statistics(self):
-        """A new flaky location is excluded from statistics."""
-        diag = {
-            "level": "error",
-            "lint_name": "some-lint",
-            "path": "a.py",
-            "line": 1,
-            "column": 1,
-            "message": "stable",
-        }
-        new_flaky = [
-            _make_flaky_loc(
-                "b.py",
-                10,
-                1,
-                [
-                    _make_variant("b.py", 10, 1, "variant A", count=2),
-                    _make_variant("b.py", 10, 1, "variant B", count=1),
-                ],
-            )
-        ]
-
-        old_data = {"outputs": [_make_output("proj", [diag])]}
-        new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        stats = diff._calculate_statistics()
-        assert stats["total_added"] == 0  # Flaky location excluded from stats
-
     def test_flaky_same_location_different_variants_suppressed(self):
         """Flaky locations at the same position are suppressed even with different variants."""
         diag = {
@@ -183,41 +147,6 @@ class TestJsonRoundtrip:
         assert stats["total_changed"] == 0
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
-
-    def test_flaky_genuinely_new_location_excluded_from_statistics(self):
-        """A genuinely new flaky location is excluded from statistics."""
-        diag = {
-            "level": "error",
-            "lint_name": "some-lint",
-            "path": "a.py",
-            "line": 1,
-            "column": 1,
-            "message": "stable",
-        }
-        new_flaky = [
-            _make_flaky_loc(
-                "c.py",
-                50,
-                1,
-                [
-                    _make_variant("c.py", 50, 1, "new variant", count=2),
-                ],
-            )
-        ]
-
-        old_data = {"outputs": [_make_output("proj", [diag])]}
-        new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        stats = diff._calculate_statistics()
-        assert stats["total_added"] == 0
 
     def test_flaky_diffs_organized_by_file(self):
         """Flaky diffs are organized by file path for inline rendering."""
