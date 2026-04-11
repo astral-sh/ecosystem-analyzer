@@ -146,6 +146,13 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=False,
 )
+@click.option(
+    "--exclude-newer",
+    help="ISO 8601 timestamp cutoff for reproducibility: pin git repos to the latest commit "
+    "at or before this time, and pass --exclude-newer to uv pip install",
+    type=str,
+    required=False,
+)
 @click.pass_context
 def analyze(
     ctx,
@@ -154,6 +161,7 @@ def analyze(
     output: str,
     profile: str,
     projects_flaky: str | None,
+    exclude_newer: str | None,
 ) -> None:
     """
     Analyze Python ecosystem projects with ty and collect diagnostics.
@@ -174,6 +182,7 @@ def analyze(
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
+        exclude_newer=exclude_newer,
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -228,6 +237,13 @@ def analyze(
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=False,
 )
+@click.option(
+    "--exclude-newer",
+    help="ISO 8601 timestamp cutoff for reproducibility: pin git repos to the latest commit "
+    "at or before this time, and pass --exclude-newer to uv pip install",
+    type=str,
+    required=False,
+)
 @click.pass_context
 def diff(
     ctx,
@@ -239,6 +255,7 @@ def diff(
     output_new: str,
     profile: str,
     projects_flaky: str | None,
+    exclude_newer: str | None,
 ) -> None:
     """
     Compare diagnostics between two commits.
@@ -263,6 +280,7 @@ def diff(
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
+        exclude_newer=exclude_newer,
     )
 
     # Build old ty first — this overlaps with background project installation
@@ -498,13 +516,6 @@ def generate_timing_diff(
     help="Show the raw diff inline when it has fewer than this many changes",
 )
 @click.option(
-    "--max-raw-diff-lines",
-    type=int,
-    default=100,
-    show_default=True,
-    help="Maximum number of raw diff changes to include in Markdown before sampling",
-)
-@click.option(
     "--old-name",
     type=str,
     help="Label for the old version (e.g., branch name, commit, or description)",
@@ -520,22 +531,14 @@ def generate_timing_diff(
     show_default=True,
     help="Exit with a non-zero status if a project regresses from exit code 0/1 to another exit code or a timeout.",
 )
-@click.option(
-    "--exclude-flaky/--no-exclude-flaky",
-    default=False,
-    show_default=True,
-    help="Exclude flaky diagnostics from the summary table.",
-)
 def generate_diff_statistics(
     old_file: str,
     new_file: str,
     output: str,
     inline_threshold: int,
-    max_raw_diff_lines: int,
     old_name: str | None,
     new_name: str | None,
     fail_on_new_abnormal_exits: bool,
-    exclude_flaky: bool,
 ) -> None:
     """
     Generate a Markdown statistics report of diagnostic differences between two JSON files.
@@ -546,8 +549,6 @@ def generate_diff_statistics(
     diff = DiagnosticDiff(old_file, new_file, old_name=old_name, new_name=new_name)
     markdown_content = diff.render_statistics_markdown(
         inline_threshold=inline_threshold,
-        max_raw_diff_lines=max_raw_diff_lines,
-        exclude_flaky=exclude_flaky,
     )
 
     with open(output, "w") as f:

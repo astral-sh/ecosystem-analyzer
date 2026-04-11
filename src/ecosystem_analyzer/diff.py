@@ -54,6 +54,13 @@ class DiagnosticDiff:
     RAW_DIFF_SAMPLE_SEED = 137
     LARGE_TIMING_CHANGE_THRESHOLD = 0.5
 
+    # GitHub's comment body limit is 65,536 characters. We keep a small
+    # margin so surrounding markup (details/summary tags, etc.) and any
+    # future additions don't push us over. This margin is effectively a
+    # safety buffer _on top_ of the calculated size of the summary table.
+    GITHUB_COMMENT_CHAR_LIMIT = 65_536
+    GITHUB_COMMENT_CHAR_MARGIN = 1_024
+
     def __init__(
         self,
         old_file: str,
@@ -680,15 +687,12 @@ class DiagnosticDiff:
         diff = difflib.ndiff(old_text.splitlines(), new_text.splitlines())
         return list(diff)
 
-    def _calculate_statistics(
-        self, *, exclude_flaky: bool = False
-    ) -> DiffStatistics:
+    def _calculate_statistics(self) -> DiffStatistics:
         """Calculate statistics about added, removed, and changed diagnostics.
 
-        If *exclude_flaky* is True, flaky diagnostic diffs are excluded from
-        the per-lint and per-project tables as well as the totals.  Stable
-        diagnostics from projects that happen to also have flaky data are
-        still counted.
+        Flaky diagnostic diffs are excluded from the per-lint and per-project
+        tables as well as the totals.  Stable diagnostics from projects that
+        happen to also have flaky data are still counted.
         """
         # Intermediate dictionaries (local variables)
         added_by_lint: dict[str, int] = {}
@@ -803,46 +807,8 @@ class DiagnosticDiff:
                             removed_by_project.get(project_name, 0) + 1
                         )
 
-            # Count flaky location diffs (each location = 1 diagnostic).
-            # When exclude_flaky is set, skip these entirely.
-            if not exclude_flaky:
-                flaky_diffs = project.get("flaky_diffs", {})
-                for loc in flaky_diffs.get("added", []):
-                    total_added += 1
-                    # Use the first variant's lint_name as representative
-                    lint_name = (
-                        loc["variants"][0]["diagnostic"]["lint_name"]
-                        if loc["variants"]
-                        else "unknown"
-                    )
-                    added_by_lint[lint_name] = added_by_lint.get(lint_name, 0) + 1
-                    added_by_project[project_name] = (
-                        added_by_project.get(project_name, 0) + 1
-                    )
-
-                for loc in flaky_diffs.get("removed", []):
-                    total_removed += 1
-                    lint_name = (
-                        loc["variants"][0]["diagnostic"]["lint_name"]
-                        if loc["variants"]
-                        else "unknown"
-                    )
-                    removed_by_lint[lint_name] = removed_by_lint.get(lint_name, 0) + 1
-                    removed_by_project[project_name] = (
-                        removed_by_project.get(project_name, 0) + 1
-                    )
-
-                for change in flaky_diffs.get("changed", []):
-                    total_changed += 1
-                    lint_name = (
-                        change["old"]["variants"][0]["diagnostic"]["lint_name"]
-                        if change["old"]["variants"]
-                        else "unknown"
-                    )
-                    changed_by_lint[lint_name] = changed_by_lint.get(lint_name, 0) + 1
-                    changed_by_project[project_name] = (
-                        changed_by_project.get(project_name, 0) + 1
-                    )
+            # Flaky location diffs are excluded from statistics — they
+            # are still shown in the HTML report for manual inspection.
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
@@ -940,7 +906,7 @@ class DiagnosticDiff:
     def _format_short_diagnostic(self, diag: Diagnostic) -> str:
         return (
             f"{diag['path']}:{diag['line']}:{diag['column']} "
-            f"[{diag['level']}] [{diag['lint_name']}] {diag['message']}"
+            f"{diag['level']}[{diag['lint_name']}] {diag['message']}"
         )
 
     def introduced_project_failures(self) -> list[str]:
@@ -960,6 +926,35 @@ class DiagnosticDiff:
 
         return introduced
 
+    def has_new_panics(self) -> bool:
+        """Check if any project has new panic messages that weren't present before."""
+        for project in self.diffs.get("failed_projects", []):
+            old_panics = project.get("old_panic_messages", [])
+            new_panics = project.get("new_panic_messages", [])
+            if set(new_panics) - set(old_panics):
+                return True
+        return False
+
+    def has_new_timeouts(self) -> bool:
+        """Check if any project newly timed out (was not a timeout before)."""
+        return any(
+            project["new_status"] == "timeout" and project["old_status"] != "timeout"
+            for project in self.diffs.get("failed_projects", [])
+        )
+
+    def generate_comment_title(self) -> str:
+        """Generate the PR comment title with status indicators for panics and timeouts."""
+        title = "## `ecosystem-analyzer` results"
+        new_panics = self.has_new_panics()
+        new_timeouts = self.has_new_timeouts()
+        if new_panics and not new_timeouts:
+            title += ": new panics detected ❌"
+        elif new_timeouts and not new_panics:
+            title += ": new timeouts detected ❌"
+        elif new_panics and new_timeouts:
+            title += ": new panics/timeouts detected ❌"
+        return title
+
     def _format_flaky_location(self, loc: dict) -> str:
         variants = " | ".join(
             self._format_short_diagnostic(variant["diagnostic"])
@@ -968,13 +963,10 @@ class DiagnosticDiff:
         return f"{loc['path']}:{loc['line']}:{loc['column']} {{{variants}}}"
 
     def _project_header(
-        self, project_name: str, project_location: str | None, *, is_flaky: bool
+        self, project_name: str, project_location: str | None
     ) -> str:
         if project_location:
-            location = f"FLAKY, {project_location}" if is_flaky else project_location
-            return f"{project_name} ({location})"
-        if is_flaky:
-            return f"{project_name} (FLAKY)"
+            return f"{project_name} ({project_location})"
         return project_name
 
     def _render_raw_diff_sections(
@@ -996,7 +988,7 @@ class DiagnosticDiff:
         self,
     ) -> tuple[dict[str, list[tuple[list[str], bool]]], int, bool]:
         sections: dict[str, list[tuple[list[str], bool]]] = {}
-        omitted_flaky_projects = False
+        omitted_flaky_diagnostics = False
 
         def add_entry(
             project_name: str,
@@ -1006,13 +998,11 @@ class DiagnosticDiff:
             is_flaky: bool = False,
             counts_as_change: bool = True,
         ) -> None:
-            nonlocal omitted_flaky_projects
+            nonlocal omitted_flaky_diagnostics
             if is_flaky:
-                omitted_flaky_projects = True
+                omitted_flaky_diagnostics = True
                 return
-            header = self._project_header(
-                project_name, project_location, is_flaky=is_flaky
-            )
+            header = self._project_header(project_name, project_location)
             sections.setdefault(header, []).append((lines, counts_as_change))
 
         for project in self.diffs["failed_projects"]:
@@ -1030,13 +1020,11 @@ class DiagnosticDiff:
         for project in self.diffs["removed_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
                 add_entry(
                     project_name,
                     project_location,
                     [f"- {self._format_short_diagnostic(diag)}"],
-                    is_flaky=is_flaky,
                 )
             for loc in project.get("flaky_diagnostics", []):
                 add_entry(
@@ -1049,13 +1037,11 @@ class DiagnosticDiff:
         for project in self.diffs["added_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diagnostics"))
             for diag in project["diagnostics"]:
                 add_entry(
                     project_name,
                     project_location,
                     [f"+ {self._format_short_diagnostic(diag)}"],
-                    is_flaky=is_flaky,
                 )
             for loc in project.get("flaky_diagnostics", []):
                 add_entry(
@@ -1068,7 +1054,6 @@ class DiagnosticDiff:
         for project in self.diffs["modified_projects"]:
             project_name = project["project"]
             project_location = project.get("project_location")
-            is_flaky = bool(project.get("flaky_diffs"))
             diffs = project["diffs"]
 
             for file_data in diffs.get("removed_files", []):
@@ -1077,7 +1062,6 @@ class DiagnosticDiff:
                         project_name,
                         project_location,
                         [f"- {self._format_short_diagnostic(diag)}"],
-                        is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("added_files", []):
@@ -1086,7 +1070,6 @@ class DiagnosticDiff:
                         project_name,
                         project_location,
                         [f"+ {self._format_short_diagnostic(diag)}"],
-                        is_flaky=is_flaky,
                     )
 
             for file_data in diffs.get("modified_files", []):
@@ -1096,7 +1079,6 @@ class DiagnosticDiff:
                             project_name,
                             project_location,
                             [f"- {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("added_lines", []):
@@ -1105,7 +1087,6 @@ class DiagnosticDiff:
                             project_name,
                             project_location,
                             [f"+ {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
 
                 for line_data in file_data["diffs"].get("modified_lines", []):
@@ -1117,21 +1098,18 @@ class DiagnosticDiff:
                                 f"- {self._format_short_diagnostic(diff_item['old'])}",
                                 f"+ {self._format_short_diagnostic(diff_item['new'])}",
                             ],
-                            is_flaky=is_flaky,
                         )
                     for diag in line_data["removed"]:
                         add_entry(
                             project_name,
                             project_location,
                             [f"- {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
                     for diag in line_data["added"]:
                         add_entry(
                             project_name,
                             project_location,
                             [f"+ {self._format_short_diagnostic(diag)}"],
-                            is_flaky=is_flaky,
                         )
 
             flaky_diffs = project.get("flaky_diffs", {})
@@ -1168,19 +1146,17 @@ class DiagnosticDiff:
             for _lines, counts_as_change in entries
             if counts_as_change
         )
-        return sections, total_changes, omitted_flaky_projects
+        return sections, total_changes, omitted_flaky_diagnostics
 
     def render_statistics_markdown(
         self,
         *,
         inline_threshold: int = 15,
-        max_raw_diff_lines: int = 100,
-        exclude_flaky: bool = False,
     ) -> str:
-        statistics = self._calculate_statistics(exclude_flaky=exclude_flaky)
+        statistics = self._calculate_statistics()
         failed_projects = self.diffs.get("failed_projects", [])
 
-        markdown_content = ""
+        markdown_content = self.generate_comment_title() + "\n\n"
 
         if failed_projects:
             markdown_content += "**Failing projects**:\n\n"
@@ -1241,26 +1217,12 @@ class DiagnosticDiff:
                     f"{row['new_time']:.2f}s | {row['change_percent']:+.0f}% |\n"
                 )
 
-        raw_diff_sections, total_raw_diff_changes, omitted_flaky_projects = (
+        raw_diff_sections, total_raw_diff_changes, omitted_flaky_diagnostics = (
             self._raw_diff_sections()
         )
         raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
-        # Check whether any flaky diagnostic diffs were excluded from the
-        # summary table so we can tell the reader.
-        excluded_flaky_from_table = False
-        if exclude_flaky:
-            for project in self.diffs["modified_projects"]:
-                flaky_diffs = project.get("flaky_diffs", {})
-                if (
-                    flaky_diffs.get("added")
-                    or flaky_diffs.get("removed")
-                    or flaky_diffs.get("changed")
-                ):
-                    excluded_flaky_from_table = True
-                    break
-
-        if omitted_flaky_projects or excluded_flaky_from_table:
+        if omitted_flaky_diagnostics:
             markdown_content += (
                 "\n\n_Changes in flaky projects detected. "
                 "This PR summary excludes flaky changes; see the HTML report for details._"
@@ -1271,21 +1233,72 @@ class DiagnosticDiff:
 
         markdown_content += "\n\n"
 
+        # Determine the character budget available for the raw diff block.
+        # We account for the wrapping markup (details/summary tags, code
+        # fence, sampling note) so that the final comment stays within
+        # GitHub's character limit.
+        char_budget = (
+            self.GITHUB_COMMENT_CHAR_LIMIT
+            - self.GITHUB_COMMENT_CHAR_MARGIN
+            - len(markdown_content)
+        )
+
+        # Reserve space for the static wrapper markup that surrounds the
+        # diff content.  We estimate generously so the budget refers to
+        # the diff payload itself.
+        #   - code fence: "```diff\n" + "\n```" = 12 chars
+        #   - details/summary (worst case): ~80 chars
+        #   - sampling note (worst case): ~120 chars
+        #   - extra newlines / padding: ~30 chars
+        _wrapper_overhead = 250
+        char_budget -= _wrapper_overhead
+
         displayed_lines = raw_diff_lines
         sampled = False
-        if total_raw_diff_changes > max_raw_diff_lines:
+        displayed_change_count = total_raw_diff_changes
+
+        full_diff_text = "\n".join(raw_diff_lines)
+        needs_sampling = len(full_diff_text) > char_budget
+
+        if needs_sampling:
             sampled = True
             rng = random.Random(self.RAW_DIFF_SAMPLE_SEED)
-            change_entries = [
-                (header, index)
-                for header, entries in sorted(raw_diff_sections.items())
-                for index, (_lines, counts_as_change) in enumerate(entries)
-                if counts_as_change
-            ]
-            selected_entries = {
-                sampled_entry
-                for sampled_entry in rng.sample(change_entries, k=max_raw_diff_lines)
-            }
+
+            # Build a list of (header, index, char_cost) for every
+            # change entry so we can greedily pick as many as fit.
+            change_entries: list[tuple[str, int, int]] = []
+            for header, entries in sorted(raw_diff_sections.items()):
+                for index, (lines, counts_as_change) in enumerate(entries):
+                    if counts_as_change:
+                        # +1 for the newline joining
+                        cost = sum(len(line) + 1 for line in lines)
+                        change_entries.append((header, index, cost))
+
+            # Shuffle deterministically, then greedily pick entries that
+            # fit within the character budget.
+            rng.shuffle(change_entries)
+
+            # Account for non-change lines (headers, etc.) that will
+            # always be included.  Compute their cost first.
+            non_change_cost = 0
+            for header, entries in sorted(raw_diff_sections.items()):
+                # header line + newline
+                non_change_cost += len(header) + 1
+                for _lines, counts_as_change in entries:
+                    if not counts_as_change:
+                        non_change_cost += sum(len(line) + 1 for line in _lines)
+                # trailing blank line between sections
+                non_change_cost += 1
+
+            remaining = char_budget - non_change_cost
+            selected_entries: set[tuple[str, int]] = set()
+            for entry_header, entry_index, cost in change_entries:
+                if cost <= remaining:
+                    selected_entries.add((entry_header, entry_index))
+                    remaining -= cost
+
+            displayed_change_count = len(selected_entries)
+
             displayed_sections: dict[str, list[tuple[list[str], bool]]] = {}
             for header, entries in sorted(raw_diff_sections.items()):
                 kept_entries = []
@@ -1301,7 +1314,7 @@ class DiagnosticDiff:
         if sampled:
             markdown_content += (
                 f"_Showing a random sample of "
-                f"{max_raw_diff_lines} of {total_raw_diff_changes} changes. "
+                f"{displayed_change_count} of {total_raw_diff_changes} changes. "
                 "See the HTML report for the full diff._\n\n"
             )
 
@@ -1313,7 +1326,7 @@ class DiagnosticDiff:
         else:
             summary = "Raw diff"
             if sampled:
-                summary += f" sample ({max_raw_diff_lines} of {total_raw_diff_changes} changes)"
+                summary += f" sample ({displayed_change_count} of {total_raw_diff_changes} changes)"
             else:
                 summary += f" ({total_raw_diff_changes} changes)"
             markdown_content += f"<details>\n<summary>{summary}</summary>\n\n"

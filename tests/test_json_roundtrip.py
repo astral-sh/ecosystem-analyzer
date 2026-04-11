@@ -102,8 +102,8 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_added_counts_as_one(self):
-        """A new flaky location counts as 1 added diagnostic regardless of variant count."""
+    def test_flaky_added_excluded_from_statistics(self):
+        """A new flaky location is excluded from statistics."""
         diag = {
             "level": "error",
             "lint_name": "some-lint",
@@ -136,7 +136,7 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
         stats = diff._calculate_statistics()
-        assert stats["total_added"] == 1  # One location, not two variants
+        assert stats["total_added"] == 0  # Flaky location excluded from stats
 
     def test_flaky_same_location_different_variants_suppressed(self):
         """Flaky locations at the same position are suppressed even with different variants."""
@@ -184,8 +184,8 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_genuinely_new_location(self):
-        """A flaky location at a position not seen on the other side counts as added."""
+    def test_flaky_genuinely_new_location_excluded_from_statistics(self):
+        """A genuinely new flaky location is excluded from statistics."""
         diag = {
             "level": "error",
             "lint_name": "some-lint",
@@ -217,7 +217,7 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
         stats = diff._calculate_statistics()
-        assert stats["total_added"] == 1
+        assert stats["total_added"] == 0
 
     def test_flaky_diffs_organized_by_file(self):
         """Flaky diffs are organized by file path for inline rendering."""
@@ -395,8 +395,8 @@ class TestJsonRoundtrip:
         assert "| `slow-project` | 10.00s | 15.00s | +50% |" in markdown
         assert "| `very-fast-project` | 10.00s | 5.00s | -50% |" in markdown
 
-    def test_exclude_flaky_omits_only_flaky_diffs_from_statistics(self):
-        """With exclude_flaky, flaky diffs are excluded but stable diffs from the same project are kept."""
+    def test_flaky_diffs_excluded_from_statistics(self):
+        """Flaky diffs are excluded from statistics but stable diffs from the same project are kept."""
         stable_diag = {
             "level": "error",
             "lint_name": "some-lint",
@@ -438,19 +438,15 @@ class TestJsonRoundtrip:
 
         diff = DiagnosticDiff(old_path, new_path)
 
-        # Without exclude_flaky: 1 stable added + 1 flaky added = 2
-        stats = diff._calculate_statistics(exclude_flaky=False)
-        assert stats["total_added"] == 2
-
-        # With exclude_flaky: only the stable diagnostic is counted
-        stats_excl = diff._calculate_statistics(exclude_flaky=True)
-        assert stats_excl["total_added"] == 1
+        # Only the stable diagnostic is counted; the flaky one is excluded.
+        stats = diff._calculate_statistics()
+        assert stats["total_added"] == 1
         lint_entry = next(
-            e for e in stats_excl["merged_by_lint"] if e["lint_name"] == "some-lint"
+            e for e in stats["merged_by_lint"] if e["lint_name"] == "some-lint"
         )
         assert lint_entry["added"] == 1
 
-    def test_exclude_flaky_keeps_stable_diffs_from_flaky_projects(self):
+    def test_stable_diffs_kept_from_flaky_projects(self):
         """Stable diagnostic changes from a project with flaky_runs > 1 are still counted."""
         diag = {
             "level": "error",
@@ -470,7 +466,7 @@ class TestJsonRoundtrip:
         }
 
         # Project has flaky_runs=5 but no flaky_diagnostics — the stable
-        # diagnostic change should still be counted even with exclude_flaky.
+        # diagnostic change should still be counted.
         old_data = {"outputs": [_make_output("proj", [diag], flaky_runs=5)]}
         new_data = {
             "outputs": [_make_output("proj", [diag, new_diag], flaky_runs=5)]
@@ -484,7 +480,7 @@ class TestJsonRoundtrip:
             new_path = f2.name
 
         diff = DiagnosticDiff(old_path, new_path)
-        stats = diff._calculate_statistics(exclude_flaky=True)
+        stats = diff._calculate_statistics()
         assert stats["total_added"] == 1
 
     def test_statistics_markdown_omits_small_or_failed_timing_changes(self):
