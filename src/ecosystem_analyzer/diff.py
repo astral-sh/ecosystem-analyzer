@@ -675,9 +675,9 @@ class DiagnosticDiff:
     def _calculate_statistics(self) -> DiffStatistics:
         """Calculate statistics about added, removed, and changed diagnostics.
 
-        Flaky diagnostic diffs are excluded from the per-lint and per-project
-        tables as well as the totals.  Stable diagnostics from projects that
-        happen to also have flaky data are still counted.
+        Flaky diagnostic diffs are excluded from the totals and breakdowns.
+        Stable diagnostics from projects that happen to also have flaky data
+        are still counted.
         """
         # Intermediate dictionaries (local variables)
         added_by_lint: dict[str, int] = {}
@@ -851,14 +851,11 @@ class DiagnosticDiff:
             if output.get("flaky_diagnostics"):
                 flaky_project_names.add(output["project"])
 
-        # Add flaky label to project entries, and include flaky-only projects
+        # Add flaky label to project entries
         for project_data in merged_projects:
             project_data["is_flaky"] = (
                 project_data["project_name"] in flaky_project_names
             )
-
-        # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
-        merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
         return {
             "total_added": total_added,
@@ -957,7 +954,7 @@ class DiagnosticDiff:
 
     def _raw_diff_sections(
         self,
-    ) -> tuple[dict[str, list[tuple[list[str], bool]]], int, bool]:
+    ) -> tuple[dict[str, list[tuple[list[str], bool]]], int]:
         sections: dict[str, list[tuple[list[str], bool]]] = {}
 
         def add_entry(
@@ -1070,7 +1067,7 @@ class DiagnosticDiff:
             for _lines, counts_as_change in entries
             if counts_as_change
         )
-        return sections, total_changes, self._has_flaky_diagnostics()
+        return sections, total_changes
 
     def render_statistics_markdown(
         self,
@@ -1141,12 +1138,10 @@ class DiagnosticDiff:
                     f"{row['new_time']:.2f}s | {row['change_percent']:+.0f}% |\n"
                 )
 
-        raw_diff_sections, total_raw_diff_changes, has_flaky_diagnostics = (
-            self._raw_diff_sections()
-        )
+        raw_diff_sections, total_raw_diff_changes = self._raw_diff_sections()
         raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
-        if has_flaky_diagnostics:
+        if self._has_flaky_diagnostics():
             markdown_content += (
                 "\n\n_Flaky changes detected. "
                 "This PR summary excludes flaky changes; see the HTML report for details._"

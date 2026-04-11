@@ -412,6 +412,49 @@ class TestJsonRoundtrip:
         stats = diff._calculate_statistics()
         assert stats["total_added"] == 1
 
+    def test_flaky_only_project_absent_from_project_breakdown(self):
+        """A project whose only changes are flaky does not appear in merged_by_project."""
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        new_flaky = [
+            _make_flaky_loc(
+                "b.py", 5, 1, [_make_variant("b.py", 5, 1, "flaky msg", count=2)]
+            )
+        ]
+
+        # "stable_proj" has a real diagnostic change; "flaky_proj" only has flaky changes.
+        old_data = {
+            "outputs": [
+                _make_output("stable_proj", [diag]),
+                _make_output("flaky_proj", [diag]),
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output("stable_proj", []),
+                _make_output("flaky_proj", [diag], new_flaky, flaky_runs=3),
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        stats = diff._calculate_statistics()
+        project_names = [p["project_name"] for p in stats["merged_by_project"]]
+        assert "stable_proj" in project_names
+        assert "flaky_proj" not in project_names
+
     def test_flaky_notice_shown_when_flaky_diagnostics_present(self):
         """The rendered markdown includes a notice when flaky diagnostics were excluded."""
         diag = {
