@@ -857,22 +857,7 @@ class DiagnosticDiff:
                 project_data["project_name"] in flaky_project_names
             )
 
-        # Add projects that are flaky but have no diffstat changes
-        projects_in_merged = {p["project_name"] for p in merged_projects}
-        merged_projects.extend(
-            {
-                "project_name": project_name,
-                "added": 0,
-                "removed": 0,
-                "changed": 0,
-                "net_change": 0,
-                "total_change": 0,
-                "is_flaky": True,
-            }
-            for project_name in sorted(flaky_project_names - projects_in_merged)
-        )
-
-        # Re-sort: flaky-only projects (0 total change) go last
+        # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
         return {
@@ -1163,7 +1148,7 @@ class DiagnosticDiff:
 
         if has_flaky_diagnostics:
             markdown_content += (
-                "\n\n_Changes in flaky projects detected. "
+                "\n\n_Flaky changes detected. "
                 "This PR summary excludes flaky changes; see the HTML report for details._"
             )
 

@@ -412,6 +412,71 @@ class TestJsonRoundtrip:
         stats = diff._calculate_statistics()
         assert stats["total_added"] == 1
 
+    def test_flaky_notice_shown_when_flaky_diagnostics_present(self):
+        """The rendered markdown includes a notice when flaky diagnostics were excluded."""
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        new_flaky = [
+            _make_flaky_loc(
+                "b.py", 5, 1, [_make_variant("b.py", 5, 1, "flaky msg", count=2)]
+            )
+        ]
+
+        old_data = {"outputs": [_make_output("proj", [diag])]}
+        new_data = {
+            "outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        markdown = diff.render_statistics_markdown()
+        assert "excludes flaky changes" in markdown
+
+    def test_flaky_notice_absent_when_no_flaky_diagnostics(self):
+        """The rendered markdown omits the flaky notice when there are no flaky diagnostics."""
+        diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "stable",
+        }
+        new_diag = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 2,
+            "column": 1,
+            "message": "new stable",
+        }
+
+        old_data = {"outputs": [_make_output("proj", [diag])]}
+        new_data = {"outputs": [_make_output("proj", [diag, new_diag])]}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        markdown = diff.render_statistics_markdown()
+        assert "flaky" not in markdown.lower()
+
     def test_statistics_markdown_omits_small_or_failed_timing_changes(self):
         old_data = {
             "outputs": [
