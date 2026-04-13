@@ -31,6 +31,15 @@ repos:
       - id: validate-pyproject
         priority: 0
 
+  - repo: https://github.com/python-jsonschema/check-jsonschema
+    rev: 0.37.1
+    hooks:
+      - id: check-renovate
+        language: python # means renovate will update the `additional_dependencies` for the hook
+        additional_dependencies:
+          - "json5"
+        priority: 0
+
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.8.1
     hooks:
