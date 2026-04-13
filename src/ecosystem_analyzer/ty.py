@@ -37,6 +37,9 @@ class Ty:
         self._commit_override: str | None = None
 
     def compile_for_commit(self, commit: str | Commit):
+        if self.repository is None:
+            raise RuntimeError("Cannot compile for commit without a repository")
+
         # Checkout the commit
         logger.debug(f"Checking out ty commit '{commit}'")
         self.repository.git.checkout(commit)
