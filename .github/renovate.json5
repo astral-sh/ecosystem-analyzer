@@ -7,7 +7,7 @@
   schedule: ["before 4am on Monday"],
   semanticCommits: "disabled",
   separateMajorMinor: false,
-  enabledManagers: ["pre-commit", "pep621"],
+  enabledManagers: ["pre-commit", "pep621", "github-actions"],
   "pre-commit": {
     enabled: true,
   },
@@ -15,6 +15,17 @@
     enabled: true,
   },
   packageRules: [
+    // Pin GitHub Actions to immutable SHAs.
+    {
+      matchDepTypes: ["action"],
+      pinDigests: true,
+    },
+    // Annotate GitHub Actions SHAs with a SemVer version.
+    {
+      extends: ["helpers:pinGitHubActionDigests"],
+      extractVersion: "^(?<version>v?\\d+\\.\\d+\\.\\d+)$",
+      versioning: "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+)\\.(?<patch>\\d+))?$",
+    },
     {
       groupName: "prek dependencies",
       matchManagers: ["pre-commit"],
