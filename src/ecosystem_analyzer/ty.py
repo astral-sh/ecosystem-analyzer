@@ -24,12 +24,17 @@ def _normalize_stderr(stderr: str) -> str | None:
 
 class Ty:
     def __init__(
-        self, repository: Repo, target_dir: Path | None, profile: str = "dev"
+        self,
+        repository: Repo | None = None,
+        target_dir: Path | None = None,
+        profile: str = "dev",
     ) -> None:
-        self.repository: Repo = repository
-        self.working_dir: Path = Path(self.repository.working_dir)
-        self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
+        self.repository: Repo | None = repository
+        if repository is not None:
+            self.working_dir: Path = Path(repository.working_dir)
+            self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
         self.profile: str = profile
+        self._commit_override: str | None = None
 
     def compile_for_commit(self, commit: str | Commit):
         # Checkout the commit
@@ -57,6 +62,22 @@ class Ty:
         # For other profiles, the directory name matches the profile name
         target_dir = "debug" if self.profile == "dev" else self.profile
         self.executable = self.cargo_target_dir / target_dir / "ty"
+        self._commit_override = None
+
+    def use_prebuilt(self, binary_path: Path, commit_sha: str) -> None:
+        """Use a pre-built ty binary instead of building from source."""
+        self.executable = binary_path.resolve()
+        self._commit_override = commit_sha
+
+    @property
+    def commit_sha(self) -> str:
+        if self._commit_override is not None:
+            return self._commit_override
+        if self.repository is None:
+            raise RuntimeError(
+                "No commit SHA available: no repository and no prebuilt override set"
+            )
+        return self.repository.head.commit.hexsha
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
         logger.info(f"Running ty on project '{project.name}'")
@@ -135,7 +156,7 @@ class Ty:
             {
                 "project": project.name,
                 "project_location": project.location,
-                "ty_commit": self.repository.head.commit.hexsha,
+                "ty_commit": self.commit_sha,
                 "diagnostics": diagnostics,
                 "time_s": execution_time,
                 "return_code": return_code,
@@ -205,7 +226,7 @@ class Ty:
             {
                 "project": project.name,
                 "project_location": project.location,
-                "ty_commit": self.repository.head.commit.hexsha,
+                "ty_commit": self.commit_sha,
                 "diagnostics": stable,
                 "flaky_runs": n,
                 "time_s": median_time,

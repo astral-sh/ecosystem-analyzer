@@ -24,6 +24,29 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def shard_project_lists(
+    project_names_old: list[str],
+    project_names_new: list[str],
+    shard: int,
+    num_shards: int,
+) -> tuple[list[str], list[str]]:
+    """Filter project lists to only include projects belonging to this shard.
+
+    Sharding is based on the sorted union of both lists, so each project
+    consistently lands in the same shard for both old and new.
+    """
+    all_names_sorted = sorted(set(project_names_old + project_names_new))
+    shard_set = {
+        name
+        for i, name in enumerate(all_names_sorted)
+        if i % num_shards == shard
+    }
+    return (
+        [n for n in project_names_old if n in shard_set],
+        [n for n in project_names_new if n in shard_set],
+    )
+
+
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
     "--repository",
@@ -244,6 +267,30 @@ def analyze(
     type=str,
     required=False,
 )
+@click.option(
+    "--shard",
+    help="Shard index (0-based) for splitting the project list across workers",
+    type=int,
+    required=False,
+)
+@click.option(
+    "--num-shards",
+    help="Total number of shards for splitting the project list",
+    type=int,
+    required=False,
+)
+@click.option(
+    "--ty-binary-old",
+    help="Path to a pre-built ty binary for the old commit (skips building)",
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    required=False,
+)
+@click.option(
+    "--ty-binary-new",
+    help="Path to a pre-built ty binary for the new commit (skips building)",
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    required=False,
+)
 @click.pass_context
 def diff(
     ctx,
@@ -256,19 +303,48 @@ def diff(
     profile: str,
     projects_flaky: str | None,
     exclude_newer: str | None,
+    shard: int | None,
+    num_shards: int | None,
+    ty_binary_old: Path | None,
+    ty_binary_new: Path | None,
 ) -> None:
     """
     Compare diagnostics between two commits.
     """
-    if ctx.obj["repository"] is None:
-        click.echo("Error: --repository is required for this command", err=True)
+    using_prebuilt = ty_binary_old is not None and ty_binary_new is not None
+    if ctx.obj["repository"] is None and not using_prebuilt:
+        click.echo(
+            "Error: --repository is required unless both --ty-binary-old and"
+            " --ty-binary-new are provided",
+            err=True,
+        )
         ctx.exit(1)
+
+    if (shard is None) != (num_shards is None):
+        raise click.UsageError("--shard and --num-shards must be used together")
+
+    if shard is not None and num_shards is not None:
+        if shard < 0 or shard >= num_shards:
+            raise click.UsageError(
+                f"--shard must be in range [0, {num_shards})"
+            )
 
     project_names_old = Path(projects_old).read_text().splitlines()
     project_names_new = Path(projects_new).read_text().splitlines()
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
     )
+
+    if num_shards is not None:
+        assert shard is not None
+        project_names_old, project_names_new = shard_project_lists(
+            project_names_old, project_names_new, shard, num_shards
+        )
+        logger.info(
+            f"Shard {shard}/{num_shards}: "
+            f"{len(project_names_old)} old projects, "
+            f"{len(project_names_new)} new projects"
+        )
 
     # Create union of both project lists for installation
     all_project_names = list(set(project_names_old + project_names_new))
@@ -283,16 +359,23 @@ def diff(
         exclude_newer=exclude_newer,
     )
 
-    # Build old ty first — this overlaps with background project installation
-    manager.build(old)
+    # Build (or use pre-built) old ty — building overlaps with background
+    # project installation
+    if ty_binary_old is not None:
+        manager.use_prebuilt(ty_binary_old, old)
+    else:
+        manager.build(old)
 
     # Run for old commit with old projects
     manager.activate(project_names_old)
     run_outputs_old = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_old, output_old)
 
-    # Run for new commit with new projects (incremental build, near-instant)
-    manager.build(new)
+    # Build (or use pre-built) new ty — incremental build is near-instant
+    if ty_binary_new is not None:
+        manager.use_prebuilt(ty_binary_new, new)
+    else:
+        manager.build(new)
     manager.activate(project_names_new)
     run_outputs_new = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_new, output_new)
