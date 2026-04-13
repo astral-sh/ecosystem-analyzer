@@ -249,7 +249,9 @@ class TestJsonRoundtrip:
 
     def test_introduced_project_failures_detects_new_timeouts(self):
         old_data = {"outputs": [_make_output("proj", [], time_s=1.5, return_code=0)]}
-        new_data = {"outputs": [_make_output("proj", [], time_s=None, return_code=None)]}
+        new_data = {
+            "outputs": [_make_output("proj", [], time_s=None, return_code=None)]
+        }
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
             json.dump(old_data, f1)
@@ -397,9 +399,7 @@ class TestJsonRoundtrip:
         # Project has flaky_runs=5 but no flaky_diagnostics — the stable
         # diagnostic change should still be counted.
         old_data = {"outputs": [_make_output("proj", [diag], flaky_runs=5)]}
-        new_data = {
-            "outputs": [_make_output("proj", [diag, new_diag], flaky_runs=5)]
-        }
+        new_data = {"outputs": [_make_output("proj", [diag, new_diag], flaky_runs=5)]}
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
             json.dump(old_data, f1)
@@ -472,9 +472,7 @@ class TestJsonRoundtrip:
         ]
 
         old_data = {"outputs": [_make_output("proj", [diag])]}
-        new_data = {
-            "outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]
-        }
+        new_data = {"outputs": [_make_output("proj", [diag], new_flaky, flaky_runs=3)]}
 
         with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
             json.dump(old_data, f1)

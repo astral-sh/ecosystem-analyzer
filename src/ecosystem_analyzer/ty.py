@@ -152,16 +152,14 @@ class Ty:
             stderr = None
             panic_messages = []
 
-        output = RunOutput(
-            {
-                "project": project.name,
-                "project_location": project.location,
-                "ty_commit": self.commit_sha,
-                "diagnostics": diagnostics,
-                "time_s": execution_time,
-                "return_code": return_code,
-            }
-        )
+        output = RunOutput({
+            "project": project.name,
+            "project_location": project.location,
+            "ty_commit": self.commit_sha,
+            "diagnostics": diagnostics,
+            "time_s": execution_time,
+            "return_code": return_code,
+        })
         if stderr:
             output["stderr"] = stderr
         if panic_messages:
@@ -222,17 +220,15 @@ class Ty:
         rc_counts = Counter(rc for rc in return_codes if rc is not None)
         most_common_rc = rc_counts.most_common(1)[0][0] if rc_counts else None
 
-        result = RunOutput(
-            {
-                "project": project.name,
-                "project_location": project.location,
-                "ty_commit": self.commit_sha,
-                "diagnostics": stable,
-                "flaky_runs": n,
-                "time_s": median_time,
-                "return_code": most_common_rc,
-            }
-        )
+        result = RunOutput({
+            "project": project.name,
+            "project_location": project.location,
+            "ty_commit": self.commit_sha,
+            "diagnostics": stable,
+            "flaky_runs": n,
+            "time_s": median_time,
+            "return_code": most_common_rc,
+        })
 
         if flaky_locations:
             result["flaky_diagnostics"] = flaky_locations

@@ -1,0 +1,50 @@
+fail_fast: false
+
+# Priority 0: Read-only hooks; trailing whitespace
+# Priority 1: end-of-file-fixer
+# Priority 2: prettier, Ruff linter
+# Priority 3: Ruff formatter
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        priority: 0
+      - id: end-of-file-fixer
+        priority: 1
+      - id: check-yaml
+        priority: 0
+      - id: check-toml
+        priority: 0
+      - id: check-merge-conflict
+        priority: 0
+      - id: check-case-conflict
+        priority: 0
+      - id: name-tests-test
+        priority: 0
+        args: [--pytest-test-first]
+
+  - repo: https://github.com/abravalheri/validate-pyproject
+    rev: v0.25
+    hooks:
+      - id: validate-pyproject
+        priority: 0
+
+  - repo: https://github.com/rbubley/mirrors-prettier
+    rev: v3.8.1
+    hooks:
+      - id: prettier
+        types: [yaml]
+        priority: 2
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.9
+    hooks:
+      - id: ruff-check
+        args: [--fix, --exit-non-zero-on-fix]
+        types_or: [python, pyi]
+        require_serial: true
+        priority: 2
+      - id: ruff-format
+        priority: 3
