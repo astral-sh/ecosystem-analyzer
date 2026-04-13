@@ -3,7 +3,7 @@ fail_fast: false
 # Priority 0: Read-only hooks; trailing whitespace
 # Priority 1: end-of-file-fixer
 # Priority 2: prettier, Ruff linter
-# Priority 3: Ruff formatter
+# Priority 3: zizmor, Ruff formatter
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -31,6 +31,13 @@ repos:
       - id: validate-pyproject
         priority: 0
 
+  - repo: https://github.com/zizmorcore/zizmor-pre-commit
+    rev: v1.23.1
+    hooks:
+      - id: zizmor
+        args: [--fix=safe]
+        priority: 3
+
   - repo: https://github.com/python-jsonschema/check-jsonschema
     rev: 0.37.1
     hooks:
@@ -39,6 +46,8 @@ repos:
         additional_dependencies:
           - "json5"
         priority: 0
+      - id: check-github-workflows
+        priority: 0
 
   - repo: https://github.com/rbubley/mirrors-prettier
     rev: v3.8.1
@@ -46,6 +55,12 @@ repos:
       - id: prettier
         types: [yaml]
         priority: 2
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        priority: 0
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.9
