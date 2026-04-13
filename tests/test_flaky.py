@@ -26,13 +26,11 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 1, 1, "msg1")
         d2 = _diag("a.py", 2, 1, "msg2")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [d1, d2],
-                [d1, d2],
-                [d1, d2],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [d1, d2],
+            [d1, d2],
+            [d1, d2],
+        ])
 
         assert len(stable) == 2
         assert len(flaky) == 0
@@ -42,12 +40,10 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 1, 1, "msg1")
         d2 = _diag("a.py", 1, 1, "msg2")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [d1],
-                [d2],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [d1],
+            [d2],
+        ])
 
         assert len(stable) == 0
         assert len(flaky) == 1
@@ -65,13 +61,11 @@ class TestClassifyDiagnostics:
         stable_diag = _diag("a.py", 1, 1, "always here")
         flaky_diag = _diag("a.py", 5, 1, "sometimes here")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [stable_diag, flaky_diag],
-                [stable_diag],
-                [stable_diag],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [stable_diag, flaky_diag],
+            [stable_diag],
+            [stable_diag],
+        ])
 
         assert len(stable) == 1
         assert stable[0]["message"] == "always here"
@@ -86,13 +80,11 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 10, 1, "variant A")
         d2 = _diag("a.py", 10, 1, "variant B")
 
-        _stable, flaky = classify_diagnostics(
-            [
-                [d1],
-                [d1],
-                [d2],
-            ]
-        )
+        _stable, flaky = classify_diagnostics([
+            [d1],
+            [d1],
+            [d2],
+        ])
 
         assert len(flaky) == 1
         variants = {
@@ -107,12 +99,10 @@ class TestClassifyDiagnostics:
         d2 = _diag("a.py", 10, 1, "variant B")
         d3 = _diag("b.py", 20, 1, "other file")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [d1, d3],
-                [d2],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [d1, d3],
+            [d2],
+        ])
 
         assert len(stable) == 0
         assert len(flaky) == 2
@@ -133,12 +123,10 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 10, 1, "msg")
         d2 = _diag("a.py", 10, 5, "msg")
 
-        _stable, flaky = classify_diagnostics(
-            [
-                [d1],
-                [d2],
-            ]
-        )
+        _stable, flaky = classify_diagnostics([
+            [d1],
+            [d2],
+        ])
 
         assert len(flaky) == 2
         assert flaky[0]["column"] == 1
@@ -148,12 +136,10 @@ class TestClassifyDiagnostics:
         """Duplicate diagnostics within a single run don't inflate counts."""
         d = _diag("a.py", 1, 1, "msg")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [d, d, d],
-                [d],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [d, d, d],
+            [d],
+        ])
 
         assert len(stable) == 1
         assert len(flaky) == 0
@@ -163,12 +149,10 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 1, 1, "stable")
         d2 = _diag("a.py", 2, 1, "flaky")
 
-        stable, flaky = classify_diagnostics(
-            [
-                [d1, d2],
-                [d1],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [d1, d2],
+            [d1],
+        ])
 
         assert len(stable) == 1
         assert len(flaky) == 1
@@ -180,12 +164,10 @@ class TestClassifyDiagnostics:
         d3 = _diag("a.py", 1, 5, "msg")
         d4 = _diag("a.py", 1, 1, "msg")
 
-        stable, _ = classify_diagnostics(
-            [
-                [d1, d2, d3, d4],
-                [d1, d2, d3, d4],
-            ]
-        )
+        stable, _ = classify_diagnostics([
+            [d1, d2, d3, d4],
+            [d1, d2, d3, d4],
+        ])
 
         assert (
             stable[0]["path"] == "a.py"
@@ -207,12 +189,10 @@ class TestClassifyDiagnostics:
         d3 = _diag("a.py", 5, 1, "msg")
         d4 = _diag("a.py", 5, 10, "msg")
 
-        _, flaky = classify_diagnostics(
-            [
-                [d1, d2, d3, d4],
-                [],
-            ]
-        )
+        _, flaky = classify_diagnostics([
+            [d1, d2, d3, d4],
+            [],
+        ])
 
         assert (
             flaky[0]["path"] == "a.py"
@@ -232,12 +212,10 @@ class TestClassifyDiagnostics:
         d1 = _diag("a.py", 10, 1, "msg B", lint_name="z-lint")
         d2 = _diag("a.py", 10, 1, "msg A", lint_name="a-lint")
 
-        _, flaky = classify_diagnostics(
-            [
-                [d1],
-                [d2],
-            ]
-        )
+        _, flaky = classify_diagnostics([
+            [d1],
+            [d2],
+        ])
 
         assert len(flaky) == 1
         assert flaky[0]["variants"][0]["diagnostic"]["lint_name"] == "a-lint"
@@ -245,12 +223,10 @@ class TestClassifyDiagnostics:
 
     def test_empty_runs(self):
         """Runs with no diagnostics produce no stable or flaky results."""
-        stable, flaky = classify_diagnostics(
-            [
-                [],
-                [],
-            ]
-        )
+        stable, flaky = classify_diagnostics([
+            [],
+            [],
+        ])
 
         assert len(stable) == 0
         assert len(flaky) == 0

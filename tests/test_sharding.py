@@ -47,7 +47,6 @@ def test_consistent_across_old_and_new():
     old = ["alpha", "bravo", "charlie"]
     new = ["bravo", "charlie", "delta"]
     old_s0, new_s0 = shard_project_lists(old, new, shard=0, num_shards=2)
-    old_s1, new_s1 = shard_project_lists(old, new, shard=1, num_shards=2)
     # bravo and charlie appear in both lists; verify they land in the
     # same shard on each side
     for project in ["bravo", "charlie"]:
@@ -107,12 +106,17 @@ def _invoke_diff(tmp_path, extra_args):
     return runner.invoke(
         cli,
         [
-            "--repository", str(tmp_path),
+            "--repository",
+            str(tmp_path),
             "diff",
-            "--projects-old", str(projects),
-            "--projects-new", str(projects),
-            "--old", "HEAD",
-            "--new", "HEAD",
+            "--projects-old",
+            str(projects),
+            "--projects-new",
+            str(projects),
+            "--old",
+            "HEAD",
+            "--new",
+            "HEAD",
             *extra_args,
         ],
     )
@@ -178,10 +182,14 @@ def test_diff_without_repository_requires_prebuilt_binaries(tmp_path):
         cli,
         [
             "diff",
-            "--projects-old", str(projects),
-            "--projects-new", str(projects),
-            "--old", "abc",
-            "--new", "def",
+            "--projects-old",
+            str(projects),
+            "--projects-new",
+            str(projects),
+            "--old",
+            "abc",
+            "--new",
+            "def",
         ],
     )
     assert result.exit_code != 0

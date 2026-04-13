@@ -227,7 +227,7 @@
 
 <body>
     <h1>ty ecosystem report</h1>
-    
+
     {% if ty_commit and ty_commit != "unknown" %}
     <div style="margin-bottom: 20px; font-size: 14px; color: #666;">
         ty @ <a href="https://github.com/astral-sh/ruff/commit/{{ ty_commit }}" target="_blank">{{
@@ -343,7 +343,7 @@
             // Sort functionality
             const sortSelect = document.getElementById('sort-select');
             sortSelect.addEventListener('change', sortTable);
-            
+
             // Add click handlers to table headers
             document.querySelectorAll('th[data-sort]').forEach(header => {
                 header.addEventListener('click', function() {
@@ -433,7 +433,7 @@
                     const projectMatch = projectFilter === 'all' || rowProject === projectFilter;
                     const lintMatch = filterLint.value === 'all' || rowLint === filterLint.value;
                     const levelMatch = levelFilter === 'all' || rowLevel === levelFilter;
-                    
+
                     // Search logic with regex
                     let searchMatch = true;
                     if (searchTerm) {
@@ -470,7 +470,7 @@
 
             function updateSearchMode() {
                 const isIncludeMode = searchMode.value === 'include';
-                
+
                 if (isIncludeMode) {
                     searchText.placeholder = 'Include pattern (regex) ...';
                 } else {

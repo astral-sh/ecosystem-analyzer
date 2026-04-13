@@ -159,9 +159,7 @@ class InstalledProject:
         try:
             self._repo.git.fetch("--deepen", "20")
         except GitError:
-            logger.warning(
-                f"'{self.name}': failed to deepen clone, using HEAD as-is"
-            )
+            logger.warning(f"'{self.name}': failed to deepen clone, using HEAD as-is")
             return
 
         try:
@@ -217,7 +215,9 @@ class InstalledProject:
         elif self._project.deps:
             logger.info(f"Installing dependencies: {', '.join(self._project.deps)}")
 
-            exclude_newer_args = ["--exclude-newer", self._exclude_newer] if self._exclude_newer else []
+            exclude_newer_args = (
+                ["--exclude-newer", self._exclude_newer] if self._exclude_newer else []
+            )
             pip_cmd = [
                 "uv",
                 "pip",

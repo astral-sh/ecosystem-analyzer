@@ -37,9 +37,7 @@ def shard_project_lists(
     """
     all_names_sorted = sorted(set(project_names_old + project_names_new))
     shard_set = {
-        name
-        for i, name in enumerate(all_names_sorted)
-        if i % num_shards == shard
+        name for i, name in enumerate(all_names_sorted) if i % num_shards == shard
     }
     return (
         [n for n in project_names_old if n in shard_set],
@@ -323,11 +321,12 @@ def diff(
     if (shard is None) != (num_shards is None):
         raise click.UsageError("--shard and --num-shards must be used together")
 
-    if shard is not None and num_shards is not None:
-        if shard < 0 or shard >= num_shards:
-            raise click.UsageError(
-                f"--shard must be in range [0, {num_shards})"
-            )
+    if (
+        shard is not None
+        and num_shards is not None
+        and (shard < 0 or shard >= num_shards)
+    ):
+        raise click.UsageError(f"--shard must be in range [0, {num_shards})")
 
     project_names_old = Path(projects_old).read_text().splitlines()
     project_names_new = Path(projects_new).read_text().splitlines()
@@ -518,13 +517,11 @@ def history(
 
         logger.info(f"Total diagnostics for commit '{sha}': {total_diagnostics}")
 
-        statistics.append(
-            {
-                "commit": sha,
-                "commit_message": message,
-                "total_diagnostics": total_diagnostics,
-            }
-        )
+        statistics.append({
+            "commit": sha,
+            "commit_message": message,
+            "total_diagnostics": total_diagnostics,
+        })
 
     with Path(output).open("w") as json_file:
         json.dump({"statistics": statistics}, json_file)

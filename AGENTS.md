@@ -13,7 +13,7 @@ Use `uv` for all local work.
 
 - `uv run ecosystem-analyzer --help`: list CLI commands.
 - `uv run pytest`: run the full test suite.
-- `uv run ruff check`: run linting.
+- `uvx prek run -a`: run linting.
 - `uv run ty check`: run type checking against the repository.
 - `uv run ecosystem-analyzer --repository ~/ty run --project-name <project> --commit <ty-commit> --output project-diagnostics.json`: analyze one project against a `ty` checkout.
 - `uv run ecosystem-analyzer generate-report project-diagnostics.json --output report.html`: render an HTML report from saved diagnostics.
