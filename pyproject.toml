@@ -27,4 +27,4 @@ preview = true
 exclude = ["plots"]
 
 [dependency-groups]
-dev = ["pytest>=8.4.1", "ty==0.0.29"]
+dev = ["pytest>=8.4.1", "ty==0.0.30"]
