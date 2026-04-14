@@ -31,6 +31,13 @@
       matchManagers: ["pre-commit"],
       description: "Weekly update of prek dependencies",
     },
+    {
+      groupName: "ty",
+      matchManagers: ["pep621"],
+      matchPackageNames: ["ty"],
+      description: "Daily ty update",
+      schedule: ["at any time"],
+    },
   ],
   vulnerabilityAlerts: {
     commitMessageSuffix: "",
