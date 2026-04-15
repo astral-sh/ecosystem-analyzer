@@ -10,7 +10,7 @@ from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
-from .manager import Manager, get_ecosystem_projects
+from .manager import Manager, get_all_project_names, get_ecosystem_projects
 
 logger = logging.getLogger(__name__)
 
@@ -237,15 +237,17 @@ def analyze(
 @cli.command()
 @click.option(
     "--projects-old",
-    help="List to a file with projects to analyze for old commit",
+    help="File with projects to analyze for the old commit "
+    "(defaults to every mypy_primer project if omitted)",
     type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=True,
+    required=False,
 )
 @click.option(
     "--projects-new",
-    help="List to a file with projects to analyze for new commit",
+    help="File with projects to analyze for the new commit "
+    "(defaults to every mypy_primer project if omitted)",
     type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=True,
+    required=False,
 )
 @click.option(
     "--old",
@@ -317,8 +319,8 @@ def analyze(
 @click.pass_context
 def diff(
     ctx,
-    projects_old: str,
-    projects_new: str,
+    projects_old: str | None,
+    projects_new: str | None,
     old: str,
     new: str,
     output_old: str,
@@ -353,8 +355,34 @@ def diff(
     ):
         raise click.UsageError(f"--shard must be in range [0, {num_shards})")
 
-    project_names_old = Path(projects_old).read_text().splitlines()
-    project_names_new = Path(projects_new).read_text().splitlines()
+    if projects_old is None or projects_new is None:
+        default_project_names = get_all_project_names()
+        defaulted = [
+            name
+            for name, value in (
+                ("--projects-old", projects_old),
+                ("--projects-new", projects_new),
+            )
+            if value is None
+        ]
+        logger.info(
+            "Defaulting %s to all %d mypy_primer projects",
+            "/".join(defaulted),
+            len(default_project_names),
+        )
+    else:
+        default_project_names = []
+
+    project_names_old = (
+        Path(projects_old).read_text().splitlines()
+        if projects_old is not None
+        else list(default_project_names)
+    )
+    project_names_new = (
+        Path(projects_new).read_text().splitlines()
+        if projects_new is not None
+        else list(default_project_names)
+    )
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
     )
