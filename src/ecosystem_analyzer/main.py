@@ -289,6 +289,14 @@ def analyze(
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
     required=False,
 )
+@click.option(
+    "--dynamic-flaky",
+    is_flag=True,
+    help="Enable dynamic flaky detection: skip reruns when there are no changes "
+    "relative to baseline, and short-circuit when all changes are flaky. "
+    "--flaky-runs becomes the maximum number of runs. Note: flakiness is only "
+    "detected for diagnostics that differ from baseline.",
+)
 @click.pass_context
 def diff(
     ctx,
@@ -305,6 +313,7 @@ def diff(
     num_shards: int | None,
     ty_binary_old: Path | None,
     ty_binary_new: Path | None,
+    dynamic_flaky: bool,
 ) -> None:
     """
     Compare diagnostics between two commits.
@@ -327,6 +336,10 @@ def diff(
         and (shard < 0 or shard >= num_shards)
     ):
         raise click.UsageError(f"--shard must be in range [0, {num_shards})")
+
+    if dynamic_flaky and ctx.obj["flaky_runs"] < 2:
+        click.echo("Error: --dynamic-flaky requires --flaky-runs >= 2", err=True)
+        ctx.exit(1)
 
     project_names_old = Path(projects_old).read_text().splitlines()
     project_names_new = Path(projects_new).read_text().splitlines()
@@ -359,15 +372,17 @@ def diff(
     )
 
     # Build (or use pre-built) old ty — building overlaps with background
-    # project installation
+    # project installation. In dynamic mode, the old side runs once (no flaky
+    # detection) and its output is passed as a baseline so the new side can
+    # skip reruns for unchanged projects and short-circuit when all changes
+    # are flaky.
     if ty_binary_old is not None:
         manager.use_prebuilt(ty_binary_old, old)
     else:
         manager.build(old)
 
-    # Run for old commit with old projects
     manager.activate(project_names_old)
-    run_outputs_old = manager.run_active_projects()
+    run_outputs_old = manager.run_active_projects(single_run=dynamic_flaky)
     manager.write_run_outputs(run_outputs_old, output_old)
 
     # Build (or use pre-built) new ty — incremental build is near-instant
@@ -376,7 +391,9 @@ def diff(
     else:
         manager.build(new)
     manager.activate(project_names_new)
-    run_outputs_new = manager.run_active_projects()
+    run_outputs_new = manager.run_active_projects(
+        baseline=run_outputs_old if dynamic_flaky else None
+    )
     manager.write_run_outputs(run_outputs_new, output_new)
 
 
