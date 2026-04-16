@@ -24,7 +24,7 @@ Use `uv` for all local work.
 
 The CI job checks out `ruff` (which includes `ty`'s implementation), copies `.github/ty-ecosystem.toml` into `~/.config/ty/ty.toml`, creates two local branches (`new_commit` at the PR head and `old_commit` at the merge base against the PR base branch), and snapshots the primer project lists from each revision. It installs `ecosystem-analyzer` with `uv tool install` from a pinned Git commit, then runs:
 
-- `ecosystem-analyzer --repository ruff --flaky-runs 10 diff ...`: compare diagnostics between `old_commit` and `new_commit` using the old/new/flaky project lists.
+- `ecosystem-analyzer --repository ruff --flaky-runs 10 diff ...`: compare diagnostics between `old_commit` and `new_commit` using the old/new/flaky project lists. The `--projects-old` and `--projects-new` options are optional; when omitted, each side defaults to every project known to `mypy_primer`.
 - `ecosystem-analyzer generate-diff ...`: produce the HTML diagnostics diff report.
 - `ecosystem-analyzer generate-diff-statistics ...`: produce the Markdown summary that is posted back to the PR.
 - `ecosystem-analyzer generate-timing-diff ...`: produce the HTML timing comparison report.
