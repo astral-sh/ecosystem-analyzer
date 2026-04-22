@@ -164,56 +164,26 @@ class Manager:
         self._ensure_installed()
         return self._run_active_projects()
 
-    def run_active_projects(
-        self,
-        *,
-        baseline: list[RunOutput] | None = None,
-        single_run: bool = False,
-    ) -> list[RunOutput]:
-        """Run the current ty build on active projects.
-
-        When *baseline* is provided, flaky projects use dynamic detection
-        that can skip reruns or short-circuit early (see
-        ``Ty.run_on_project_dynamic``).  Without a baseline the fixed
-        ``--flaky-runs`` behaviour is used.
-
-        When *single_run* is True, every project runs exactly once
-        regardless of ``--flaky-runs`` — useful for establishing a
-        baseline for dynamic detection.
-        """
+    def run_active_projects(self) -> list[RunOutput]:
+        """Run the current ty build on active projects."""
         self._ensure_installed()
-        return self._run_active_projects(baseline=baseline, single_run=single_run)
+        return self._run_active_projects()
 
-    def _is_flaky_project(self, project: InstalledProject) -> bool:
-        return self._flaky_runs > 1 and (
-            not self._flaky_projects or project.name in self._flaky_projects
-        )
-
-    def _run_active_projects(
-        self,
-        *,
-        baseline: list[RunOutput] | None = None,
-        single_run: bool = False,
-    ) -> list[RunOutput]:
-        assert not (single_run and baseline is not None), (
-            "single_run=True and baseline are mutually exclusive: a baseline "
-            "is only meaningful for dynamic flaky detection"
-        )
-        baseline_by_project: dict[str, RunOutput] = (
-            {o["project"]: o for o in baseline} if baseline is not None else {}
-        )
-
+    def _run_active_projects(self) -> list[RunOutput]:
         run_outputs = []
         for project in self._active_projects:
-            if not single_run and self._is_flaky_project(project):
-                if baseline is not None:
-                    output = self._ty.run_on_project_dynamic(
-                        project,
-                        self._flaky_runs,
-                        baseline_by_project.get(project.name),
+            n = (
+                self._flaky_runs
+                if (
+                    self._flaky_runs > 1
+                    and (
+                        not self._flaky_projects or project.name in self._flaky_projects
                     )
-                else:
-                    output = self._ty.run_on_project_multiple(project, self._flaky_runs)
+                )
+                else 1
+            )
+            if n > 1:
+                output = self._ty.run_on_project_multiple(project, n)
             else:
                 output = self._ty.run_on_project(project)
             run_outputs.append(output)

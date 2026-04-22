@@ -21,13 +21,6 @@ def _location_key(diag: Diagnostic) -> tuple[str, int, int]:
     return (diag["path"], diag["line"], diag["column"])
 
 
-def diagnostic_keys(
-    diagnostics: list[Diagnostic],
-) -> frozenset[tuple[str, int, int, str, str, str]]:
-    """Return the set of unique diagnostic keys for a list of diagnostics."""
-    return frozenset(_diagnostic_key(d) for d in diagnostics)
-
-
 def classify_diagnostics(
     all_runs: list[list[Diagnostic]],
 ) -> tuple[list[Diagnostic], list[FlakyLocation]]:
