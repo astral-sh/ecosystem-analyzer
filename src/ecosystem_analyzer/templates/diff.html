@@ -208,6 +208,25 @@
             border: 1px solid rgba(38, 18, 48, 0.12);
         }
 
+        .panic-block + .panic-block {
+            margin-top: 6px;
+        }
+
+        .panic-block-new {
+            background: rgba(220, 53, 69, 0.08);
+            border-color: rgba(220, 53, 69, 0.3);
+        }
+
+        .panic-block-fixed {
+            background: rgba(40, 167, 69, 0.08);
+            border-color: rgba(40, 167, 69, 0.3);
+        }
+
+        .panic-block-persistent {
+            background: rgba(108, 117, 125, 0.08);
+            border-color: rgba(108, 117, 125, 0.25);
+        }
+
         .panic-block summary {
             cursor: pointer;
             font-weight: 600;
@@ -220,6 +239,79 @@
             font-family: 'Fira Code', monospace;
             font-size: 12px;
             line-height: 1.5;
+        }
+
+        .panic-tag {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .panic-tag-new {
+            background: rgba(220, 53, 69, 0.15);
+            color: #b02a37;
+        }
+
+        .panic-tag-fixed {
+            background: rgba(40, 167, 69, 0.15);
+            color: #1d6f3a;
+        }
+
+        .panic-tag-persistent {
+            background: rgba(108, 117, 125, 0.15);
+            color: #495057;
+        }
+
+        .failed-row-new {
+            background: rgba(220, 53, 69, 0.12);
+        }
+
+        .failed-row-fixed {
+            background: rgba(40, 167, 69, 0.12);
+        }
+
+        .failed-row-persistent {
+            background: rgba(108, 117, 125, 0.08);
+        }
+
+        .fixed-panic-banner {
+            background: rgba(40, 167, 69, 0.12);
+            border: 1px solid rgba(40, 167, 69, 0.35);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 12px 0 16px 0;
+            font-size: 14px;
+            color: #1d6f3a;
+        }
+
+        .fixed-panic-banner code {
+            background: rgba(40, 167, 69, 0.15);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: #145a2d;
+        }
+
+        .new-panic-banner {
+            background: rgba(220, 53, 69, 0.12);
+            border: 1px solid rgba(220, 53, 69, 0.4);
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin: 12px 0 16px 0;
+            font-size: 14px;
+            color: #842029;
+        }
+
+        .new-panic-banner code {
+            background: rgba(220, 53, 69, 0.15);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-family: 'Fira Code', monospace;
+            font-size: 12px;
+            color: #5c1620;
         }
 
         .error {
@@ -659,12 +751,27 @@
         </div>
 
         {% if diffs.failed_projects %}
+        {% set new_failure_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'new') | list %}
+        {% set fixed_failure_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'fixed') | list %}
+        {% if new_failure_projects %}
+        <div class="new-panic-banner">
+            ❌ <strong>New ecosystem failure{{ 's' if new_failure_projects|length != 1 else '' }} introduced</strong> in:
+            {% for project in new_failure_projects %}<code>{{ project.project }}</code> <small>({{ failure_descriptor(project, 'new') }})</small>{{ ", " if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
+        {% if fixed_failure_projects %}
+        <div class="fixed-panic-banner">
+            🎉 <strong>Fixed ecosystem failure{{ 's' if fixed_failure_projects|length != 1 else '' }}</strong> in:
+            {% for project in fixed_failure_projects %}<code>{{ project.project }}</code> <small>({{ failure_descriptor(project, 'fixed') }})</small>{{ ", " if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
         <h2>Failed Projects</h2>
         <div class="failed-projects">
             <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
                 <thead>
                     <tr style="background: var(--flare); color: white;">
                         <th style="padding: 12px; text-align: left;">Project</th>
+                        <th style="padding: 12px; text-align: center;">Status</th>
                         <th style="padding: 12px; text-align: center;">Old Status</th>
                         <th style="padding: 12px; text-align: center;">New Status</th>
                         <th style="padding: 12px; text-align: center;">Old Return Code</th>
@@ -673,10 +780,20 @@
                 </thead>
                 <tbody>
                     {% for project in diffs.failed_projects %}
-                    <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1); background: rgba(200, 50, 50, 0.1);">
+                    {% set failure_status = project.failure_status|default('persistent') %}
+                    <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td style="padding: 12px;">
                             <strong>{{ project.project }}</strong>
                             <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
+                        </td>
+                        <td style="padding: 12px; text-align: center; font-weight: 600;">
+                            {% if failure_status == 'new' %}
+                                <span class="panic-tag panic-tag-new" title="Failure introduced by this PR">{{ failure_status_labels['new'] }}</span>
+                            {% elif failure_status == 'fixed' %}
+                                <span class="panic-tag panic-tag-fixed" title="Failure that existed on the baseline is no longer present">{{ failure_status_labels['fixed'] }}</span>
+                            {% else %}
+                                <span class="panic-tag panic-tag-persistent" title="Same failure on both baseline and PR">{{ failure_status_labels['persistent'] }}</span>
+                            {% endif %}
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 500;">
                             {% if project.old_status == 'timeout' %}
@@ -712,18 +829,24 @@
                         </td>
                     </tr>
                     {% if project.old_panic_messages or project.new_panic_messages %}
-                    <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1); background: rgba(200, 50, 50, 0.04);">
-                        <td colspan="5" style="padding: 12px;">
-                            {% if project.old_panic_messages %}
-                            <details class="panic-block">
-                                <summary>Old panic message{{ 's' if project.old_panic_messages|length != 1 }}</summary>
-                                <pre>{{ project.old_panic_messages | join('\n') }}</pre>
+                    <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
+                        <td colspan="6" style="padding: 12px;">
+                            {% if project.introduced_panic_messages %}
+                            <details class="panic-block panic-block-new" open>
+                                <summary>❌ New panic message{{ 's' if project.introduced_panic_messages|length != 1 }} (introduced by this PR)</summary>
+                                <pre>{{ project.introduced_panic_messages | join('\n') }}</pre>
                             </details>
                             {% endif %}
-                            {% if project.new_panic_messages %}
-                            <details class="panic-block">
-                                <summary>New panic message{{ 's' if project.new_panic_messages|length != 1 }}</summary>
-                                <pre>{{ project.new_panic_messages | join('\n') }}</pre>
+                            {% if project.fixed_panic_messages %}
+                            <details class="panic-block panic-block-fixed">
+                                <summary>🎉 Fixed panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
+                                <pre>{{ project.fixed_panic_messages | join('\n') }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if project.persistent_panic_messages %}
+                            <details class="panic-block panic-block-persistent">
+                                <summary>➖ Persistent panic message{{ 's' if project.persistent_panic_messages|length != 1 }} (present on both baseline and PR)</summary>
+                                <pre>{{ project.persistent_panic_messages | join('\n') }}</pre>
                             </details>
                             {% endif %}
                         </td>

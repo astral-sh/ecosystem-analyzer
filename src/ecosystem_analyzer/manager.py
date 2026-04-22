@@ -29,6 +29,11 @@ def _get_ecosystem_projects() -> dict[str, Project]:
     return projects
 
 
+def get_all_project_names() -> list[str]:
+    """Return the names of every project known to mypy_primer."""
+    return sorted(_get_ecosystem_projects().keys())
+
+
 class Manager:
     _project_names: list[str]
     _installed_projects: list[InstalledProject]
