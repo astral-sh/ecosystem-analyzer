@@ -15,7 +15,7 @@ from .ty import Ty
 logger = logging.getLogger(__name__)
 
 
-def _get_ecosystem_projects() -> dict[str, Project]:
+def get_ecosystem_projects() -> dict[str, Project]:
     projects: dict[str, Project] = {}
     for project in get_projects():
         project_name = (
@@ -46,6 +46,7 @@ class Manager:
         flaky_runs: int = 1,
         flaky_projects: set[str] | None = None,
         exclude_newer: str | None = None,
+        ecosystem_projects: dict[str, Project] | None = None,
     ) -> None:
         self._installed_projects = []
         self._active_projects = []
@@ -54,7 +55,11 @@ class Manager:
         self._flaky_projects = flaky_projects or set()
         self._exclude_newer = exclude_newer
 
-        self._ecosystem_projects = _get_ecosystem_projects()
+        self._ecosystem_projects = (
+            ecosystem_projects
+            if ecosystem_projects is not None
+            else get_ecosystem_projects()
+        )
 
         unavailable_projects = set(project_names) - set(self._ecosystem_projects.keys())
         if unavailable_projects:

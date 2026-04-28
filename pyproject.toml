@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "A tool for analyzing Python projects with ty"
 dependencies = [
     "gitpython==3.1.46",
-    "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@850d65d9da947ef9e02498b6f07598e7c8401641",
+    "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@00ded1e9df38b86bf4825457e7fa17d89c215d05",
     "click==8.3.2",
     "jinja2==3.1.6",
 ]
