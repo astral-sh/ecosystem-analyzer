@@ -4,12 +4,13 @@ import sys
 from pathlib import Path
 
 import click
+from mypy_primer.model import Project
 
 from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
-from .manager import Manager
+from .manager import Manager, get_ecosystem_projects
 
 logger = logging.getLogger(__name__)
 
@@ -29,19 +30,43 @@ def shard_project_lists(
     project_names_new: list[str],
     shard: int,
     num_shards: int,
+    ecosystem_projects: dict[str, Project],
+    flaky_projects: set[str] | None = None,
+    flaky_runs: int = 1,
 ) -> tuple[list[str], list[str]]:
     """Filter project lists to only include projects belonging to this shard.
 
-    Sharding is based on the sorted union of both lists, so each project
-    consistently lands in the same shard for both old and new.
+    Uses greedy bin-packing based on mypy_primer cost estimates so that
+    expensive projects are spread across shards rather than clustered.
     """
-    all_names_sorted = sorted(set(project_names_old + project_names_new))
-    shard_set = {
-        name for i, name in enumerate(all_names_sorted) if i % num_shards == shard
-    }
+    all_names = sorted(set(project_names_old + project_names_new))
+
+    # Sort by cost descending (with name as tiebreaker for determinism),
+    # then greedily assign each project to the lightest shard.
+    costs: dict[str, int] = {}
+    for name in all_names:
+        project = ecosystem_projects.get(name)
+        if project is not None:
+            cost = project.cost_for_type_checker("ty")
+        else:
+            cost = 5
+        if flaky_projects is not None and name in flaky_projects:
+            cost *= flaky_runs
+        costs[name] = cost
+
+    sorted_by_cost = sorted(all_names, key=lambda n: (-costs[n], n))
+
+    shard_costs = [0] * num_shards
+    shard_sets: list[set[str]] = [set() for _ in range(num_shards)]
+    for name in sorted_by_cost:
+        min_shard = min(range(num_shards), key=lambda i: shard_costs[i])
+        shard_costs[min_shard] += costs[name]
+        shard_sets[min_shard].add(name)
+
+    target = shard_sets[shard]
     return (
-        [n for n in project_names_old if n in shard_set],
-        [n for n in project_names_new if n in shard_set],
+        [n for n in project_names_old if n in target],
+        [n for n in project_names_new if n in target],
     )
 
 
@@ -334,10 +359,19 @@ def diff(
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
     )
 
+    ecosystem_projects: dict[str, Project] | None = None
+
     if num_shards is not None:
         assert shard is not None
+        ecosystem_projects = get_ecosystem_projects()
         project_names_old, project_names_new = shard_project_lists(
-            project_names_old, project_names_new, shard, num_shards
+            project_names_old,
+            project_names_new,
+            shard,
+            num_shards,
+            ecosystem_projects,
+            flaky_projects=flaky_project_names,
+            flaky_runs=ctx.obj["flaky_runs"],
         )
         logger.info(
             f"Shard {shard}/{num_shards}: "
@@ -356,6 +390,7 @@ def diff(
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
+        ecosystem_projects=ecosystem_projects,
     )
 
     # Build (or use pre-built) old ty — building overlaps with background
