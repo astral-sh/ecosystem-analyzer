@@ -36,6 +36,7 @@ class MergedProjectStats(TypedDict):
     changed: int
     net_change: int
     total_change: int
+    is_flaky: bool
 
 
 class DiffStatistics(TypedDict):
@@ -801,7 +802,7 @@ class DiagnosticDiff:
             | set(removed_by_lint.keys())
             | set(changed_by_lint.keys())
         )
-        merged_lints = []
+        merged_lints: list[MergedLintStats] = []
 
         for lint_name in all_lints:
             added_count = added_by_lint.get(lint_name, 0)
@@ -820,13 +821,20 @@ class DiagnosticDiff:
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_lints.sort(key=lambda x: (-x["total_change"], x["lint_name"]))
 
+        # Identify projects with flaky diagnostics in the new data
+        flaky_project_names: set[str] = {
+            proj["project"]
+            for proj in self.diffs["added_projects"]
+            if proj.get("flaky_diagnostics")
+        }
+
         # Create merged project breakdown sorted by total absolute change (descending)
         all_projects = (
-            set(added_by_project.keys())
-            | set(removed_by_project.keys())
-            | set(changed_by_project.keys())
+            added_by_project.keys()
+            | removed_by_project.keys()
+            | changed_by_project.keys()
         )
-        merged_projects = []
+        merged_projects: list[MergedProjectStats] = []
 
         for project_name in all_projects:
             added_count = added_by_project.get(project_name, 0)
@@ -840,22 +848,11 @@ class DiagnosticDiff:
                 "changed": changed_count,
                 "net_change": added_count - removed_count,
                 "total_change": total_change,
+                "is_flaky": project_name in flaky_project_names,
             })
 
         # Sort by total absolute change (|removed| + |added| + |changed|) descending, then by name for ties
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
-
-        # Identify projects with flaky diagnostics in the new data
-        flaky_project_names: set[str] = set()
-        for output in self.new_data["outputs"]:
-            if output.get("flaky_diagnostics"):
-                flaky_project_names.add(output["project"])
-
-        # Add flaky label to project entries
-        for project_data in merged_projects:
-            project_data["is_flaky"] = (
-                project_data["project_name"] in flaky_project_names
-            )
 
         return {
             "total_added": total_added,
