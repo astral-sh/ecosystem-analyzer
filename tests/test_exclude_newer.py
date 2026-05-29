@@ -127,6 +127,32 @@ class TestInstallDependenciesPythonVersion:
         assert cmd == ["uv", "venv", "--quiet", "--python", expected]
 
 
+class TestInstallDependencies:
+    @patch("ecosystem_analyzer.installed_project.subprocess.run")
+    @patch.object(InstalledProject, "_clone_or_update")
+    def test_install_cmd_does_not_skip_deps(self, _mock_clone, mock_run):
+        project = InstalledProject(
+            _make_project(install_cmd="{install} -e .", deps=["pytest"])
+        )
+
+        assert mock_run.call_count == 3
+        install_call_args = mock_run.call_args_list[1]
+        assert (
+            install_call_args.args[0]
+            == f"uv pip install --python {project.venv_path / 'bin' / 'python'} -e ."
+        )
+        deps_call_args = mock_run.call_args_list[2]
+        assert deps_call_args.args[0] == [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(project.venv_path / "bin" / "python"),
+            "--link-mode=copy",
+            "pytest",
+        ]
+
+
 class TestInstallDependenciesExcludeNewer:
     """Tests that --exclude-newer is correctly passed to uv pip install commands."""
 
