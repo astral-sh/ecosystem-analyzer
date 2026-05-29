@@ -2,4 +2,5 @@
 Configuration constants for the ecosystem analyzer.
 """
 
-PYTHON_VERSION = "3.11"
+# Projects may require a newer Python version than this baseline.
+MINIMUM_PYTHON_VERSION = (3, 11)

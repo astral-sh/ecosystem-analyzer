@@ -106,6 +106,27 @@ class TestInstalledProjectExcludeNewer:
         mock_install.assert_called_once()
 
 
+class TestInstallDependenciesPythonVersion:
+    @pytest.mark.parametrize(
+        ("min_python_version", "expected"),
+        [
+            (None, "3.11"),
+            ((3, 10), "3.11"),
+            ((3, 13), "3.13"),
+        ],
+    )
+    @patch("ecosystem_analyzer.installed_project.subprocess.run")
+    @patch.object(InstalledProject, "_clone_or_update")
+    def test_venv_uses_required_python_version(
+        self, _mock_clone, mock_run, min_python_version, expected
+    ):
+        InstalledProject(_make_project(min_python_version=min_python_version))
+
+        venv_call_args = mock_run.call_args_list[0]
+        cmd = venv_call_args.args[0]
+        assert cmd == ["uv", "venv", "--quiet", "--python", expected]
+
+
 class TestInstallDependenciesExcludeNewer:
     """Tests that --exclude-newer is correctly passed to uv pip install commands."""
 

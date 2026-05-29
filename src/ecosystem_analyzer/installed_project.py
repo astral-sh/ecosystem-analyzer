@@ -9,7 +9,7 @@ from pathlib import Path
 from git import GitError, Repo
 from mypy_primer.model import Project
 
-from .config import PYTHON_VERSION
+from .config import MINIMUM_PYTHON_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -188,7 +188,17 @@ class InstalledProject:
 
     def _install_dependencies(self) -> None:
         # Create venv in temporary directory
-        venv_cmd = ["uv", "venv", "--quiet", "--python", PYTHON_VERSION]
+        python_version = max(
+            self._project.min_python_version or MINIMUM_PYTHON_VERSION,
+            MINIMUM_PYTHON_VERSION,
+        )
+        venv_cmd = [
+            "uv",
+            "venv",
+            "--quiet",
+            "--python",
+            ".".join(str(part) for part in python_version),
+        ]
         logger.debug(f"Executing: {' '.join(venv_cmd)}")
         subprocess.run(venv_cmd, check=True, cwd=self._temp_dir.name)
 
