@@ -788,6 +788,131 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "flaky_diffs" not in proj
         assert "flaky_file_diffs" not in proj
 
+    def test_duplicate_diagnostics_do_not_cascade_into_phantom_removals(self):
+        def make_diag(message):
+            return {
+                "level": "error",
+                "lint_name": "invalid-argument-type",
+                "path": "a.py",
+                "line": 1,
+                "column": 1,
+                "message": message,
+            }
+
+        old_int = "Argument to bound method `__init__` is incorrect: Expected `int`"
+        old_str = "Argument to bound method `__init__` is incorrect: Expected `str`"
+        new_int = "Argument to `Z.__init__` is incorrect: Expected `int`"
+        new_str = "Argument to `A.__init__` is incorrect: Expected `str`"
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "proj", [make_diag(old_int), make_diag(old_int), make_diag(old_str)]
+                )
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "proj", [make_diag(new_int), make_diag(new_int), make_diag(new_str)]
+                )
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        stats = diff._calculate_statistics()
+        modified_line = diff.diffs["modified_projects"][0]["diffs"]["modified_files"][
+            0
+        ]["diffs"]["modified_lines"][0]
+
+        assert stats["total_changed"] == 2
+        assert stats["total_added"] == 0
+        assert stats["total_removed"] == 0
+        assert {
+            (item["old"]["message"], item["new"]["message"])
+            for item in modified_line["text_diffs"]
+        } == {(old_int, new_int), (old_str, new_str)}
+
+    def test_competing_rewritten_diagnostics_are_matched_globally(self):
+        def make_diag(message):
+            return {
+                "level": "error",
+                "lint_name": "invalid-assignment",
+                "path": "a.py",
+                "line": 1,
+                "column": 1,
+                "message": message,
+            }
+
+        old_int = "Expected int"
+        old_str = "Expected str"
+        new_int = "Expected int | None."
+        new_str = "Expected str."
+        old_data = {
+            "outputs": [_make_output("proj", [make_diag(old_int), make_diag(old_str)])]
+        }
+        new_data = {
+            "outputs": [_make_output("proj", [make_diag(new_int), make_diag(new_str)])]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        modified_line = diff.diffs["modified_projects"][0]["diffs"]["modified_files"][
+            0
+        ]["diffs"]["modified_lines"][0]
+
+        assert {
+            (item["old"]["message"], item["new"]["message"])
+            for item in modified_line["text_diffs"]
+        } == {(old_int, new_int), (old_str, new_str)}
+
+    def test_rectangular_matching_preserves_old_to_new_similarity_direction(self):
+        def make_diag(message):
+            return {
+                "level": "error",
+                "lint_name": "invalid-assignment",
+                "path": "a.py",
+                "line": 1,
+                "column": 1,
+                "message": message,
+            }
+
+        old_data = {
+            "outputs": [_make_output("proj", [make_diag("aaa"), make_diag("babba")])]
+        }
+        new_data = {"outputs": [_make_output("proj", [make_diag("aba")])]}
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        modified_line = diff.diffs["modified_projects"][0]["diffs"]["modified_files"][
+            0
+        ]["diffs"]["modified_lines"][0]
+
+        assert [
+            (item["old"]["message"], item["new"]["message"])
+            for item in modified_line["text_diffs"]
+        ] == [("aaa", "aba")]
+        assert [item["message"] for item in modified_line["removed"]] == ["babba"]
+        assert modified_line["added"] == []
+
     def test_statistics_markdown_includes_large_timing_changes(self):
         old_data = {
             "outputs": [

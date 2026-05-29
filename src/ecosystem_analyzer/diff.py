@@ -745,32 +745,28 @@ class DiagnosticDiff:
                 changed_old_formatted = set()
                 changed_new_formatted = set()
 
-                # Track which new diagnostics have been matched to avoid double-matching
-                matched_new_strs = set()
+                removed_diagnostics = [
+                    d for d in old_diagnostics if self._format_diagnostic(d) in removed
+                ]
+                added_diagnostics = [
+                    d for d in new_diagnostics if self._format_diagnostic(d) in added
+                ]
 
-                # For simplicity, we'll just show all removed and added diagnostics
-                for old_diag in old_diagnostics:
+                for old_diag, new_diag in self._match_changed_diagnostics(
+                    removed_diagnostics, added_diagnostics
+                ):
                     old_str = self._format_diagnostic(old_diag)
-                    if old_str in removed:
-                        for new_diag in new_diagnostics:
-                            new_str = self._format_diagnostic(new_diag)
-                            if (
-                                new_str in added
-                                and new_str not in matched_new_strs
-                                and self._similar_diagnostics(old_diag, new_diag)
-                            ):
-                                # Generate line diff
-                                diff = self._generate_text_diff(old_str, new_str)
-                                if diff:
-                                    text_diffs.append({
-                                        "old": old_diag,
-                                        "new": new_diag,
-                                        "diff": diff,
-                                    })
-                                    changed_old_formatted.add(old_str)
-                                    changed_new_formatted.add(new_str)
-                                    matched_new_strs.add(new_str)
-                                break
+                    new_str = self._format_diagnostic(new_diag)
+                    # Generate line diff
+                    diff = self._generate_text_diff(old_str, new_str)
+                    if diff:
+                        text_diffs.append({
+                            "old": old_diag,
+                            "new": new_diag,
+                            "diff": diff,
+                        })
+                        changed_old_formatted.add(old_str)
+                        changed_new_formatted.add(new_str)
 
                 # Filter out diagnostics that are part of changes
                 removed_diagnostics = [
@@ -804,9 +800,132 @@ class DiagnosticDiff:
 
         return result
 
-    def _similar_diagnostics(self, diag1: Diagnostic, diag2: Diagnostic) -> bool:
-        """Check if two diagnostics are similar (same lint name)."""
-        return diag1["lint_name"] == diag2["lint_name"]
+    def _match_changed_diagnostics(
+        self,
+        old_diagnostics: list[Diagnostic],
+        new_diagnostics: list[Diagnostic],
+    ) -> list[tuple[Diagnostic, Diagnostic]]:
+        """Match rewritten diagnostics by lint while maximizing total similarity."""
+        old_by_lint: dict[str, list[Diagnostic]] = {}
+        new_by_lint: dict[str, list[Diagnostic]] = {}
+        for diag in old_diagnostics:
+            old_by_lint.setdefault(diag["lint_name"], []).append(diag)
+        for diag in new_diagnostics:
+            new_by_lint.setdefault(diag["lint_name"], []).append(diag)
+
+        result = []
+        for lint_name in sorted(old_by_lint.keys() & new_by_lint.keys()):
+            old_group = self._distinct_diagnostics(old_by_lint[lint_name])
+            new_group = self._distinct_diagnostics(new_by_lint[lint_name])
+            result.extend(
+                (old_group[old_index], new_group[new_index])
+                for old_index, new_index in self._maximum_similarity_assignment(
+                    old_group, new_group
+                )
+            )
+        return result
+
+    def _distinct_diagnostics(self, diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+        """Return the first diagnostic for each distinct formatted representation."""
+        result = {}
+        for diag in diagnostics:
+            result.setdefault(self._format_diagnostic(diag), diag)
+        return list(result.values())
+
+    def _maximum_similarity_assignment(
+        self,
+        old_diagnostics: list[Diagnostic],
+        new_diagnostics: list[Diagnostic],
+    ) -> list[tuple[int, int]]:
+        """Assign the smaller diagnostic group to the larger one by total similarity."""
+        if not old_diagnostics or not new_diagnostics:
+            return []
+
+        old_formatted = [self._format_diagnostic(diag) for diag in old_diagnostics]
+        new_formatted = [self._format_diagnostic(diag) for diag in new_diagnostics]
+        assignment_is_transposed = len(old_formatted) > len(new_formatted)
+        # This quadratic matrix is pathological for very large groups, but a single
+        # source line is extremely unlikely to emit enough distinct diagnostics of
+        # one lint for that to matter in ecosystem analysis.
+        if assignment_is_transposed:
+            costs = [
+                [
+                    -difflib.SequenceMatcher(None, old_str, new_str).ratio()
+                    for old_str in old_formatted
+                ]
+                for new_str in new_formatted
+            ]
+        else:
+            costs = [
+                [
+                    -difflib.SequenceMatcher(None, old_str, new_str).ratio()
+                    for new_str in new_formatted
+                ]
+                for old_str in old_formatted
+            ]
+
+        # Hungarian algorithm for a rectangular cost matrix with rows <= columns.
+        row_count = len(costs)
+        column_count = len(costs[0])
+        row_potentials = [0.0] * (row_count + 1)
+        column_potentials = [0.0] * (column_count + 1)
+        matched_rows_by_column = [0] * (column_count + 1)
+        previous_columns = [0] * (column_count + 1)
+
+        for row in range(1, row_count + 1):
+            matched_rows_by_column[0] = row
+            column = 0
+            min_values = [float("inf")] * (column_count + 1)
+            used_columns = [False] * (column_count + 1)
+            while True:
+                used_columns[column] = True
+                matched_row = matched_rows_by_column[column]
+                delta = float("inf")
+                next_column = 0
+                for candidate_column in range(1, column_count + 1):
+                    if used_columns[candidate_column]:
+                        continue
+                    current_value = (
+                        costs[matched_row - 1][candidate_column - 1]
+                        - row_potentials[matched_row]
+                        - column_potentials[candidate_column]
+                    )
+                    if current_value < min_values[candidate_column]:
+                        min_values[candidate_column] = current_value
+                        previous_columns[candidate_column] = column
+                    if min_values[candidate_column] < delta:
+                        delta = min_values[candidate_column]
+                        next_column = candidate_column
+
+                for candidate_column in range(column_count + 1):
+                    if used_columns[candidate_column]:
+                        row_potentials[matched_rows_by_column[candidate_column]] += (
+                            delta
+                        )
+                        column_potentials[candidate_column] -= delta
+                    else:
+                        min_values[candidate_column] -= delta
+                column = next_column
+                if matched_rows_by_column[column] == 0:
+                    break
+
+            while True:
+                previous_column = previous_columns[column]
+                matched_rows_by_column[column] = matched_rows_by_column[previous_column]
+                column = previous_column
+                if column == 0:
+                    break
+
+        assignments = sorted(
+            (matched_rows_by_column[column] - 1, column - 1)
+            for column in range(1, column_count + 1)
+            if matched_rows_by_column[column] != 0
+        )
+        if assignment_is_transposed:
+            return sorted(
+                (old_index, new_index) for new_index, old_index in assignments
+            )
+        return assignments
 
     def _generate_text_diff(self, old_text: str, new_text: str) -> list[str]:
         """Generate a text diff between two strings."""
