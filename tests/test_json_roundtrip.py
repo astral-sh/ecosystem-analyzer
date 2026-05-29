@@ -491,7 +491,7 @@ class TestJsonRoundtrip:
         assert "| `panic-to-timeout` | ➖ failure mode changed |" in markdown
         assert "| `timeout-to-abnormal-exit` | ➖ failure mode changed |" in markdown
         assert "❌ newly failing" not in markdown
-        assert "🎉 crashes fixed" not in markdown
+        assert "🎉" not in markdown
         assert (
             "  FAILURE MODE CHANGED old=abnormal exit(101) new=timeout(None)"
             in markdown
@@ -514,6 +514,9 @@ class TestJsonRoundtrip:
 
         assert "➖ failure mode changed" in html
         assert 'title="Failure mode changed between the baseline and PR"' in html
+        assert "🎉" not in html
+        assert "➖ Previous panic message (no longer present)" in html
+        assert "Fixed panic message" not in html
 
     def test_introduced_panics_outrank_changed_failure_modes(self):
         shared = "thread 'main' panicked at shared site"
@@ -950,6 +953,7 @@ class TestJsonRoundtrip:
             html = f.read()
 
         assert "🎉 panics reduced" in html
+        assert "🎉 Fixed panic message (no longer present)" in html
         assert (
             'title="Some panic messages that existed on the baseline '
             'are no longer present"'
@@ -1006,6 +1010,19 @@ class TestJsonRoundtrip:
         # `has_fixed_failures` only fires on full recovery, not on panic swaps.
         assert not diff.has_fixed_failures()
         assert "new panics detected" in diff.generate_comment_title()
+
+        markdown = diff.render_statistics_markdown()
+        assert "🎉" not in markdown
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
+            html_path = f.name
+        diff.generate_html_report(html_path)
+        with open(html_path) as f:
+            html = f.read()
+
+        assert "🎉" not in html
+        assert "➖ Previous panic message (no longer present)" in html
+        assert "Fixed panic message" not in html
 
     def test_no_flaky_keys_when_absent(self):
         """When no flaky data exists, no flaky keys in output."""

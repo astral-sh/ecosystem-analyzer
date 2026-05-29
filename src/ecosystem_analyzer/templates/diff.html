@@ -222,6 +222,7 @@
             border-color: rgba(40, 167, 69, 0.3);
         }
 
+        .panic-block-neutral,
         .panic-block-persistent {
             background: rgba(108, 117, 125, 0.08);
             border-color: rgba(108, 117, 125, 0.25);
@@ -856,10 +857,17 @@
                             </details>
                             {% endif %}
                             {% if project.fixed_panic_messages %}
+                            {% if failure_status in ['fixed', 'reduced'] %}
                             <details class="panic-block panic-block-fixed">
                                 <summary>🎉 Fixed panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
                                 <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
                             </details>
+                            {% else %}
+                            <details class="panic-block panic-block-neutral">
+                                <summary>➖ Previous panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
+                                <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
+                            </details>
+                            {% endif %}
                             {% endif %}
                             {% if project.persistent_panic_messages %}
                             <details class="panic-block panic-block-persistent">
