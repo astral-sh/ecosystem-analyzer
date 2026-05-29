@@ -222,7 +222,7 @@ class InstalledProject:
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
             )
-        elif self._project.deps:
+        if self._project.deps:
             logger.info(f"Installing dependencies: {', '.join(self._project.deps)}")
 
             exclude_newer_args = (
@@ -245,5 +245,5 @@ class InstalledProject:
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
             )
-        else:
+        if not self._project.install_cmd and not self._project.deps:
             logger.info("No dependencies to install")
