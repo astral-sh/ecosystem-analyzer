@@ -52,7 +52,10 @@ class DiffStatistics(TypedDict):
 
 _FAILURE_STATUS_LABELS = {
     "new": "❌ newly failing",
+    "new_panics": "❌ new panics",
+    "changed": "➖ failure mode changed",
     "persistent": "➖ persistent",
+    "reduced": "🎉 panics reduced",
     "fixed": "🎉 crashes fixed",
 }
 
@@ -318,18 +321,30 @@ class DiagnosticDiff:
                 introduced_panics = sorted(new_panic_set - old_panic_set)
                 fixed_panics = sorted(old_panic_set - new_panic_set)
                 persistent_panics = sorted(new_panic_set & old_panic_set)
+                abnormal_exit_kind_changed = (
+                    old_status == new_status == "abnormal exit"
+                    and old_project.get("return_code") != new_project.get("return_code")
+                )
 
-                # `failure_status` celebrates or flags only *overall* state
-                # transitions — going from passing to failing (or vice
-                # versa).  A project that stays failing but picks up a new
-                # panic still counts as a regression ("new").  A project
-                # that stays failing but loses a panic is still failing —
-                # surface the partial improvement in the HTML report and
-                # raw diff, but don't celebrate it in the PR title/table.
-                if introduced_panics or (not old_failed and new_failed):
+                # `failure_status` celebrates or flags overall state
+                # transitions. A project that stays failing but picks up a new
+                # panic is a regression, even if it also changes failure mode,
+                # but it isn't a newly failing project. Otherwise, switching
+                # between a timeout and an abnormal exit, or between different
+                # abnormal return codes, is neutral: neither mode is
+                # necessarily worse. A project that stays failing but loses a
+                # panic is still failing, but the reduction is worth surfacing
+                # as a partial improvement.
+                if not old_failed and new_failed:
                     failure_status = "new"
                 elif old_failed and not new_failed:
                     failure_status = "fixed"
+                elif introduced_panics:
+                    failure_status = "new_panics"
+                elif old_status != new_status or abnormal_exit_kind_changed:
+                    failure_status = "changed"
+                elif fixed_panics:
+                    failure_status = "reduced"
                 else:
                     failure_status = "persistent"
 
@@ -481,8 +496,15 @@ class DiagnosticDiff:
                 result["modified_projects"].append(entry)
 
         # Sort failed projects so PR reviewers see new regressions first,
-        # then persistent failures, then anything that was fixed.
-        failure_status_priority = {"new": 3, "persistent": 2, "fixed": 1}
+        # then changed failure modes, reductions, persistent failures, and fixes.
+        failure_status_priority = {
+            "new": 6,
+            "new_panics": 5,
+            "changed": 4,
+            "reduced": 3,
+            "persistent": 2,
+            "fixed": 1,
+        }
 
         def failed_project_sort_key(project):
             status_priority = failure_status_priority.get(
@@ -958,6 +980,20 @@ class DiagnosticDiff:
             for project in self.diffs.get("failed_projects", [])
         )
 
+    def has_new_panics(self) -> bool:
+        """Check if any still-failing project gained panic messages."""
+        return any(
+            project.get("failure_status") == "new_panics"
+            for project in self.diffs.get("failed_projects", [])
+        )
+
+    def has_reduced_panics(self) -> bool:
+        """Check if any still-failing project has fewer panic messages."""
+        return any(
+            project.get("failure_status") == "reduced"
+            for project in self.diffs.get("failed_projects", [])
+        )
+
     def generate_comment_title(self) -> str:
         """Generate the PR comment title with status indicators for new failures."""
         title = "## `ecosystem-analyzer` results"
@@ -977,8 +1013,12 @@ class DiagnosticDiff:
                 title += ": new timeouts detected ❌"
             else:
                 title += ": new crashes detected ❌"
+        elif self.has_new_panics():
+            title += ": new panics detected ❌"
         elif self.has_fixed_failures():
             title += ": ecosystem failure fixed 🎉"
+        elif self.has_reduced_panics():
+            title += ": panics reduced 🎉"
         return title
 
     def _render_raw_diff_sections(
@@ -1035,27 +1075,38 @@ class DiagnosticDiff:
 
         for project in self.diffs["failed_projects"]:
             status = project.get("failure_status")
+            introduced_panics = project.get("introduced_panic_messages", [])
             fixed_panics = project.get("fixed_panic_messages", [])
-            # Persistent failures with no panic delta aren't PR-specific
-            # news; they live in the HTML report instead of the comment's
-            # raw diff.  Persistent-but-partially-improved failures (some
-            # panics resolved, project still failing) are surfaced here so
-            # reviewers can see the partial progress.
+            # Persistent failures with no panic delta aren't PR-specific news;
+            # they live in the HTML report instead of the comment's raw diff.
+            # Changed failure modes are neutral but still PR-specific.
+            # Reduced failures (some panics resolved, project still failing)
+            # are surfaced here so reviewers can see the partial progress.
             if status == "persistent" and not fixed_panics:
                 continue
             # Prefix drives GitHub's `diff` highlighting: `-` is red (bad),
-            # `+` is green (good).  Newly failing → red; fully fixed →
-            # green; partial fix on a still-failing project → green line
-            # noting the improvement.
+            # `+` is green (good). Newly failing and new panics are red; fully
+            # fixed and partial fixes on still-failing projects are green.
             if status == "new":
                 line = (
                     f"- FAILED "
                     f"old={project['old_status']}({project.get('old_return_code')}) "
                     f"new={project['new_status']}({project.get('new_return_code')})"
                 )
+            elif status == "new_panics":
+                line = (
+                    f"- NEW PANIC{'S' if len(introduced_panics) != 1 else ''}: "
+                    f"{len(introduced_panics)} introduced, project still failing"
+                )
             elif status == "fixed":
                 line = (
                     f"+ FIXED "
+                    f"old={project['old_status']}({project.get('old_return_code')}) "
+                    f"new={project['new_status']}({project.get('new_return_code')})"
+                )
+            elif status == "changed":
+                line = (
+                    f"  FAILURE MODE CHANGED "
                     f"old={project['old_status']}({project.get('old_return_code')}) "
                     f"new={project['new_status']}({project.get('new_return_code')})"
                 )
@@ -1169,10 +1220,9 @@ class DiagnosticDiff:
 
         markdown_content = self.generate_comment_title() + "\n\n"
 
-        # Projects that were already failing on the baseline and are still
-        # failing on the PR aren't news — omit them from the PR-comment
-        # summary table so reviewers can focus on what changed.  They
-        # still show up in the full HTML report.
+        # Projects with the same failure mode on the baseline and PR aren't
+        # news — omit them from the PR-comment summary table so reviewers can
+        # focus on what changed. They still show up in the full HTML report.
         table_projects = [
             project
             for project in failed_projects

@@ -254,24 +254,29 @@
             color: #b02a37;
         }
 
+        .panic-tag-reduced,
         .panic-tag-fixed {
             background: rgba(40, 167, 69, 0.15);
             color: #1d6f3a;
         }
 
+        .panic-tag-changed,
         .panic-tag-persistent {
             background: rgba(108, 117, 125, 0.15);
             color: #495057;
         }
 
+        .failed-row-new_panics,
         .failed-row-new {
             background: rgba(220, 53, 69, 0.12);
         }
 
+        .failed-row-reduced,
         .failed-row-fixed {
             background: rgba(40, 167, 69, 0.12);
         }
 
+        .failed-row-changed,
         .failed-row-persistent {
             background: rgba(108, 117, 125, 0.08);
         }
@@ -752,11 +757,18 @@
 
         {% if diffs.failed_projects %}
         {% set new_failure_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'new') | list %}
+        {% set new_panic_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'new_panics') | list %}
         {% set fixed_failure_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'fixed') | list %}
         {% if new_failure_projects %}
         <div class="new-panic-banner">
             ❌ <strong>New ecosystem failure{{ 's' if new_failure_projects|length != 1 else '' }} introduced</strong> in:
             {% for project in new_failure_projects %}<code>{{ project.project }}</code> <small>({{ failure_descriptor(project, 'new') }})</small>{{ ", " if not loop.last }}{% endfor %}
+        </div>
+        {% endif %}
+        {% if new_panic_projects %}
+        <div class="new-panic-banner">
+            ❌ <strong>Panic regression{{ 's' if new_panic_projects|length != 1 else '' }} introduced</strong> in:
+            {% for project in new_panic_projects %}<code>{{ project.project }}</code> <small>({{ project.introduced_panic_messages|length }} new panic message{{ 's' if project.introduced_panic_messages|length != 1 else '' }})</small>{{ ", " if not loop.last }}{% endfor %}
         </div>
         {% endif %}
         {% if fixed_failure_projects %}
@@ -789,8 +801,14 @@
                         <td style="padding: 12px; text-align: center; font-weight: 600;">
                             {% if failure_status == 'new' %}
                                 <span class="panic-tag panic-tag-new" title="Failure introduced by this PR">{{ failure_status_labels['new'] }}</span>
+                            {% elif failure_status == 'new_panics' %}
+                                <span class="panic-tag panic-tag-new" title="New panic messages introduced by this PR while the project remains failing">{{ failure_status_labels['new_panics'] }}</span>
                             {% elif failure_status == 'fixed' %}
                                 <span class="panic-tag panic-tag-fixed" title="Failure that existed on the baseline is no longer present">{{ failure_status_labels['fixed'] }}</span>
+                            {% elif failure_status == 'changed' %}
+                                <span class="panic-tag panic-tag-changed" title="Failure mode changed between the baseline and PR">{{ failure_status_labels['changed'] }}</span>
+                            {% elif failure_status == 'reduced' %}
+                                <span class="panic-tag panic-tag-reduced" title="Some panic messages that existed on the baseline are no longer present">{{ failure_status_labels['reduced'] }}</span>
                             {% else %}
                                 <span class="panic-tag panic-tag-persistent" title="Same failure on both baseline and PR">{{ failure_status_labels['persistent'] }}</span>
                             {% endif %}
@@ -834,19 +852,19 @@
                             {% if project.introduced_panic_messages %}
                             <details class="panic-block panic-block-new" open>
                                 <summary>❌ New panic message{{ 's' if project.introduced_panic_messages|length != 1 }} (introduced by this PR)</summary>
-                                <pre>{{ project.introduced_panic_messages | join('\n') }}</pre>
+                                <pre>{{ project.introduced_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
                             {% if project.fixed_panic_messages %}
                             <details class="panic-block panic-block-fixed">
                                 <summary>🎉 Fixed panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
-                                <pre>{{ project.fixed_panic_messages | join('\n') }}</pre>
+                                <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
                             {% if project.persistent_panic_messages %}
                             <details class="panic-block panic-block-persistent">
                                 <summary>➖ Persistent panic message{{ 's' if project.persistent_panic_messages|length != 1 }} (present on both baseline and PR)</summary>
-                                <pre>{{ project.persistent_panic_messages | join('\n') }}</pre>
+                                <pre>{{ project.persistent_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
                         </td>
