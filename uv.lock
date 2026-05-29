@@ -45,7 +45,7 @@ requires-dist = [
     { name = "click", specifier = "==8.4.0" },
     { name = "gitpython", specifier = "==3.1.50" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?rev=f5047ff57be3d84889bd3ca27f0344318a91480d" },
+    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?rev=23bbdd55fea37ca2489043d1327dbe35c4fc7083" },
 ]
 
 [package.metadata.requires-dev]
@@ -154,7 +154,7 @@ wheels = [
 [[package]]
 name = "mypy-primer"
 version = "0.1.0"
-source = { git = "https://github.com/hauntsaninja/mypy_primer?rev=f5047ff57be3d84889bd3ca27f0344318a91480d#f5047ff57be3d84889bd3ca27f0344318a91480d" }
+source = { git = "https://github.com/hauntsaninja/mypy_primer?rev=23bbdd55fea37ca2489043d1327dbe35c4fc7083#23bbdd55fea37ca2489043d1327dbe35c4fc7083" }
 
 [[package]]
 name = "packaging"
