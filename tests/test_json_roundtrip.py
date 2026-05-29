@@ -789,6 +789,8 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "flaky_file_diffs" not in proj
 
     def test_duplicate_diagnostics_do_not_cascade_into_phantom_removals(self):
+        """Repeated representations are matched once without leaving duplicate noise."""
+
         def make_diag(message):
             return {
                 "level": "error",
@@ -840,6 +842,8 @@ info: Args: /tmp/new_commit/ty check ."""
         } == {(old_int, new_int), (old_str, new_str)}
 
     def test_competing_rewritten_diagnostics_are_matched_globally(self):
+        """Competing rewrites are paired by the best assignment for the whole group."""
+
         def make_diag(message):
             return {
                 "level": "error",
@@ -879,6 +883,8 @@ info: Args: /tmp/new_commit/ty check ."""
         } == {(old_int, new_int), (old_str, new_str)}
 
     def test_rectangular_matching_preserves_old_to_new_similarity_direction(self):
+        """Transposed assignments still calculate similarity from old text to new text."""
+
         def make_diag(message):
             return {
                 "level": "error",
