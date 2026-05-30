@@ -752,15 +752,15 @@ class DiagnosticDiff:
                     d for d in new_diagnostics if self._format_diagnostic(d) in added
                 ]
 
-                # The set difference above has already removed exact matches. Pair
-                # likely rewrites before reporting the remaining diagnostics as
-                # independent removals and additions.
+                # Exact string matches are gone. A diagnostic whose text changed
+                # should be reported as one change, not as one removal plus one
+                # addition. Match likely old and new versions before recording
+                # anything left over.
                 for old_diag, new_diag in self._match_changed_diagnostics(
                     removed_diagnostics, added_diagnostics
                 ):
                     old_str = self._format_diagnostic(old_diag)
                     new_str = self._format_diagnostic(new_diag)
-                    # Generate line diff
                     diff = self._generate_text_diff(old_str, new_str)
                     if diff:
                         text_diffs.append({
@@ -808,17 +808,25 @@ class DiagnosticDiff:
         old_diagnostics: list[Diagnostic],
         new_diagnostics: list[Diagnostic],
     ) -> list[tuple[Diagnostic, Diagnostic]]:
-        """Match removed and added diagnostics that should render as rewrites.
+        """Match old diagnostics to new diagnostics when only their text changed.
 
-        A rewrite must preserve the lint name. Within each lint group, collapse
-        duplicate formatted diagnostics and find a one-to-one assignment that
-        maximizes the total textual similarity across all pairs. Matching the
-        group globally avoids an early, locally plausible pair from forcing a
-        worse pairing for the remaining diagnostics.
+        For example, ty might change a message from::
 
-        If the group sizes differ, every member of the smaller group is paired.
-        The caller reports unmatched members of the larger group as additions
-        or removals.
+            Argument to bound method `__init__` is incorrect
+
+        to::
+
+            Argument to `A.__init__` is incorrect
+
+        Those messages should appear in the report as one changed diagnostic,
+        not as one removal and one addition.
+
+        Only diagnostics with the same lint name can be old and new versions
+        of each other. A line can contain several diagnostics from the same
+        lint, so choose the combination whose messages are most similar
+        overall. If one side has more distinct diagnostics, return one match
+        for each diagnostic on the smaller side. The caller reports anything
+        left over as an addition or removal.
         """
         old_by_lint: dict[str, list[Diagnostic]] = {}
         new_by_lint: dict[str, list[Diagnostic]] = {}
@@ -840,12 +848,13 @@ class DiagnosticDiff:
         return result
 
     def _distinct_diagnostics(self, diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-        """Collapse duplicate formatted diagnostics while preserving display data.
+        """Return the first diagnostic for each distinct formatted string.
 
         Line comparison is set-based, so repeated instances of the same
-        formatted diagnostic represent one changed value. Keeping only the
-        first instance prevents duplicates from cascading into phantom
-        additions or removals after matching.
+        formatted string represent one changed value. Matching duplicates
+        again here would let one value count more than once and cause false
+        additions or removals. The first instance is enough for choosing the
+        matches.
         """
         result = {}
         for diag in diagnostics:
@@ -857,36 +866,46 @@ class DiagnosticDiff:
         old_diagnostics: list[Diagnostic],
         new_diagnostics: list[Diagnostic],
     ) -> list[tuple[int, int]]:
-        """Return the old/new index pairs with the greatest total similarity.
+        """Return old/new index pairs whose formatted strings are most similar.
 
-        Treat the old and new diagnostics as the two sides of a bipartite
-        graph. Each edge is weighted by the ``SequenceMatcher`` similarity of
-        its formatted diagnostics. This uses the Hungarian algorithm to find a
-        maximum-similarity one-to-one assignment.
+        For each possible old/new combination, calculate the ``SequenceMatcher``
+        similarity score for the two strings. Then use the Hungarian algorithm
+        to choose the combination with the highest total score, without using
+        any diagnostic more than once. This avoids choosing a good match for
+        the first old diagnostic if that would force worse matches for the
+        remaining diagnostics.
 
-        The rectangular implementation requires at most as many rows as
-        columns, so the matrix is transposed when there are more old
-        diagnostics than new diagnostics. Every diagnostic in the smaller
-        group is matched; the caller leaves any unmatched diagnostics in the
-        larger group as additions or removals.
+        The two lists can have different lengths. The implementation below
+        stores the score for each possible match in a table: one row for each
+        diagnostic in the shorter list and one column for each diagnostic in
+        the longer list. It matches every row to one column. The caller reports
+        diagnostics represented only by unused columns as additions or
+        removals.
+
+        ``SequenceMatcher``:
+        https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher
+
+        Hungarian algorithm:
+        https://en.wikipedia.org/wiki/Hungarian_algorithm
         """
         if not old_diagnostics or not new_diagnostics:
             return []
 
         old_formatted = [self._format_diagnostic(diag) for diag in old_diagnostics]
         new_formatted = [self._format_diagnostic(diag) for diag in new_diagnostics]
-        assignment_is_transposed = len(old_formatted) > len(new_formatted)
-        # The Hungarian algorithm minimizes costs. Negating the similarity
-        # ratios turns the desired maximum-similarity assignment into a
-        # minimum-cost assignment. Keep the old string as SequenceMatcher's
-        # first argument even when the matrix is transposed: its ratio can
-        # depend on argument order.
+        rows_are_new_diagnostics = len(old_formatted) > len(new_formatted)
+        # The implementation below chooses the smallest numbers, whereas
+        # SequenceMatcher gives larger scores to more similar strings. Store
+        # negated scores so the smallest total represents the best matches.
+        # Keep the old string as SequenceMatcher's first argument even when a
+        # row represents a new diagnostic: its ratio can depend on argument
+        # order.
         #
-        # This matrix is pathological for very large groups, but a single
-        # source line is extremely unlikely to emit enough distinct
-        # diagnostics of one lint for that to matter in ecosystem analysis.
-        if assignment_is_transposed:
-            costs = [
+        # The table has one entry for every possible match. A single source
+        # line is extremely unlikely to emit enough distinct diagnostics of one
+        # lint for the table size to matter in ecosystem analysis.
+        if rows_are_new_diagnostics:
+            negated_similarities = [
                 [
                     -difflib.SequenceMatcher(None, old_str, new_str).ratio()
                     for old_str in old_formatted
@@ -894,7 +913,7 @@ class DiagnosticDiff:
                 for new_str in new_formatted
             ]
         else:
-            costs = [
+            negated_similarities = [
                 [
                     -difflib.SequenceMatcher(None, old_str, new_str).ratio()
                     for new_str in new_formatted
@@ -902,13 +921,13 @@ class DiagnosticDiff:
                 for old_str in old_formatted
             ]
 
-        # Hungarian algorithm for a rectangular cost matrix with rows <=
-        # columns. Index zero is a sentinel that anchors the alternating path.
-        # Each outer iteration extends the matching by one row.
-        row_count = len(costs)
-        column_count = len(costs[0])
-        row_potentials = [0.0] * (row_count + 1)
-        column_potentials = [0.0] * (column_count + 1)
+        # This is the Hungarian algorithm linked above. Use one-based indexes
+        # because slot zero is reserved for bookkeeping. Each pass adds a match
+        # for one more row.
+        row_count = len(negated_similarities)
+        column_count = len(negated_similarities[0])
+        row_offsets = [0.0] * (row_count + 1)
+        column_offsets = [0.0] * (column_count + 1)
         matched_rows_by_column = [0] * (column_count + 1)
         previous_columns = [0] * (column_count + 1)
 
@@ -925,12 +944,10 @@ class DiagnosticDiff:
                 for candidate_column in range(1, column_count + 1):
                     if used_columns[candidate_column]:
                         continue
-                    # Find the cheapest reduced-cost edge leaving the current
-                    # alternating tree.
                     current_value = (
-                        costs[matched_row - 1][candidate_column - 1]
-                        - row_potentials[matched_row]
-                        - column_potentials[candidate_column]
+                        negated_similarities[matched_row - 1][candidate_column - 1]
+                        - row_offsets[matched_row]
+                        - column_offsets[candidate_column]
                     )
                     if current_value < min_values[candidate_column]:
                         min_values[candidate_column] = current_value
@@ -939,23 +956,20 @@ class DiagnosticDiff:
                         delta = min_values[candidate_column]
                         next_column = candidate_column
 
-                # Shift the dual potentials so that at least one more column
-                # becomes reachable without changing the best assignment seen
-                # so far.
+                # Update the bookkeeping offsets before considering the next
+                # available column.
                 for candidate_column in range(column_count + 1):
                     if used_columns[candidate_column]:
-                        row_potentials[matched_rows_by_column[candidate_column]] += (
-                            delta
-                        )
-                        column_potentials[candidate_column] -= delta
+                        row_offsets[matched_rows_by_column[candidate_column]] += delta
+                        column_offsets[candidate_column] -= delta
                     else:
                         min_values[candidate_column] -= delta
                 column = next_column
                 if matched_rows_by_column[column] == 0:
                     break
 
-            # Follow the predecessor columns back to the sentinel, augmenting
-            # the matching along the discovered alternating path.
+            # Save the new match. Following previous_columns may move earlier
+            # matches to different columns to make room for it.
             while True:
                 previous_column = previous_columns[column]
                 matched_rows_by_column[column] = matched_rows_by_column[previous_column]
@@ -963,16 +977,16 @@ class DiagnosticDiff:
                 if column == 0:
                     break
 
-        # Convert the one-indexed column-to-row representation back into
-        # zero-indexed matrix pairs.
+        # Convert the one-based bookkeeping indexes back into indexes for the
+        # input lists.
         assignments = sorted(
             (matched_rows_by_column[column] - 1, column - 1)
             for column in range(1, column_count + 1)
             if matched_rows_by_column[column] != 0
         )
-        if assignment_is_transposed:
-            # Matrix rows represent new diagnostics after transposition. Expose
-            # a consistent (old_index, new_index) API to the caller.
+        if rows_are_new_diagnostics:
+            # Rows represent new diagnostics in this case. Swap the indexes so
+            # callers always receive (old_index, new_index).
             return sorted(
                 (old_index, new_index) for new_index, old_index in assignments
             )
