@@ -821,12 +821,14 @@ class DiagnosticDiff:
         Those messages should appear in the report as one changed diagnostic,
         not as one removal and one addition.
 
-        Only diagnostics with the same lint name can be old and new versions
-        of each other. A line can contain several diagnostics from the same
-        lint, so choose the combination whose messages are most similar
-        overall. If one side has more distinct diagnostics, return one match
-        for each diagnostic on the smaller side. The caller reports anything
-        left over as an addition or removal.
+        Only two diagnostics with the same lint name can be old/new versions
+        of each other. A line can contain several diagnostics with the same
+        error code, so choose the combination whose messages are most similar
+        overall. If one "side" (old vs new) has more distinct diagnostics,
+        return one match for each diagnostic on the smaller side. After we've
+        matched as many "changed diagnostic" pairs as possible, report all
+        remaining diagnostics on the old side as removals and all remaining
+        diagnostics on the new side as additions.
         """
         old_by_lint: dict[str, list[Diagnostic]] = {}
         new_by_lint: dict[str, list[Diagnostic]] = {}
@@ -848,13 +850,14 @@ class DiagnosticDiff:
         return result
 
     def _distinct_diagnostics(self, diagnostics: list[Diagnostic]) -> list[Diagnostic]:
-        """Return the first diagnostic for each distinct formatted string.
+        """Remove exact duplicates before matching old diagnostics to new ones.
 
-        Line comparison is set-based, so repeated instances of the same
-        formatted string represent one changed value. Matching duplicates
-        again here would let one value count more than once and cause false
-        additions or removals. The first instance is enough for choosing the
-        matches.
+        This is called separately for the old and new diagnostics from one line
+        that have the same error code. Multiple diagnostics can produce exactly
+        the same text in the diff report. Those duplicates should count as one
+        possible old/new match; otherwise one value could count more than once
+        and cause false additions or removals. Keep the first diagnostic so it
+        can be included in the report if selected as a match.
         """
         result = {}
         for diag in diagnostics:
@@ -866,14 +869,14 @@ class DiagnosticDiff:
         old_diagnostics: list[Diagnostic],
         new_diagnostics: list[Diagnostic],
     ) -> list[tuple[int, int]]:
-        """Return old/new index pairs whose formatted strings are most similar.
+        """Return old/new index pairs whose diagnostic text is most similar.
 
         For each possible old/new combination, calculate the ``SequenceMatcher``
-        similarity score for the two strings. Then use the Hungarian algorithm
-        to choose the combination with the highest total score, without using
-        any diagnostic more than once. This avoids choosing a good match for
-        the first old diagnostic if that would force worse matches for the
-        remaining diagnostics.
+        similarity score for the diagnostic text. Then use the "Hungarian
+        algorithm" to choose the combination with the highest total score,
+        without using any diagnostic more than once. This avoids choosing a
+        good match for the first old diagnostic if that would force worse
+        matches for the remaining diagnostics.
 
         The two lists can have different lengths. The implementation below
         stores the score for each possible match in a table: one row for each
@@ -898,8 +901,8 @@ class DiagnosticDiff:
         # SequenceMatcher gives larger scores to more similar strings. Store
         # negated scores so the smallest total represents the best matches.
         # Keep the old string as SequenceMatcher's first argument even when a
-        # row represents a new diagnostic: its ratio can depend on argument
-        # order.
+        # row represents a new diagnostic: SequenceMatcher's score can depend
+        # on argument order.
         #
         # The table has one entry for every possible match. A single source
         # line is extremely unlikely to emit enough distinct diagnostics of one
@@ -921,8 +924,8 @@ class DiagnosticDiff:
                 for old_str in old_formatted
             ]
 
-        # This is the Hungarian algorithm linked above. Use one-based indexes
-        # because slot zero is reserved for bookkeeping. Each pass adds a match
+        # This is the Hungarian algorithm linked above. Use 1-based indexes
+        # because slot 0 is reserved for bookkeeping. Each pass adds a match
         # for one more row.
         row_count = len(negated_similarities)
         column_count = len(negated_similarities[0])
