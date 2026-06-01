@@ -5,7 +5,7 @@ description = "A tool for analyzing Python projects with ty"
 dependencies = [
     "gitpython==3.1.50",
     "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@23bbdd55fea37ca2489043d1327dbe35c4fc7083",
-    "click==8.4.0",
+    "click==8.4.1",
     "jinja2==3.1.6",
 ]
 requires-python = ">=3.13"
