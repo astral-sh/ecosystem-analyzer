@@ -10,6 +10,7 @@ def _make_output(
     flaky_diagnostics: list | None = None,
     flaky_runs: int | None = None,
     panic_messages: list[str] | None = None,
+    stderr: str | None = None,
     time_s: float | None = 1.5,
     return_code: int | None = 1,
 ):
@@ -27,6 +28,8 @@ def _make_output(
         entry["flaky_runs"] = flaky_runs
     if panic_messages is not None:
         entry["panic_messages"] = panic_messages
+    if stderr is not None:
+        entry["stderr"] = stderr
     return entry
 
 
@@ -665,6 +668,51 @@ class TestJsonRoundtrip:
         markdown = diff.render_statistics_markdown()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
         assert "**Failing projects**:" not in markdown
+
+    def test_changed_stderr_is_visible_only_in_html_report(self):
+        old_stderr = "invalid invocation: <old option>"
+        new_stderr = "invalid invocation: <new option>"
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "same-code-error",
+                    [],
+                    stderr=old_stderr,
+                    time_s=None,
+                    return_code=2,
+                )
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "same-code-error",
+                    [],
+                    stderr=new_stderr,
+                    time_s=None,
+                    return_code=2,
+                )
+            ]
+        }
+
+        diff = _make_diff(old_data, new_data)
+        entry = diff.diffs["failed_projects"][0]
+
+        assert entry["failure_status"] == "persistent"
+        assert entry["old_stderr"] == old_stderr
+        assert entry["new_stderr"] == new_stderr
+
+        markdown = diff.render_statistics_markdown()
+        assert "same-code-error" not in markdown
+        assert old_stderr not in markdown
+        assert new_stderr not in markdown
+
+        html = _render_html(diff)
+        assert "same-code-error" in html
+        assert "<summary>Baseline stderr</summary>" in html
+        assert "<summary>PR stderr</summary>" in html
+        assert "invalid invocation: &lt;old option&gt;" in html
+        assert "invalid invocation: &lt;new option&gt;" in html
 
     def test_panic_location_and_trace_changes_are_persistent(self):
         old_panics = {

@@ -200,7 +200,7 @@
             background-color: #ffeef0;
         }
 
-        .panic-block {
+        .failure-output-block {
             margin-top: 8px;
             padding: 10px 12px;
             background: rgba(38, 18, 48, 0.06);
@@ -208,7 +208,7 @@
             border: 1px solid rgba(38, 18, 48, 0.12);
         }
 
-        .panic-block + .panic-block {
+        .failure-output-block + .failure-output-block {
             margin-top: 6px;
         }
 
@@ -228,12 +228,12 @@
             border-color: rgba(108, 117, 125, 0.25);
         }
 
-        .panic-block summary {
+        .failure-output-block summary {
             cursor: pointer;
             font-weight: 600;
         }
 
-        .panic-block pre {
+        .failure-output-block pre {
             margin: 10px 0 0 0;
             white-space: pre-wrap;
             word-break: break-word;
@@ -835,26 +835,38 @@
                             {% endif %}
                         </td>
                     </tr>
-                    {% if project.old_panic_messages or project.new_panic_messages %}
+                    {% if project.old_panic_messages or project.new_panic_messages or project.old_stderr or project.new_stderr %}
                     <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td colspan="6" style="padding: 12px;">
                             {% if project.introduced_panic_messages %}
-                            <details class="panic-block panic-block-new" open>
+                            <details class="failure-output-block panic-block-new" open>
                                 <summary>❌ New panic message{{ 's' if project.introduced_panic_messages|length != 1 }} (introduced by this PR)</summary>
                                 <pre>{{ project.introduced_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
                             {% if project.fixed_panic_messages %}
                             {% set fixed_panics_are_improvement = failure_status in ['fixed', 'reduced'] %}
-                            <details class="panic-block panic-block-{{ 'fixed' if fixed_panics_are_improvement else 'neutral' }}">
+                            <details class="failure-output-block panic-block-{{ 'fixed' if fixed_panics_are_improvement else 'neutral' }}">
                                 <summary>{{ '🎉 Fixed' if fixed_panics_are_improvement else '➖ Previous' }} panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
                                 <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
                             {% if project.persistent_panic_messages %}
-                            <details class="panic-block panic-block-persistent">
+                            <details class="failure-output-block panic-block-persistent">
                                 <summary>➖ Persistent panic message{{ 's' if project.persistent_panic_messages|length != 1 }} (present on both baseline and PR)</summary>
                                 <pre>{{ project.persistent_panic_messages | join('\n') | e }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if project.old_stderr %}
+                            <details class="failure-output-block">
+                                <summary>Baseline stderr</summary>
+                                <pre>{{ project.old_stderr | e }}</pre>
+                            </details>
+                            {% endif %}
+                            {% if project.new_stderr %}
+                            <details class="failure-output-block">
+                                <summary>PR stderr</summary>
+                                <pre>{{ project.new_stderr | e }}</pre>
                             </details>
                             {% endif %}
                         </td>
