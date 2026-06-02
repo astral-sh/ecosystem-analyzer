@@ -242,7 +242,7 @@
             line-height: 1.5;
         }
 
-        .panic-tag {
+        .failure-tag {
             display: inline-block;
             padding: 2px 8px;
             border-radius: 999px;
@@ -250,19 +250,19 @@
             font-weight: 600;
         }
 
-        .panic-tag-new {
+        .failure-tag-new {
             background: rgba(220, 53, 69, 0.15);
             color: #b02a37;
         }
 
-        .panic-tag-reduced,
-        .panic-tag-fixed {
+        .failure-tag-reduced,
+        .failure-tag-fixed {
             background: rgba(40, 167, 69, 0.15);
             color: #1d6f3a;
         }
 
-        .panic-tag-changed,
-        .panic-tag-persistent {
+        .failure-tag-changed,
+        .failure-tag-persistent {
             background: rgba(108, 117, 125, 0.15);
             color: #495057;
         }
@@ -282,40 +282,38 @@
             background: rgba(108, 117, 125, 0.08);
         }
 
-        .fixed-panic-banner,
-        .new-panic-banner {
+        .failure-banner {
             border-radius: 8px;
             padding: 12px 16px;
             margin: 12px 0 16px 0;
             font-size: 14px;
         }
 
-        .fixed-panic-banner {
+        .failure-banner-fixed {
             background: rgba(40, 167, 69, 0.12);
             border: 1px solid rgba(40, 167, 69, 0.35);
             color: #1d6f3a;
         }
 
-        .fixed-panic-banner code,
-        .new-panic-banner code {
+        .failure-banner code {
             padding: 1px 6px;
             border-radius: 4px;
             font-family: 'Fira Code', monospace;
             font-size: 12px;
         }
 
-        .fixed-panic-banner code {
+        .failure-banner-fixed code {
             background: rgba(40, 167, 69, 0.15);
             color: #145a2d;
         }
 
-        .new-panic-banner {
+        .failure-banner-new {
             background: rgba(220, 53, 69, 0.12);
             border: 1px solid rgba(220, 53, 69, 0.4);
             color: #842029;
         }
 
-        .new-panic-banner code {
+        .failure-banner-new code {
             background: rgba(220, 53, 69, 0.15);
             color: #5c1620;
         }
@@ -761,19 +759,19 @@
         {% set new_panic_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'new_panics') | list %}
         {% set fixed_failure_projects = diffs.failed_projects | selectattr('failure_status', 'equalto', 'fixed') | list %}
         {% if new_failure_projects %}
-        <div class="new-panic-banner">
+        <div class="failure-banner failure-banner-new">
             ❌ <strong>New ecosystem failure{{ 's' if new_failure_projects|length != 1 else '' }} introduced</strong> in:
             {% for project in new_failure_projects %}<code>{{ project.project }}</code> <small>({{ failure_descriptor(project, 'new') }})</small>{{ ", " if not loop.last }}{% endfor %}
         </div>
         {% endif %}
         {% if new_panic_projects %}
-        <div class="new-panic-banner">
+        <div class="failure-banner failure-banner-new">
             ❌ <strong>Panic regression{{ 's' if new_panic_projects|length != 1 else '' }} introduced</strong> in:
             {% for project in new_panic_projects %}<code>{{ project.project }}</code> <small>({{ project.introduced_panic_messages|length }} new panic message{{ 's' if project.introduced_panic_messages|length != 1 else '' }})</small>{{ ", " if not loop.last }}{% endfor %}
         </div>
         {% endif %}
         {% if fixed_failure_projects %}
-        <div class="fixed-panic-banner">
+        <div class="failure-banner failure-banner-fixed">
             🎉 <strong>Fixed ecosystem failure{{ 's' if fixed_failure_projects|length != 1 else '' }}</strong> in:
             {% for project in fixed_failure_projects %}<code>{{ project.project }}</code> <small>({{ failure_descriptor(project, 'fixed') }})</small>{{ ", " if not loop.last }}{% endfor %}
         </div>
@@ -793,14 +791,14 @@
                 </thead>
                 <tbody>
                     {% for project in diffs.failed_projects %}
-                    {% set failure_status = project.failure_status|default('persistent') %}
+                    {% set failure_status = project.failure_status %}
                     <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td style="padding: 12px;">
                             <strong>{{ project.project }}</strong>
                             <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 600;">
-                            <span class="panic-tag panic-tag-{{ 'new' if failure_status == 'new_panics' else failure_status }}" title="{{ failure_status_titles[failure_status] }}">{{ failure_status_labels[failure_status] }}</span>
+                            <span class="failure-tag failure-tag-{{ 'new' if failure_status == 'new_panics' else failure_status }}" title="{{ failure_status_titles[failure_status] }}">{{ failure_status_labels[failure_status] }}</span>
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 500;">
                             {% if project.old_status == 'timeout' %}

@@ -374,8 +374,7 @@ def diff(
         manager.build(old)
 
     # Run for old commit
-    manager.activate(project_names)
-    run_outputs_old = manager.run_active_projects()
+    run_outputs_old = manager.run_projects()
     manager.write_run_outputs(run_outputs_old, output_old)
 
     # Build (or use pre-built) new ty — incremental build is near-instant
@@ -383,8 +382,7 @@ def diff(
         manager.use_prebuilt(ty_binary_new, new)
     else:
         manager.build(new)
-    manager.activate(project_names)
-    run_outputs_new = manager.run_active_projects()
+    run_outputs_new = manager.run_projects()
     manager.write_run_outputs(run_outputs_new, output_new)
 
 
