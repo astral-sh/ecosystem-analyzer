@@ -576,6 +576,27 @@ info: query stacktrace:
         assert not diff.has_new_panics()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
+    def test_panic_version_and_args_changes_are_persistent(self):
+        old_panic = """Panicked at somewhere: `internal error`
+info: This indicates a bug in ty.
+info: Version: 0.0.1
+info: Args: /tmp/old_commit/ty check ."""
+        new_panic = """Panicked at somewhere: `internal error`
+info: This indicates a bug in ty.
+info: Version: 0.0.2
+info: Args: /tmp/new_commit/ty check ."""
+        diff = _make_diff(
+            [_make_failed_output("proj", panic_messages=[old_panic])],
+            [_make_failed_output("proj", panic_messages=[new_panic])],
+        )
+        entry = diff.diffs["failed_projects"][0]
+
+        assert entry["failure_status"] == "persistent"
+        assert entry["introduced_panic_messages"] == []
+        assert entry["fixed_panic_messages"] == []
+        assert entry["persistent_panic_messages"] == [new_panic]
+        assert not diff.has_new_panics()
+
     def test_multiple_panics_with_same_normalized_key_preserve_multiplicity(self):
         def panic_at(line: int) -> str:
             return (
