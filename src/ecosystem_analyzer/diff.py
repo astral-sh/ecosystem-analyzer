@@ -2,9 +2,11 @@ import difflib
 import json
 import os
 import random
+import re
+from collections import Counter
 from itertools import chain
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Literal, TypedDict
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
@@ -48,6 +50,98 @@ class DiffStatistics(TypedDict):
     failed_projects: int
     merged_by_lint: list[MergedLintStats]
     merged_by_project: list[MergedProjectStats]
+
+
+_FAILURE_STATUS_LABELS = {
+    "new": "❌ newly failing",
+    "new_panics": "❌ new panics",
+    "changed": "➖ failure mode changed",
+    "persistent": "➖ persistent",
+    "reduced": "🎉 panics reduced",
+    "fixed": "🎉 crashes fixed",
+}
+
+_FAILURE_STATUS_TITLES = {
+    "new": "Failure introduced by this PR",
+    "new_panics": "New panic messages introduced by this PR while the project remains failing",
+    "changed": "Failure mode changed between the baseline and PR",
+    "persistent": "Same failure on both baseline and PR",
+    "reduced": "Some panic messages that existed on the baseline are no longer present",
+    "fixed": "Failure that existed on the baseline is no longer present",
+}
+
+_RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
+_PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
+_VOLATILE_PANIC_METADATA_PREFIXES = ("info: Version:", "info: Args:")
+
+
+def _normalize_panic_message(message: str) -> str:
+    """Remove volatile details before comparing panic messages."""
+    stable_lines = []
+    for line in message.splitlines():
+        stripped = line.strip()
+        if stripped in _PANIC_TRACE_HEADERS:
+            break
+        if stripped.startswith(_VOLATILE_PANIC_METADATA_PREFIXES):
+            continue
+        stable_lines.append(_RUST_SOURCE_LOCATION_PATTERN.sub(r"\g<path>:<line>", line))
+    return "\n".join(stable_lines)
+
+
+def _index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
+    """Group raw panic messages by their normalized comparison key."""
+    indexed_messages: dict[str, list[str]] = {}
+    for message in messages:
+        key = _normalize_panic_message(message)
+        indexed_messages.setdefault(key, []).append(message)
+    return indexed_messages
+
+
+def _compare_panic_messages(
+    old_messages: list[str], new_messages: list[str]
+) -> tuple[list[str], list[str], list[str]]:
+    """Return introduced, fixed, and persistent panic messages."""
+    old_messages_by_key = _index_panic_messages(old_messages)
+    new_messages_by_key = _index_panic_messages(new_messages)
+    introduced = []
+    fixed = []
+    persistent = []
+
+    for key in old_messages_by_key.keys() | new_messages_by_key.keys():
+        old_counts = Counter(old_messages_by_key.get(key, []))
+        new_counts = Counter(new_messages_by_key.get(key, []))
+
+        # Match unchanged raw messages first so any count delta reports the
+        # most likely added or removed panic site.
+        exact_matches = old_counts & new_counts
+        unmatched_old = list((old_counts - exact_matches).elements())
+        unmatched_new = list((new_counts - exact_matches).elements())
+        persistent.extend(exact_matches.elements())
+
+        persistent_count = min(len(unmatched_old), len(unmatched_new))
+        persistent.extend(unmatched_new[:persistent_count])
+        fixed.extend(unmatched_old[persistent_count:])
+        introduced.extend(unmatched_new[persistent_count:])
+
+    return sorted(introduced), sorted(fixed), sorted(persistent)
+
+
+def _failure_descriptor(
+    project: dict[str, Any], direction: Literal["new", "fixed"]
+) -> str:
+    """Describe the kind of failure for `direction` ('new' or 'fixed')."""
+    status_key = "new_status" if direction == "new" else "old_status"
+    status = project[status_key]
+    panic_messages_key = (
+        "introduced_panic_messages" if direction == "new" else "fixed_panic_messages"
+    )
+    if project[panic_messages_key]:
+        return "panic"
+    if status == "timeout":
+        return "timeout"
+    if status == "abnormal exit":
+        return "crash"
+    return "failure"
 
 
 class DiagnosticDiff:
@@ -280,7 +374,40 @@ class DiagnosticDiff:
             old_failed, old_status = self._is_project_failed(old_project)
             new_failed, new_status = self._is_project_failed(new_project)
 
+            old_panics = old_project.get("panic_messages", [])
+            new_panics = new_project.get("panic_messages", [])
+
             if old_failed or new_failed:
+                introduced_panics, fixed_panics, persistent_panics = (
+                    _compare_panic_messages(old_panics, new_panics)
+                )
+                abnormal_exit_kind_changed = (
+                    old_status == new_status == "abnormal exit"
+                    and old_project.get("return_code") != new_project.get("return_code")
+                )
+
+                # `failure_status` celebrates or flags overall state
+                # transitions. A project that stays failing but picks up a new
+                # panic is a regression, even if it also changes failure mode,
+                # but it isn't a newly failing project. Otherwise, switching
+                # between a timeout and an abnormal exit, or between different
+                # abnormal return codes, is neutral: neither mode is
+                # necessarily worse. A project that stays failing but loses a
+                # panic is still failing, but the reduction is worth surfacing
+                # as a partial improvement.
+                if not old_failed and new_failed:
+                    failure_status = "new"
+                elif old_failed and not new_failed:
+                    failure_status = "fixed"
+                elif introduced_panics:
+                    failure_status = "new_panics"
+                elif old_status != new_status or abnormal_exit_kind_changed:
+                    failure_status = "changed"
+                elif fixed_panics:
+                    failure_status = "reduced"
+                else:
+                    failure_status = "persistent"
+
                 result["failed_projects"].append({
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
@@ -288,8 +415,14 @@ class DiagnosticDiff:
                     "new_status": new_status,
                     "old_return_code": old_project.get("return_code"),
                     "new_return_code": new_project.get("return_code"),
-                    "old_panic_messages": old_project.get("panic_messages", []),
-                    "new_panic_messages": new_project.get("panic_messages", []),
+                    "old_stderr": old_project.get("stderr"),
+                    "new_stderr": new_project.get("stderr"),
+                    "old_panic_messages": old_panics,
+                    "new_panic_messages": new_panics,
+                    "introduced_panic_messages": introduced_panics,
+                    "fixed_panic_messages": fixed_panics,
+                    "persistent_panic_messages": persistent_panics,
+                    "failure_status": failure_status,
                 })
                 # Skip detailed diff analysis for failed projects
                 continue
@@ -424,20 +557,37 @@ class DiagnosticDiff:
                     )
                 result["modified_projects"].append(entry)
 
-        # Sort failed projects to prioritize abnormal exits over timeouts
+        # Sort failed projects so PR reviewers see new regressions first,
+        # then changed failure modes, reductions, persistent failures, and fixes.
+        failure_status_priority = {
+            "new": 6,
+            "new_panics": 5,
+            "changed": 4,
+            "reduced": 3,
+            "persistent": 2,
+            "fixed": 1,
+        }
+
         def failed_project_sort_key(project):
+            status_priority = failure_status_priority[project["failure_status"]]
             old_abnormal = project["old_status"] == "abnormal exit"
             new_abnormal = project["new_status"] == "abnormal exit"
             old_timeout = project["old_status"] == "timeout"
             new_timeout = project["new_status"] == "timeout"
 
             if old_abnormal or new_abnormal:
-                return (2, project["project"])  # Abnormal exits first
-            if old_timeout or new_timeout:
-                return (1, project["project"])  # Timeouts second
-            return (0, project["project"])  # Other failures last
+                exit_priority = 2  # Abnormal exits (incl. panics/stack overflows) first
+            elif old_timeout or new_timeout:
+                exit_priority = 1  # Timeouts second
+            else:
+                exit_priority = 0
 
-        result["failed_projects"].sort(key=failed_project_sort_key, reverse=True)
+            # Negate so the natural sort puts the highest-priority entries
+            # at the top without relying on `reverse=True` (which would also
+            # reverse the project-name tiebreaker).
+            return (-status_priority, -exit_priority, project["project"])
+
+        result["failed_projects"].sort(key=failed_project_sort_key)
 
         return result
 
@@ -877,32 +1027,37 @@ class DiagnosticDiff:
         return introduced
 
     def has_new_panics(self) -> bool:
-        """Check if any project has new panic messages that weren't present before."""
-        for project in self.diffs.get("failed_projects", []):
-            old_panics = project.get("old_panic_messages", [])
-            new_panics = project.get("new_panic_messages", [])
-            if set(new_panics) - set(old_panics):
-                return True
-        return False
-
-    def has_new_timeouts(self) -> bool:
-        """Check if any project newly timed out (was not a timeout before)."""
+        """Check if any still-failing project gained panic messages."""
         return any(
-            project["new_status"] == "timeout" and project["old_status"] != "timeout"
+            project["failure_status"] == "new_panics"
             for project in self.diffs.get("failed_projects", [])
         )
 
     def generate_comment_title(self) -> str:
-        """Generate the PR comment title with status indicators for panics and timeouts."""
+        """Generate the PR comment title with status indicators for new failures."""
         title = "## `ecosystem-analyzer` results"
-        new_panics = self.has_new_panics()
-        new_timeouts = self.has_new_timeouts()
-        if new_panics and not new_timeouts:
+        failed_projects = self.diffs.get("failed_projects", [])
+        failure_statuses = {project["failure_status"] for project in failed_projects}
+        new_projects = [
+            project for project in failed_projects if project["failure_status"] == "new"
+        ]
+        if new_projects:
+            # If every regression is a timeout, say so — a blanket "new
+            # crashes detected" would be misleading.  Any panic or crash
+            # in the mix falls back to "crashes" so the title stays short.
+            if all(
+                _failure_descriptor(project, "new") == "timeout"
+                for project in new_projects
+            ):
+                title += ": new timeouts detected ❌"
+            else:
+                title += ": new crashes detected ❌"
+        elif "new_panics" in failure_statuses:
             title += ": new panics detected ❌"
-        elif new_timeouts and not new_panics:
-            title += ": new timeouts detected ❌"
-        elif new_panics and new_timeouts:
-            title += ": new panics/timeouts detected ❌"
+        elif "fixed" in failure_statuses:
+            title += ": ecosystem failure fixed 🎉"
+        elif "reduced" in failure_statuses:
+            title += ": panics reduced 🎉"
         return title
 
     def _render_raw_diff_sections(
@@ -958,14 +1113,53 @@ class DiagnosticDiff:
             sections.setdefault(header, []).append((lines, counts_as_change))
 
         for project in self.diffs["failed_projects"]:
+            status = project["failure_status"]
+            introduced_panics = project["introduced_panic_messages"]
+            fixed_panics = project["fixed_panic_messages"]
+            # Persistent failures aren't PR-specific news; they live in the
+            # HTML report instead of the comment's raw diff. Changed failure
+            # modes are neutral but still PR-specific. Reduced failures (some
+            # panics resolved, project still failing) are surfaced here so
+            # reviewers can see the partial progress.
+            if status == "persistent":
+                continue
+            # Prefix drives GitHub's `diff` highlighting: `-` is red (bad),
+            # `+` is green (good). Newly failing and new panics are red; fully
+            # fixed and partial fixes on still-failing projects are green.
+            match status:
+                case "new":
+                    line = (
+                        f"- FAILED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case "new_panics":
+                    line = (
+                        f"- NEW PANIC{'S' if len(introduced_panics) != 1 else ''}: "
+                        f"{len(introduced_panics)} introduced, project still failing"
+                    )
+                case "fixed":
+                    line = (
+                        f"+ FIXED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case "changed":
+                    line = (
+                        f"  FAILURE MODE CHANGED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case _:
+                    line = (
+                        f"+ PARTIAL FIX {len(fixed_panics)} "
+                        f"panic{'s' if len(fixed_panics) != 1 else ''} "
+                        f"resolved, project still failing"
+                    )
             add_entry(
                 project["project"],
                 project.get("project_location"),
-                [
-                    "- "
-                    f"FAILED old={project['old_status']}({project.get('old_return_code')}) "
-                    f"new={project['new_status']}({project.get('new_return_code')})"
-                ],
+                [line],
                 counts_as_change=False,
             )
 
@@ -1066,19 +1260,36 @@ class DiagnosticDiff:
 
         markdown_content = self.generate_comment_title() + "\n\n"
 
-        if failed_projects:
-            markdown_content += "**Failing projects**:\n\n"
-            markdown_content += "| Project | Old Status | New Status | Old Return Code | New Return Code |\n"
-            markdown_content += "|---------|------------|------------|-----------------|------------------|\n"
+        # Projects with the same failure mode on the baseline and PR aren't
+        # news — omit them from the PR-comment summary table so reviewers can
+        # focus on what changed. They still show up in the full HTML report.
+        table_projects = [
+            project
+            for project in failed_projects
+            if project["failure_status"] != "persistent"
+        ]
 
-            for project in failed_projects:
+        if table_projects:
+            markdown_content += "**Failing projects**:\n\n"
+            markdown_content += (
+                "| Project | Status | Old Status | New Status | "
+                "Old Return Code | New Return Code |\n"
+            )
+            markdown_content += (
+                "|---------|--------|------------|------------|"
+                "-----------------|------------------|\n"
+            )
+
+            for project in table_projects:
                 old_status = project["old_status"]
                 new_status = project["new_status"]
                 old_rc = project.get("old_return_code", "None")
                 new_rc = project.get("new_return_code", "None")
+                status_label = _FAILURE_STATUS_LABELS[project["failure_status"]]
 
                 markdown_content += (
-                    f"| `{project['project']}` | {old_status} | {new_status} | "
+                    f"| `{project['project']}` | {status_label} | "
+                    f"{old_status} | {new_status} | "
                     f"`{old_rc}` | `{new_rc}` |\n"
                 )
 
@@ -1091,7 +1302,7 @@ class DiagnosticDiff:
         ):
             markdown_content += "No diagnostic changes detected ✅\n"
         else:
-            if failed_projects:
+            if table_projects:
                 markdown_content += "**Diagnostic changes:**\n"
 
             markdown_content += """
@@ -1270,6 +1481,9 @@ class DiagnosticDiff:
             "new_diagnostics": self.new_diagnostics,
             "diffs": self.diffs,
             "statistics": statistics,
+            "failure_descriptor": _failure_descriptor,
+            "failure_status_labels": _FAILURE_STATUS_LABELS,
+            "failure_status_titles": _FAILURE_STATUS_TITLES,
         }
 
         # Ensure the output directory exists

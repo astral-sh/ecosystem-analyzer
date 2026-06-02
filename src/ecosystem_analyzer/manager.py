@@ -32,7 +32,6 @@ def get_ecosystem_projects() -> dict[str, Project]:
 class Manager:
     _project_names: list[str]
     _installed_projects: list[InstalledProject]
-    _active_projects: list[InstalledProject]
 
     _ty: Ty
 
@@ -49,7 +48,6 @@ class Manager:
         ecosystem_projects: dict[str, Project] | None = None,
     ) -> None:
         self._installed_projects = []
-        self._active_projects = []
         self._ty = Ty(ty_repo, target_dir, profile=profile)
         self._flaky_runs = flaky_runs
         self._flaky_projects = flaky_projects or set()
@@ -125,32 +123,6 @@ class Manager:
                 f" {install_total - wait_time:.1f}s overlapped with build)"
             )
 
-            # Set default activation now that projects are ready
-            self._active_projects = self._installed_projects.copy()
-
-    def activate(self, project_names: list[str]) -> None:
-        """Activate a subset of installed projects for running."""
-        self._ensure_installed()
-
-        # Validate that all requested projects are installed
-        installed_project_names = {project.name for project in self._installed_projects}
-
-        unavailable_projects = set(project_names) - installed_project_names
-        if unavailable_projects:
-            logger.warning(
-                f'Project(s) "{", ".join(sorted(unavailable_projects))}" not found in installed projects. Skipping.'
-            )
-
-        # Filter installed projects to only include the requested ones that are available
-        available_project_names = [
-            name for name in project_names if name in installed_project_names
-        ]
-        self._active_projects = [
-            project
-            for project in self._installed_projects
-            if project.name in available_project_names
-        ]
-
     def build(self, commit: str | Commit) -> None:
         """Build ty for a commit. Can be called while projects are still installing."""
         self._ty.compile_for_commit(commit)
@@ -160,23 +132,23 @@ class Manager:
         self._ty.use_prebuilt(binary_path, commit_sha)
 
     def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
-        """Build ty for a commit and run it on active projects.
+        """Build ty for a commit and run it on the installed projects.
 
         The build runs first and can overlap with background project
         installation. We only block on installation before running ty.
         """
         self.build(commit)
         self._ensure_installed()
-        return self._run_active_projects()
+        return self._run_projects()
 
-    def run_active_projects(self) -> list[RunOutput]:
-        """Run the current ty build on active projects."""
+    def run_projects(self) -> list[RunOutput]:
+        """Run the current ty build on the installed projects."""
         self._ensure_installed()
-        return self._run_active_projects()
+        return self._run_projects()
 
-    def _run_active_projects(self) -> list[RunOutput]:
+    def _run_projects(self) -> list[RunOutput]:
         run_outputs = []
-        for project in self._active_projects:
+        for project in self._installed_projects:
             n = (
                 self._flaky_runs
                 if (
