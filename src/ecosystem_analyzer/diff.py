@@ -2,6 +2,7 @@ import difflib
 import json
 import os
 import random
+import re
 from itertools import chain
 from pathlib import Path
 from typing import Any, Literal, TypedDict
@@ -59,9 +60,31 @@ _FAILURE_STATUS_LABELS = {
     "fixed": "🎉 crashes fixed",
 }
 
+_RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
+_PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
+
 
 def _failure_status_label(status: str) -> str:
     return _FAILURE_STATUS_LABELS.get(status, "—")
+
+
+def _normalize_panic_message(message: str) -> str:
+    """Remove volatile details before comparing panic messages."""
+    stable_lines = []
+    for line in message.splitlines():
+        if line.strip() in _PANIC_TRACE_HEADERS:
+            break
+        stable_lines.append(_RUST_SOURCE_LOCATION_PATTERN.sub(r"\g<path>:<line>", line))
+    return "\n".join(stable_lines)
+
+
+def _index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
+    """Group raw panic messages by their normalized comparison key."""
+    indexed_messages: dict[str, list[str]] = {}
+    for message in messages:
+        key = _normalize_panic_message(message)
+        indexed_messages.setdefault(key, []).append(message)
+    return indexed_messages
 
 
 def _failure_descriptor(
@@ -316,11 +339,34 @@ class DiagnosticDiff:
             new_panics = list(new_project.get("panic_messages", []))
 
             if old_failed or new_failed:
-                old_panic_set = set(old_panics)
-                new_panic_set = set(new_panics)
-                introduced_panics = sorted(new_panic_set - old_panic_set)
-                fixed_panics = sorted(old_panic_set - new_panic_set)
-                persistent_panics = sorted(new_panic_set & old_panic_set)
+                old_panics_by_key = _index_panic_messages(old_panics)
+                new_panics_by_key = _index_panic_messages(new_panics)
+                old_panic_keys = set(old_panics_by_key)
+                new_panic_keys = set(new_panics_by_key)
+                introduced_panics = []
+                fixed_panics = []
+                persistent_panics = []
+                for key in old_panic_keys | new_panic_keys:
+                    # Match unchanged raw messages first so any count delta
+                    # reports the most likely added or removed panic site.
+                    unmatched_old_messages = old_panics_by_key.get(key, []).copy()
+                    unmatched_new_messages = []
+                    for message in new_panics_by_key.get(key, []):
+                        if message in unmatched_old_messages:
+                            unmatched_old_messages.remove(message)
+                            persistent_panics.append(message)
+                        else:
+                            unmatched_new_messages.append(message)
+
+                    persistent_count = min(
+                        len(unmatched_old_messages), len(unmatched_new_messages)
+                    )
+                    persistent_panics.extend(unmatched_new_messages[:persistent_count])
+                    fixed_panics.extend(unmatched_old_messages[persistent_count:])
+                    introduced_panics.extend(unmatched_new_messages[persistent_count:])
+                introduced_panics.sort()
+                fixed_panics.sort()
+                persistent_panics.sort()
                 abnormal_exit_kind_changed = (
                     old_status == new_status == "abnormal exit"
                     and old_project.get("return_code") != new_project.get("return_code")

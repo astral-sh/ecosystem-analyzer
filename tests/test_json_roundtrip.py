@@ -758,6 +758,148 @@ class TestJsonRoundtrip:
         # No new panics, no fixed panics → plain title.
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
+    def test_panic_location_and_trace_changes_are_persistent(self):
+        old_panics = {
+            "backtrace": """Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
+info: This indicates a bug in ty.
+info: Backtrace:
+   0: ty_python_semantic::types::signatures::Signature::new
+             at crates/ty_python_semantic/src/types/signatures.rs:1719:42""",
+            "query-stack": """Panicked at crates/ty_python_semantic/src/types/infer.rs:70:9 when checking `/tmp/project.py`: `query error`
+info: This indicates a bug in ty.
+info: query stacktrace:
+   0: infer_definition_types(Id(b633))
+             at crates/ty_python_semantic/src/types/infer.rs:70""",
+        }
+        new_panics = {
+            "backtrace": """Panicked at crates/ty_python_semantic/src/types/signatures.rs:1720:42 when checking `/tmp/project.py`: `internal error`
+info: This indicates a bug in ty.
+info: Backtrace:
+   1: ty_python_semantic::types::signatures::Signature::new
+             at crates/ty_python_semantic/src/types/signatures.rs:1720:42""",
+            "query-stack": """Panicked at crates/ty_python_semantic/src/types/infer.rs:71:9 when checking `/tmp/project.py`: `query error`
+info: This indicates a bug in ty.
+info: query stacktrace:
+   0: infer_definition_types(Id(b744))
+             at crates/ty_python_semantic/src/types/infer.rs:71""",
+        }
+        old_data = {
+            "outputs": [
+                _make_output(
+                    project,
+                    [],
+                    panic_messages=[panic],
+                    time_s=None,
+                    return_code=101,
+                )
+                for project, panic in old_panics.items()
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    project,
+                    [],
+                    panic_messages=[panic],
+                    time_s=None,
+                    return_code=101,
+                )
+                for project, panic in new_panics.items()
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        entries = {entry["project"]: entry for entry in diff.diffs["failed_projects"]}
+
+        assert set(entries) == set(new_panics)
+        for project, new_panic in new_panics.items():
+            entry = entries[project]
+            assert entry["failure_status"] == "persistent"
+            assert entry["introduced_panic_messages"] == []
+            assert entry["fixed_panic_messages"] == []
+            assert entry["persistent_panic_messages"] == [new_panic]
+            assert entry["old_panic_messages"] == [old_panics[project]]
+            assert entry["new_panic_messages"] == [new_panic]
+
+        assert not diff.has_new_panics()
+        assert not diff.has_reduced_panics()
+        assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
+
+    def test_multiple_panics_with_same_normalized_key_preserve_multiplicity(self):
+        def panic_at(line: int) -> str:
+            return (
+                "Panicked at crates/ty_python_semantic/src/types/infer.rs:"
+                f"{line}:9 when checking `/tmp/project.py`: `query error`"
+            )
+
+        two_panics = [panic_at(70), panic_at(80)]
+        three_panics = [panic_at(60), *two_panics]
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "added-site",
+                    [],
+                    panic_messages=two_panics,
+                    time_s=None,
+                    return_code=101,
+                ),
+                _make_output(
+                    "removed-site",
+                    [],
+                    panic_messages=three_panics,
+                    time_s=None,
+                    return_code=101,
+                ),
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "added-site",
+                    [],
+                    panic_messages=three_panics,
+                    time_s=None,
+                    return_code=101,
+                ),
+                _make_output(
+                    "removed-site",
+                    [],
+                    panic_messages=two_panics,
+                    time_s=None,
+                    return_code=101,
+                ),
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        entries = {entry["project"]: entry for entry in diff.diffs["failed_projects"]}
+
+        added_entry = entries["added-site"]
+        assert added_entry["failure_status"] == "new_panics"
+        assert added_entry["introduced_panic_messages"] == [panic_at(60)]
+        assert added_entry["fixed_panic_messages"] == []
+        assert added_entry["persistent_panic_messages"] == two_panics
+
+        removed_entry = entries["removed-site"]
+        assert removed_entry["failure_status"] == "reduced"
+        assert removed_entry["introduced_panic_messages"] == []
+        assert removed_entry["fixed_panic_messages"] == [panic_at(60)]
+        assert removed_entry["persistent_panic_messages"] == two_panics
+
     def test_introduced_project_failures_detects_new_abnormal_exit_code(self):
         old_data = {
             "outputs": [
