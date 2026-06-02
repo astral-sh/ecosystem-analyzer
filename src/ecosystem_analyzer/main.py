@@ -10,7 +10,7 @@ from .diagnostic import DiagnosticsParser
 from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
-from .manager import Manager, get_all_project_names, get_ecosystem_projects
+from .manager import Manager, get_ecosystem_projects
 
 logger = logging.getLogger(__name__)
 
@@ -25,21 +25,20 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
-def shard_project_lists(
-    project_names_old: list[str],
-    project_names_new: list[str],
+def shard_projects(
+    project_names: list[str],
     shard: int,
     num_shards: int,
     ecosystem_projects: dict[str, Project],
     flaky_projects: set[str] | None = None,
     flaky_runs: int = 1,
-) -> tuple[list[str], list[str]]:
-    """Filter project lists to only include projects belonging to this shard.
+) -> list[str]:
+    """Filter projects to only include those belonging to this shard.
 
     Uses greedy bin-packing based on mypy_primer cost estimates so that
     expensive projects are spread across shards rather than clustered.
     """
-    all_names = sorted(set(project_names_old + project_names_new))
+    all_names = sorted(set(project_names))
 
     # Sort by cost descending (with name as tiebreaker for determinism),
     # then greedily assign each project to the lightest shard.
@@ -64,10 +63,7 @@ def shard_project_lists(
         shard_sets[min_shard].add(name)
 
     target = shard_sets[shard]
-    return (
-        [n for n in project_names_old if n in target],
-        [n for n in project_names_new if n in target],
-    )
+    return [name for name in project_names if name in target]
 
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
@@ -236,20 +232,6 @@ def analyze(
 
 @cli.command()
 @click.option(
-    "--projects-old",
-    help="File with projects to analyze for the old commit "
-    "(defaults to every mypy_primer project if omitted)",
-    type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=False,
-)
-@click.option(
-    "--projects-new",
-    help="File with projects to analyze for the new commit "
-    "(defaults to every mypy_primer project if omitted)",
-    type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=False,
-)
-@click.option(
     "--old",
     help="The old commit",
     type=str,
@@ -319,8 +301,6 @@ def analyze(
 @click.pass_context
 def diff(
     ctx,
-    projects_old: str | None,
-    projects_new: str | None,
     old: str,
     new: str,
     output_old: str,
@@ -355,65 +335,30 @@ def diff(
     ):
         raise click.UsageError(f"--shard must be in range [0, {num_shards})")
 
-    if projects_old is None or projects_new is None:
-        default_project_names = get_all_project_names()
-        defaulted = [
-            name
-            for name, value in (
-                ("--projects-old", projects_old),
-                ("--projects-new", projects_new),
-            )
-            if value is None
-        ]
-        logger.info(
-            "Defaulting %s to all %d mypy_primer projects",
-            "/".join(defaulted),
-            len(default_project_names),
-        )
-    else:
-        default_project_names = []
+    ecosystem_projects = get_ecosystem_projects()
+    project_names = sorted(ecosystem_projects)
+    logger.info("Analyzing all %d mypy_primer projects", len(project_names))
 
-    project_names_old = (
-        Path(projects_old).read_text().splitlines()
-        if projects_old is not None
-        else list(default_project_names)
-    )
-    project_names_new = (
-        Path(projects_new).read_text().splitlines()
-        if projects_new is not None
-        else list(default_project_names)
-    )
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
     )
 
-    ecosystem_projects: dict[str, Project] | None = None
-
     if num_shards is not None:
         assert shard is not None
-        ecosystem_projects = get_ecosystem_projects()
-        project_names_old, project_names_new = shard_project_lists(
-            project_names_old,
-            project_names_new,
+        project_names = shard_projects(
+            project_names,
             shard,
             num_shards,
             ecosystem_projects,
             flaky_projects=flaky_project_names,
             flaky_runs=ctx.obj["flaky_runs"],
         )
-        logger.info(
-            f"Shard {shard}/{num_shards}: "
-            f"{len(project_names_old)} old projects, "
-            f"{len(project_names_new)} new projects"
-        )
-
-    # Create union of both project lists for installation
-    all_project_names = list(set(project_names_old + project_names_new))
+        logger.info(f"Shard {shard}/{num_shards}: {len(project_names)} projects")
 
     manager = Manager(
         ty_repo=ctx.obj["repository"],
         target_dir=ctx.obj["target"],
-        project_names=all_project_names,
+        project_names=project_names,
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
@@ -428,8 +373,8 @@ def diff(
     else:
         manager.build(old)
 
-    # Run for old commit with old projects
-    manager.activate(project_names_old)
+    # Run for old commit
+    manager.activate(project_names)
     run_outputs_old = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_old, output_old)
 
@@ -438,7 +383,7 @@ def diff(
         manager.use_prebuilt(ty_binary_new, new)
     else:
         manager.build(new)
-    manager.activate(project_names_new)
+    manager.activate(project_names)
     run_outputs_new = manager.run_active_projects()
     manager.write_run_outputs(run_outputs_new, output_new)
 
