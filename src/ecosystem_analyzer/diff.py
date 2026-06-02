@@ -1133,35 +1133,36 @@ class DiagnosticDiff:
             # Prefix drives GitHub's `diff` highlighting: `-` is red (bad),
             # `+` is green (good). Newly failing and new panics are red; fully
             # fixed and partial fixes on still-failing projects are green.
-            if status == "new":
-                line = (
-                    f"- FAILED "
-                    f"old={project['old_status']}({project.get('old_return_code')}) "
-                    f"new={project['new_status']}({project.get('new_return_code')})"
-                )
-            elif status == "new_panics":
-                line = (
-                    f"- NEW PANIC{'S' if len(introduced_panics) != 1 else ''}: "
-                    f"{len(introduced_panics)} introduced, project still failing"
-                )
-            elif status == "fixed":
-                line = (
-                    f"+ FIXED "
-                    f"old={project['old_status']}({project.get('old_return_code')}) "
-                    f"new={project['new_status']}({project.get('new_return_code')})"
-                )
-            elif status == "changed":
-                line = (
-                    f"  FAILURE MODE CHANGED "
-                    f"old={project['old_status']}({project.get('old_return_code')}) "
-                    f"new={project['new_status']}({project.get('new_return_code')})"
-                )
-            else:
-                line = (
-                    f"+ PARTIAL FIX {len(fixed_panics)} "
-                    f"panic{'s' if len(fixed_panics) != 1 else ''} "
-                    f"resolved, project still failing"
-                )
+            match status:
+                case "new":
+                    line = (
+                        f"- FAILED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case "new_panics":
+                    line = (
+                        f"- NEW PANIC{'S' if len(introduced_panics) != 1 else ''}: "
+                        f"{len(introduced_panics)} introduced, project still failing"
+                    )
+                case "fixed":
+                    line = (
+                        f"+ FIXED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case "changed":
+                    line = (
+                        f"  FAILURE MODE CHANGED "
+                        f"old={project['old_status']}({project.get('old_return_code')}) "
+                        f"new={project['new_status']}({project.get('new_return_code')})"
+                    )
+                case _:
+                    line = (
+                        f"+ PARTIAL FIX {len(fixed_panics)} "
+                        f"panic{'s' if len(fixed_panics) != 1 else ''} "
+                        f"resolved, project still failing"
+                    )
             add_entry(
                 project["project"],
                 project.get("project_location"),
