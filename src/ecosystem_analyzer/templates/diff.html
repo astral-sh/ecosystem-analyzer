@@ -282,41 +282,41 @@
             background: rgba(108, 117, 125, 0.08);
         }
 
-        .fixed-panic-banner {
-            background: rgba(40, 167, 69, 0.12);
-            border: 1px solid rgba(40, 167, 69, 0.35);
+        .fixed-panic-banner,
+        .new-panic-banner {
             border-radius: 8px;
             padding: 12px 16px;
             margin: 12px 0 16px 0;
             font-size: 14px;
+        }
+
+        .fixed-panic-banner {
+            background: rgba(40, 167, 69, 0.12);
+            border: 1px solid rgba(40, 167, 69, 0.35);
             color: #1d6f3a;
         }
 
-        .fixed-panic-banner code {
-            background: rgba(40, 167, 69, 0.15);
+        .fixed-panic-banner code,
+        .new-panic-banner code {
             padding: 1px 6px;
             border-radius: 4px;
             font-family: 'Fira Code', monospace;
             font-size: 12px;
+        }
+
+        .fixed-panic-banner code {
+            background: rgba(40, 167, 69, 0.15);
             color: #145a2d;
         }
 
         .new-panic-banner {
             background: rgba(220, 53, 69, 0.12);
             border: 1px solid rgba(220, 53, 69, 0.4);
-            border-radius: 8px;
-            padding: 12px 16px;
-            margin: 12px 0 16px 0;
-            font-size: 14px;
             color: #842029;
         }
 
         .new-panic-banner code {
             background: rgba(220, 53, 69, 0.15);
-            padding: 1px 6px;
-            border-radius: 4px;
-            font-family: 'Fira Code', monospace;
-            font-size: 12px;
             color: #5c1620;
         }
 
@@ -800,19 +800,7 @@
                             <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 600;">
-                            {% if failure_status == 'new' %}
-                                <span class="panic-tag panic-tag-new" title="Failure introduced by this PR">{{ failure_status_labels['new'] }}</span>
-                            {% elif failure_status == 'new_panics' %}
-                                <span class="panic-tag panic-tag-new" title="New panic messages introduced by this PR while the project remains failing">{{ failure_status_labels['new_panics'] }}</span>
-                            {% elif failure_status == 'fixed' %}
-                                <span class="panic-tag panic-tag-fixed" title="Failure that existed on the baseline is no longer present">{{ failure_status_labels['fixed'] }}</span>
-                            {% elif failure_status == 'changed' %}
-                                <span class="panic-tag panic-tag-changed" title="Failure mode changed between the baseline and PR">{{ failure_status_labels['changed'] }}</span>
-                            {% elif failure_status == 'reduced' %}
-                                <span class="panic-tag panic-tag-reduced" title="Some panic messages that existed on the baseline are no longer present">{{ failure_status_labels['reduced'] }}</span>
-                            {% else %}
-                                <span class="panic-tag panic-tag-persistent" title="Same failure on both baseline and PR">{{ failure_status_labels['persistent'] }}</span>
-                            {% endif %}
+                            <span class="panic-tag panic-tag-{{ 'new' if failure_status == 'new_panics' else failure_status }}" title="{{ failure_status_titles[failure_status] }}">{{ failure_status_labels[failure_status] }}</span>
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 500;">
                             {% if project.old_status == 'timeout' %}
@@ -857,17 +845,11 @@
                             </details>
                             {% endif %}
                             {% if project.fixed_panic_messages %}
-                            {% if failure_status in ['fixed', 'reduced'] %}
-                            <details class="panic-block panic-block-fixed">
-                                <summary>🎉 Fixed panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
+                            {% set fixed_panics_are_improvement = failure_status in ['fixed', 'reduced'] %}
+                            <details class="panic-block panic-block-{{ 'fixed' if fixed_panics_are_improvement else 'neutral' }}">
+                                <summary>{{ '🎉 Fixed' if fixed_panics_are_improvement else '➖ Previous' }} panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
                                 <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
                             </details>
-                            {% else %}
-                            <details class="panic-block panic-block-neutral">
-                                <summary>➖ Previous panic message{{ 's' if project.fixed_panic_messages|length != 1 }} (no longer present)</summary>
-                                <pre>{{ project.fixed_panic_messages | join('\n') | e }}</pre>
-                            </details>
-                            {% endif %}
                             {% endif %}
                             {% if project.persistent_panic_messages %}
                             <details class="panic-block panic-block-persistent">

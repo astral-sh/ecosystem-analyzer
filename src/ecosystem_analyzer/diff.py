@@ -3,6 +3,7 @@ import json
 import os
 import random
 import re
+from collections import Counter
 from itertools import chain
 from pathlib import Path
 from typing import Any, Literal, TypedDict
@@ -60,12 +61,17 @@ _FAILURE_STATUS_LABELS = {
     "fixed": "🎉 crashes fixed",
 }
 
+_FAILURE_STATUS_TITLES = {
+    "new": "Failure introduced by this PR",
+    "new_panics": "New panic messages introduced by this PR while the project remains failing",
+    "changed": "Failure mode changed between the baseline and PR",
+    "persistent": "Same failure on both baseline and PR",
+    "reduced": "Some panic messages that existed on the baseline are no longer present",
+    "fixed": "Failure that existed on the baseline is no longer present",
+}
+
 _RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
 _PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
-
-
-def _failure_status_label(status: str) -> str:
-    return _FAILURE_STATUS_LABELS.get(status, "—")
 
 
 def _normalize_panic_message(message: str) -> str:
@@ -85,6 +91,35 @@ def _index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
         key = _normalize_panic_message(message)
         indexed_messages.setdefault(key, []).append(message)
     return indexed_messages
+
+
+def _compare_panic_messages(
+    old_messages: list[str], new_messages: list[str]
+) -> tuple[list[str], list[str], list[str]]:
+    """Return introduced, fixed, and persistent panic messages."""
+    old_messages_by_key = _index_panic_messages(old_messages)
+    new_messages_by_key = _index_panic_messages(new_messages)
+    introduced = []
+    fixed = []
+    persistent = []
+
+    for key in old_messages_by_key.keys() | new_messages_by_key.keys():
+        old_counts = Counter(old_messages_by_key.get(key, []))
+        new_counts = Counter(new_messages_by_key.get(key, []))
+
+        # Match unchanged raw messages first so any count delta reports the
+        # most likely added or removed panic site.
+        exact_matches = old_counts & new_counts
+        unmatched_old = list((old_counts - exact_matches).elements())
+        unmatched_new = list((new_counts - exact_matches).elements())
+        persistent.extend(exact_matches.elements())
+
+        persistent_count = min(len(unmatched_old), len(unmatched_new))
+        persistent.extend(unmatched_new[:persistent_count])
+        fixed.extend(unmatched_old[persistent_count:])
+        introduced.extend(unmatched_new[persistent_count:])
+
+    return sorted(introduced), sorted(fixed), sorted(persistent)
 
 
 def _failure_descriptor(
@@ -339,34 +374,9 @@ class DiagnosticDiff:
             new_panics = list(new_project.get("panic_messages", []))
 
             if old_failed or new_failed:
-                old_panics_by_key = _index_panic_messages(old_panics)
-                new_panics_by_key = _index_panic_messages(new_panics)
-                old_panic_keys = set(old_panics_by_key)
-                new_panic_keys = set(new_panics_by_key)
-                introduced_panics = []
-                fixed_panics = []
-                persistent_panics = []
-                for key in old_panic_keys | new_panic_keys:
-                    # Match unchanged raw messages first so any count delta
-                    # reports the most likely added or removed panic site.
-                    unmatched_old_messages = old_panics_by_key.get(key, []).copy()
-                    unmatched_new_messages = []
-                    for message in new_panics_by_key.get(key, []):
-                        if message in unmatched_old_messages:
-                            unmatched_old_messages.remove(message)
-                            persistent_panics.append(message)
-                        else:
-                            unmatched_new_messages.append(message)
-
-                    persistent_count = min(
-                        len(unmatched_old_messages), len(unmatched_new_messages)
-                    )
-                    persistent_panics.extend(unmatched_new_messages[:persistent_count])
-                    fixed_panics.extend(unmatched_old_messages[persistent_count:])
-                    introduced_panics.extend(unmatched_new_messages[persistent_count:])
-                introduced_panics.sort()
-                fixed_panics.sort()
-                persistent_panics.sort()
+                introduced_panics, fixed_panics, persistent_panics = (
+                    _compare_panic_messages(old_panics, new_panics)
+                )
                 abnormal_exit_kind_changed = (
                     old_status == new_status == "abnormal exit"
                     and old_project.get("return_code") != new_project.get("return_code")
@@ -1012,20 +1022,6 @@ class DiagnosticDiff:
 
         return introduced
 
-    def has_new_failures(self) -> bool:
-        """Check if any project regressed from passing to failing."""
-        return any(
-            project.get("failure_status") == "new"
-            for project in self.diffs.get("failed_projects", [])
-        )
-
-    def has_fixed_failures(self) -> bool:
-        """Check if any project went from failing to passing."""
-        return any(
-            project.get("failure_status") == "fixed"
-            for project in self.diffs.get("failed_projects", [])
-        )
-
     def has_new_panics(self) -> bool:
         """Check if any still-failing project gained panic messages."""
         return any(
@@ -1033,19 +1029,16 @@ class DiagnosticDiff:
             for project in self.diffs.get("failed_projects", [])
         )
 
-    def has_reduced_panics(self) -> bool:
-        """Check if any still-failing project has fewer panic messages."""
-        return any(
-            project.get("failure_status") == "reduced"
-            for project in self.diffs.get("failed_projects", [])
-        )
-
     def generate_comment_title(self) -> str:
         """Generate the PR comment title with status indicators for new failures."""
         title = "## `ecosystem-analyzer` results"
+        failed_projects = self.diffs.get("failed_projects", [])
+        failure_statuses = {
+            project.get("failure_status") for project in failed_projects
+        }
         new_projects = [
             project
-            for project in self.diffs.get("failed_projects", [])
+            for project in failed_projects
             if project.get("failure_status") == "new"
         ]
         if new_projects:
@@ -1059,11 +1052,11 @@ class DiagnosticDiff:
                 title += ": new timeouts detected ❌"
             else:
                 title += ": new crashes detected ❌"
-        elif self.has_new_panics():
+        elif "new_panics" in failure_statuses:
             title += ": new panics detected ❌"
-        elif self.has_fixed_failures():
+        elif "fixed" in failure_statuses:
             title += ": ecosystem failure fixed 🎉"
-        elif self.has_reduced_panics():
+        elif "reduced" in failure_statuses:
             title += ": panics reduced 🎉"
         return title
 
@@ -1292,8 +1285,8 @@ class DiagnosticDiff:
                 new_status = project["new_status"]
                 old_rc = project.get("old_return_code", "None")
                 new_rc = project.get("new_return_code", "None")
-                status_label = _failure_status_label(
-                    project.get("failure_status", "persistent")
+                status_label = _FAILURE_STATUS_LABELS.get(
+                    project.get("failure_status", "persistent"), "—"
                 )
 
                 markdown_content += (
@@ -1492,6 +1485,7 @@ class DiagnosticDiff:
             "statistics": statistics,
             "failure_descriptor": _failure_descriptor,
             "failure_status_labels": _FAILURE_STATUS_LABELS,
+            "failure_status_titles": _FAILURE_STATUS_TITLES,
         }
 
         # Ensure the output directory exists

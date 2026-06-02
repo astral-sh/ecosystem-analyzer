@@ -50,6 +50,25 @@ def _make_flaky_loc(path, line, column, variants):
     return {"path": path, "line": line, "column": column, "variants": variants}
 
 
+def _make_diff(old_data, new_data):
+    paths = []
+    for data in (old_data, new_data):
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False
+        ) as file:
+            json.dump(data, file)
+            paths.append(file.name)
+    return DiagnosticDiff(paths[0], paths[1])
+
+
+def _render_html(diff: DiagnosticDiff) -> str:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as file:
+        html_path = file.name
+    diff.generate_html_report(html_path)
+    with open(html_path) as file:
+        return file.read()
+
+
 class TestJsonRoundtrip:
     def test_roundtrip_without_flaky(self):
         """JSON files without flaky data load and diff correctly."""
@@ -267,14 +286,7 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         statuses = {
             entry["project"]: entry["failure_status"]
             for entry in diff.diffs["failed_projects"]
@@ -299,8 +311,6 @@ class TestJsonRoundtrip:
         assert fixed_entry["fixed_panic_messages"] == [old_only]
         assert fixed_entry["introduced_panic_messages"] == []
 
-        assert diff.has_new_failures()
-        assert diff.has_fixed_failures()
         assert "new crashes detected" in diff.generate_comment_title()
 
         markdown = diff.render_statistics_markdown()
@@ -309,6 +319,13 @@ class TestJsonRoundtrip:
         # Persistent failures are intentionally omitted from the PR-comment
         # summary table (they appear in the HTML report instead).
         assert "➖ persistent" not in markdown
+
+        html = _render_html(diff)
+        assert 'title="Failure introduced by this PR"' in html
+        assert (
+            'title="Failure that existed on the baseline is no longer present"' in html
+        )
+        assert 'title="Same failure on both baseline and PR"' in html
 
     def test_comment_title_celebrates_when_only_panic_change_is_a_fix(self):
         old_data = {
@@ -324,14 +341,7 @@ class TestJsonRoundtrip:
         }
         new_data = {"outputs": [_make_output("proj", [], time_s=1.0, return_code=1)]}
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         title = diff.generate_comment_title()
         assert "🎉" in title
         assert "fixed" in title.lower()
@@ -356,17 +366,7 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        assert diff.has_new_failures()
-        assert diff.has_fixed_failures()
-
+        diff = _make_diff(old_data, new_data)
         markdown = diff.render_statistics_markdown()
         assert "| `newly-timing-out` | ❌ newly failing |" in markdown
         assert "| `newly-passing` | 🎉 crashes fixed |" in markdown
@@ -396,19 +396,9 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        assert diff.has_new_failures()
-        assert diff.has_fixed_failures()
-
+        diff = _make_diff(old_data, new_data)
         title = diff.generate_comment_title()
-        assert "crashes" in title
+        assert title == "## `ecosystem-analyzer` results: new crashes detected ❌"
 
         markdown = diff.render_statistics_markdown()
         assert "| `newly-crashing` | ❌ newly failing |" in markdown
@@ -463,14 +453,7 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         statuses = {
             entry["project"]: entry["failure_status"]
             for entry in diff.diffs["failed_projects"]
@@ -481,9 +464,6 @@ class TestJsonRoundtrip:
             "panic-to-timeout": "changed",
             "timeout-to-abnormal-exit": "changed",
         }
-        assert not diff.has_new_failures()
-        assert not diff.has_fixed_failures()
-        assert not diff.has_reduced_panics()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
         markdown = diff.render_statistics_markdown()
@@ -506,11 +486,7 @@ class TestJsonRoundtrip:
         )
         assert "PARTIAL FIX" not in markdown
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
-            html_path = f.name
-        diff.generate_html_report(html_path)
-        with open(html_path) as f:
-            html = f.read()
+        html = _render_html(diff)
 
         assert "➖ failure mode changed" in html
         assert 'title="Failure mode changed between the baseline and PR"' in html
@@ -544,20 +520,12 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         entry = diff.diffs["failed_projects"][0]
 
         assert entry["failure_status"] == "new_panics"
         assert entry["introduced_panic_messages"] == [introduced]
         assert entry["persistent_panic_messages"] == [shared]
-        assert not diff.has_new_failures()
         assert diff.has_new_panics()
         assert "new panics detected" in diff.generate_comment_title()
 
@@ -567,15 +535,15 @@ class TestJsonRoundtrip:
         assert "❌ newly failing" not in markdown
         assert "FAILURE MODE CHANGED" not in markdown
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
-            html_path = f.name
-        diff.generate_html_report(html_path)
-        with open(html_path) as f:
-            html = f.read()
+        html = _render_html(diff)
 
         assert "Panic regression introduced" in html
         assert "New ecosystem failure introduced" not in html
         assert "❌ new panics" in html
+        assert (
+            'title="New panic messages introduced by this PR while the project '
+            'remains failing"'
+        ) in html
 
     def test_html_report_escapes_panic_messages(self):
         introduced = "</pre><script>alert('introduced')</script><pre>"
@@ -604,19 +572,8 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
-            html_path = f.name
-        diff.generate_html_report(html_path)
-        with open(html_path) as f:
-            html = f.read()
+        diff = _make_diff(old_data, new_data)
+        html = _render_html(diff)
 
         assert introduced not in html
         assert fixed not in html
@@ -660,14 +617,7 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
 
         # The persistent project still appears in the structured diff
         # data (which feeds the HTML report).
@@ -711,52 +661,10 @@ class TestJsonRoundtrip:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         markdown = diff.render_statistics_markdown()
-        assert "**Failing projects**:" not in markdown
-
-    def test_persistent_panic_does_not_flag_title(self):
-        msg = "thread 'main' panicked at shared site"
-        old_data = {
-            "outputs": [
-                _make_output(
-                    "proj",
-                    [],
-                    panic_messages=[msg],
-                    time_s=None,
-                    return_code=101,
-                )
-            ]
-        }
-        new_data = {
-            "outputs": [
-                _make_output(
-                    "proj",
-                    [],
-                    panic_messages=[msg],
-                    time_s=None,
-                    return_code=101,
-                )
-            ]
-        }
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-        # No new panics, no fixed panics → plain title.
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
+        assert "**Failing projects**:" not in markdown
 
     def test_panic_location_and_trace_changes_are_persistent(self):
         old_panics = {
@@ -808,14 +716,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         entries = {entry["project"]: entry for entry in diff.diffs["failed_projects"]}
 
         assert set(entries) == set(new_panics)
@@ -829,7 +730,6 @@ info: query stacktrace:
             assert entry["new_panic_messages"] == [new_panic]
 
         assert not diff.has_new_panics()
-        assert not diff.has_reduced_panics()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
     def test_multiple_panics_with_same_normalized_key_preserve_multiplicity(self):
@@ -878,14 +778,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         entries = {entry["project"]: entry for entry in diff.diffs["failed_projects"]}
 
         added_entry = entries["added-site"]
@@ -952,25 +845,6 @@ info: query stacktrace:
 
         assert diff.introduced_project_failures() == ["proj"]
 
-    def test_comment_title_for_new_non_panic_crash(self):
-        """A new abnormal exit without a panic message (e.g. stack overflow)
-        should produce a scary title, not the default neutral one."""
-        old_data = {"outputs": [_make_output("proj", [], time_s=1.5, return_code=0)]}
-        new_data = {"outputs": [_make_output("proj", [], time_s=None, return_code=-11)]}
-
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
-
-        assert diff.generate_comment_title() == (
-            "## `ecosystem-analyzer` results: new crashes detected ❌"
-        )
-
     def test_comment_title_combines_panics_crashes_and_timeouts(self):
         old_data = {
             "outputs": [
@@ -993,14 +867,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         assert diff.generate_comment_title() == (
             "## `ecosystem-analyzer` results: new crashes detected ❌"
         )
@@ -1021,14 +888,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         assert diff.generate_comment_title() == (
             "## `ecosystem-analyzer` results: new timeouts detected ❌"
         )
@@ -1062,14 +922,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
 
         entry = next(
             e for e in diff.diffs["failed_projects"] if e["project"] == "partial"
@@ -1077,8 +930,6 @@ info: query stacktrace:
         assert entry["failure_status"] == "reduced"
         assert entry["fixed_panic_messages"] == [old_only]
 
-        assert not diff.has_fixed_failures()
-        assert diff.has_reduced_panics()
         assert diff.generate_comment_title() == (
             "## `ecosystem-analyzer` results: panics reduced 🎉"
         )
@@ -1088,11 +939,7 @@ info: query stacktrace:
         assert "🎉 crashes fixed" not in markdown
         assert "PARTIAL FIX" in markdown
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
-            html_path = f.name
-        diff.generate_html_report(html_path)
-        with open(html_path) as f:
-            html = f.read()
+        html = _render_html(diff)
 
         assert "🎉 panics reduced" in html
         assert "🎉 Fixed panic message (no longer present)" in html
@@ -1131,14 +978,7 @@ info: query stacktrace:
             ]
         }
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
-            json.dump(old_data, f1)
-            old_path = f1.name
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
-            json.dump(new_data, f2)
-            new_path = f2.name
-
-        diff = DiagnosticDiff(old_path, new_path)
+        diff = _make_diff(old_data, new_data)
         entry = next(
             e for e in diff.diffs["failed_projects"] if e["project"] == "swapped"
         )
@@ -1147,20 +987,13 @@ info: query stacktrace:
         assert entry["fixed_panic_messages"] == [old_panic]
         assert entry["persistent_panic_messages"] == []
 
-        assert not diff.has_new_failures()
         assert diff.has_new_panics()
-        # `has_fixed_failures` only fires on full recovery, not on panic swaps.
-        assert not diff.has_fixed_failures()
         assert "new panics detected" in diff.generate_comment_title()
 
         markdown = diff.render_statistics_markdown()
         assert "🎉" not in markdown
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as f:
-            html_path = f.name
-        diff.generate_html_report(html_path)
-        with open(html_path) as f:
-            html = f.read()
+        html = _render_html(diff)
 
         assert "🎉" not in html
         assert "➖ Previous panic message (no longer present)" in html
