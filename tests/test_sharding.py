@@ -5,7 +5,7 @@ from click.testing import CliRunner
 from git import Repo
 from mypy_primer.model import Project
 
-from ecosystem_analyzer.main import cli, shard_projects
+from ecosystem_analyzer.main import cli, get_all_project_names, shard_projects
 from ecosystem_analyzer.ty import Ty
 
 
@@ -17,6 +17,11 @@ def _projects(*costs: tuple[str, int]) -> dict[str, Project]:
         )
         for name, c in costs
     }
+
+
+def test_all_project_names_are_sorted():
+    projects = _projects(("charlie", 1), ("alpha", 1), ("bravo", 1))
+    assert get_all_project_names(projects) == ["alpha", "bravo", "charlie"]
 
 
 def test_two_shards_partition_all_projects():
@@ -176,10 +181,12 @@ def test_num_shards_without_shard_is_error(tmp_path):
     assert "--shard and --num-shards must be used together" in result.output
 
 
-def test_diff_help_omits_project_list_options():
-    """The diff command always analyzes every mypy_primer project."""
-    result = CliRunner().invoke(cli, ["diff", "--help"])
+@pytest.mark.parametrize("command", ["analyze", "diff", "history"])
+def test_ecosystem_command_help_omits_project_selection_options(command):
+    """Ecosystem-wide commands always analyze every mypy_primer project."""
+    result = CliRunner().invoke(cli, [command, "--help"])
     assert result.exit_code == 0
+    assert "--projects FILE" not in result.output
     assert "--projects-old" not in result.output
     assert "--projects-new" not in result.output
 

@@ -2,6 +2,8 @@
 
 ecosystem-analyzer is a tool for analyzing Python projects with `ty` (a Python type checker). It downloads Python projects based on setup instructions in `mypy_primer`'s project list, runs `ty` on them, and collects diagnostics. The tool supports single project analysis, ecosystem-wide analysis, diagnostic diff comparison between commits, and historical analysis.
 
+The ecosystem-wide `analyze`, `diff`, and `history` commands always run every project known to `mypy_primer`. Use `run --project-name <project>` to analyze a single project.
+
 
 ## Project Structure & Module Organization
 

@@ -25,6 +25,12 @@ def setup_logging(verbose: bool = False) -> None:
     )
 
 
+def get_all_project_names(ecosystem_projects: dict[str, Project]) -> list[str]:
+    project_names = sorted(ecosystem_projects)
+    logger.info("Analyzing all %d mypy_primer projects", len(project_names))
+    return project_names
+
+
 def shard_projects(
     project_names: list[str],
     shard: int,
@@ -164,12 +170,6 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
     default="origin/main",
 )
 @click.option(
-    "--projects",
-    help="List to a file with projects to analyze",
-    type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=True,
-)
-@click.option(
     "--output",
     "-o",
     default="ecosystem-diagnostics.json",
@@ -199,7 +199,6 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
 def analyze(
     ctx,
     commit: str,
-    projects: str,
     output: str,
     profile: str,
     projects_flaky: str | None,
@@ -212,7 +211,9 @@ def analyze(
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
-    project_names = Path(projects).read_text().splitlines()
+    ecosystem_projects = get_ecosystem_projects()
+    project_names = get_all_project_names(ecosystem_projects)
+
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
     )
@@ -225,6 +226,7 @@ def analyze(
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
+        ecosystem_projects=ecosystem_projects,
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -336,8 +338,7 @@ def diff(
         raise click.UsageError(f"--shard must be in range [0, {num_shards})")
 
     ecosystem_projects = get_ecosystem_projects()
-    project_names = sorted(ecosystem_projects)
-    logger.info("Analyzing all %d mypy_primer projects", len(project_names))
+    project_names = get_all_project_names(ecosystem_projects)
 
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
@@ -440,12 +441,6 @@ def generate_diff(
 
 @cli.command()
 @click.option(
-    "--projects",
-    help="List to a file with projects to analyze",
-    type=click.Path(exists=True, dir_okay=False, readable=True),
-    required=True,
-)
-@click.option(
     "--num-commits",
     help="Number of recent commits to analyze",
     type=int,
@@ -473,7 +468,6 @@ def generate_diff(
 @click.pass_context
 def history(
     ctx,
-    projects: str,
     num_commits: int,
     output: str,
     profile: str,
@@ -494,7 +488,8 @@ def history(
         message = commit.message.splitlines()[0]
         logger.debug(f"Found commit: {message}")
 
-    project_names = Path(projects).read_text().splitlines()
+    ecosystem_projects = get_ecosystem_projects()
+    project_names = get_all_project_names(ecosystem_projects)
 
     flaky_project_names = (
         set(Path(projects_flaky).read_text().splitlines()) if projects_flaky else None
@@ -507,6 +502,7 @@ def history(
         profile=profile,
         flaky_runs=ctx.obj["flaky_runs"],
         flaky_projects=flaky_project_names,
+        ecosystem_projects=ecosystem_projects,
     )
 
     statistics = []
