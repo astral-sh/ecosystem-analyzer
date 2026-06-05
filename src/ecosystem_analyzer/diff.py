@@ -408,7 +408,7 @@ class DiagnosticDiff:
                 else:
                     failure_status = "persistent"
 
-                result["failed_projects"].append({
+                entry = {
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
                     "old_status": old_status,
@@ -423,7 +423,9 @@ class DiagnosticDiff:
                     "fixed_panic_messages": fixed_panics,
                     "persistent_panic_messages": persistent_panics,
                     "failure_status": failure_status,
-                })
+                }
+                self._add_project_kind(entry, new_project)
+                result["failed_projects"].append(entry)
                 # Skip detailed diff analysis for failed projects
                 continue
 
@@ -446,6 +448,7 @@ class DiagnosticDiff:
                     "project_location": project_data.get("project_location", ""),
                     "diagnostics": diagnostics,
                 }
+                self._add_project_kind(entry, project_data)
                 flaky = project_data.get("flaky_diagnostics", [])
                 if flaky:
                     entry["flaky_diagnostics"] = flaky
@@ -471,6 +474,7 @@ class DiagnosticDiff:
                     "project_location": project_data.get("project_location", ""),
                     "diagnostics": diagnostics,
                 }
+                self._add_project_kind(entry, project_data)
                 flaky = project_data.get("flaky_diagnostics", [])
                 if flaky:
                     entry["flaky_diagnostics"] = flaky
@@ -550,6 +554,7 @@ class DiagnosticDiff:
                     "project_location": new_project.get("project_location", ""),
                     "diffs": file_diffs,
                 }
+                self._add_project_kind(entry, new_project)
                 if has_flaky_changes:
                     entry["flaky_diffs"] = flaky_diffs
                     entry["flaky_file_diffs"] = self._organize_flaky_diffs_by_file(
@@ -590,6 +595,16 @@ class DiagnosticDiff:
         result["failed_projects"].sort(key=failed_project_sort_key)
 
         return result
+
+    @staticmethod
+    def _project_kind(output: RunOutput) -> str | None:
+        metadata = output.get("project_metadata")
+        return metadata.get("kind") if metadata is not None else None
+
+    @classmethod
+    def _add_project_kind(cls, entry: dict[str, Any], output: RunOutput) -> None:
+        if kind := cls._project_kind(output):
+            entry["project_metadata"] = {"kind": kind}
 
     def _group_diagnostics_by_file(
         self, diagnostics: list[Diagnostic]
@@ -1484,6 +1499,11 @@ class DiagnosticDiff:
             "failure_descriptor": _failure_descriptor,
             "failure_status_labels": _FAILURE_STATUS_LABELS,
             "failure_status_titles": _FAILURE_STATUS_TITLES,
+            "project_kinds": sorted({
+                kind
+                for output in chain(self.old_data["outputs"], self.new_data["outputs"])
+                if (kind := self._project_kind(output))
+            }),
         }
 
         # Ensure the output directory exists
