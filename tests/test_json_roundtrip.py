@@ -1,5 +1,7 @@
 import json
 import tempfile
+from pathlib import Path
+from typing import Any
 
 from ecosystem_analyzer.diff import DiagnosticDiff
 
@@ -13,8 +15,9 @@ def _make_output(
     stderr: str | None = None,
     time_s: float | None = 1.5,
     return_code: int | None = 1,
+    project_metadata: dict | None = None,
 ):
-    entry = {
+    entry: dict[str, Any] = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
         "ty_commit": "abc123def456",
@@ -30,6 +33,8 @@ def _make_output(
         entry["panic_messages"] = panic_messages
     if stderr is not None:
         entry["stderr"] = stderr
+    if project_metadata is not None:
+        entry["project_metadata"] = project_metadata
     return entry
 
 
@@ -90,6 +95,56 @@ def _render_html(diff: DiagnosticDiff) -> str:
 
 
 class TestJsonRoundtrip:
+    def test_project_metadata_is_rendered_as_filterable_html(self):
+        old_data = {
+            "outputs": [
+                _make_output(
+                    "example-project",
+                    [],
+                    project_metadata={"kind": "example-kind"},
+                )
+            ]
+        }
+        new_data = {
+            "outputs": [
+                _make_output(
+                    "example-project",
+                    [
+                        {
+                            "level": "error",
+                            "lint_name": "some-lint",
+                            "path": "a.py",
+                            "line": 1,
+                            "column": 1,
+                            "message": "new",
+                        }
+                    ],
+                    project_metadata={"kind": "example-kind"},
+                )
+            ]
+        }
+
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f1:
+            json.dump(old_data, f1)
+            old_path = f1.name
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f2:
+            json.dump(new_data, f2)
+            new_path = f2.name
+        with tempfile.NamedTemporaryFile(
+            mode="r", suffix=".html", delete=False
+        ) as html:
+            html_path = html.name
+
+        diff = DiagnosticDiff(old_path, new_path)
+        diff.generate_html_report(html_path)
+        rendered = Path(html_path).read_text()
+
+        assert 'id="project-kind-filter"' in rendered
+        assert 'data-project-kind="example-kind"' in rendered
+        assert diff.diffs["modified_projects"][0]["project_metadata"] == {
+            "kind": "example-kind"
+        }
+
     def test_roundtrip_without_flaky(self):
         """JSON files without flaky data load and diff correctly."""
         diag = {

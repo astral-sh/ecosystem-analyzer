@@ -3,6 +3,10 @@ from typing import NotRequired, TypedDict
 from .diagnostic import Diagnostic
 
 
+class ProjectMetadata(TypedDict):
+    kind: NotRequired[str]
+
+
 class FlakyVariant(TypedDict):
     """A diagnostic variant seen at a flaky location, with its frequency."""
 
@@ -30,3 +34,4 @@ class RunOutput(TypedDict):
     return_code: int | None
     stderr: NotRequired[str]
     panic_messages: NotRequired[list[str]]
+    project_metadata: NotRequired[ProjectMetadata]

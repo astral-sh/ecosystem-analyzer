@@ -751,6 +751,14 @@
                     {% endfor %}
                     {% endif %}
                 </select>
+                {% if project_kinds %}
+                <select class="filter-select" id="project-kind-filter">
+                    <option value="all">All Project Kinds</option>
+                    {% for project_kind in project_kinds %}
+                    <option value="{{ project_kind }}">{{ project_kind }}</option>
+                    {% endfor %}
+                </select>
+                {% endif %}
             </div>
         </div>
 
@@ -879,7 +887,7 @@
         {% if diffs.added_projects %}
         <h2>Added Projects</h2>
         {% for project in diffs.added_projects %}
-        <div class="project added">
+        <div class="project added"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
@@ -900,7 +908,7 @@
         {% if diffs.removed_projects %}
         <h2>Removed Projects</h2>
         {% for project in diffs.removed_projects %}
-        <div class="project removed">
+        <div class="project removed"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
@@ -920,7 +928,7 @@
 
         {% if diffs.modified_projects %}
         {% for project in diffs.modified_projects %}
-        <div class="project modified">
+        <div class="project modified"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             {% if project.diffs.added_files %}
             {% for file_data in project.diffs.added_files %}
@@ -1104,10 +1112,12 @@
             const filterButtons = document.querySelectorAll('.filter-btn');
             const lintFilter = document.getElementById('lint-filter');
             const projectFilter = document.getElementById('project-filter');
+            const projectKindFilter = document.getElementById('project-kind-filter');
 
             let activeChangeFilter = 'all';
             let activeLintFilter = 'all';
             let activeProjectFilter = 'all';
+            let activeProjectKindFilter = 'all';
 
             // Change type filter buttons
             filterButtons.forEach(button => {
@@ -1134,6 +1144,14 @@
                 applyFilters();
             });
 
+            // Project kind filter dropdown
+            if (projectKindFilter) {
+                projectKindFilter.addEventListener('change', function() {
+                    activeProjectKindFilter = this.value;
+                    applyFilters();
+                });
+            }
+
             function applyFilters() {
                 const diagnostics = document.querySelectorAll('.diagnostic');
 
@@ -1141,10 +1159,13 @@
                     const changeType = diagnostic.dataset.changeType;
                     const lintName = diagnostic.dataset.lintName;
                     const projectName = diagnostic.dataset.projectName;
+                    const project = diagnostic.closest('.project');
+                    const projectKind = project.dataset.projectKind;
 
                     let showByChange = true;
                     let showByLint = true;
                     let showByProject = true;
+                    let showByProjectKind = true;
 
                     // Apply change type filter
                     if (activeChangeFilter !== 'all') {
@@ -1161,8 +1182,13 @@
                         showByProject = projectName === activeProjectFilter;
                     }
 
+                    // Apply project kind filter
+                    if (activeProjectKindFilter !== 'all') {
+                        showByProjectKind = projectKind === activeProjectKindFilter;
+                    }
+
                     // Show/hide diagnostic
-                    if (showByChange && showByLint && showByProject) {
+                    if (showByChange && showByLint && showByProject && showByProjectKind) {
                         diagnostic.style.display = '';
                         diagnostic.closest('.file').style.display = '';
                         diagnostic.closest('.project').style.display = '';
