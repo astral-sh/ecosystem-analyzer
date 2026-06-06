@@ -11,6 +11,7 @@ from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
 from .manager import Manager, get_ecosystem_projects
+from .run_output import ExitStatus, OutputVariant
 
 logger = logging.getLogger(__name__)
 
@@ -698,18 +699,24 @@ def generate_report(
     help="Commit hash for GitHub links",
     type=str,
 )
+@click.option(
+    "--return-code",
+    type=int,
+    required=True,
+    help="Exit code from the ty process that produced the diagnostic output",
+)
 def parse_diagnostics(
-    output: str, project_name: str, project_location: str | None, commit: str | None
+    output: str,
+    project_name: str,
+    project_location: str | None,
+    commit: str | None,
+    return_code: int,
 ) -> None:
     """
     Parse ty diagnostic output from stdin and generate a JSON file.
     """
     # Read diagnostic output from stdin
     diagnostic_content = sys.stdin.read()
-
-    if not diagnostic_content.strip():
-        click.echo("No diagnostic content provided on stdin", err=True)
-        return
 
     # Create a parser with the provided information
     parser = DiagnosticsParser(
@@ -718,13 +725,23 @@ def parse_diagnostics(
         repo_working_dir=Path.cwd(),
     )
 
-    # Parse the diagnostics (parser will conditionally include github_ref)
+    # Parse diagnostics and panic output (the parser conditionally includes
+    # github_ref for regular diagnostics).
     diagnostics = parser.parse(diagnostic_content)
+    panic_messages = parser.parse_panic_messages(diagnostic_content)
+
+    exit_status = ExitStatus(return_code=return_code, count=1)
+    if panic_messages:
+        exit_status["panic_messages"] = [
+            OutputVariant(message=message, count=1) for message in panic_messages
+        ]
 
     # Create output structure - only include fields that have meaningful values
     run_output = {
         "project": project_name,
         "diagnostics": diagnostics,
+        "exit_statuses": [exit_status],
+        "median_time_s": None,
     }
 
     # Only include optional fields if they're provided
