@@ -2,16 +2,16 @@ import difflib
 import json
 import os
 import random
-import re
 from collections import Counter
+from enum import Enum
 from itertools import chain
 from pathlib import Path
 from typing import Any, Literal, TypedDict
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
-from .diagnostic import Diagnostic
-from .run_output import RunOutput
+from .diagnostic import Diagnostic, index_panic_messages
+from .run_output import ExitStatus, OutputVariant, RunOutput
 
 
 class JsonData(TypedDict):
@@ -70,39 +70,20 @@ _FAILURE_STATUS_TITLES = {
     "fixed": "Failure that existed on the baseline is no longer present",
 }
 
-_RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
-_PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
-_VOLATILE_PANIC_METADATA_PREFIXES = ("info: Version:", "info: Args:")
 
-
-def _normalize_panic_message(message: str) -> str:
-    """Remove volatile details before comparing panic messages."""
-    stable_lines = []
-    for line in message.splitlines():
-        stripped = line.strip()
-        if stripped in _PANIC_TRACE_HEADERS:
-            break
-        if stripped.startswith(_VOLATILE_PANIC_METADATA_PREFIXES):
-            continue
-        stable_lines.append(_RUST_SOURCE_LOCATION_PATTERN.sub(r"\g<path>:<line>", line))
-    return "\n".join(stable_lines)
-
-
-def _index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
-    """Group raw panic messages by their normalized comparison key."""
-    indexed_messages: dict[str, list[str]] = {}
-    for message in messages:
-        key = _normalize_panic_message(message)
-        indexed_messages.setdefault(key, []).append(message)
-    return indexed_messages
+class _ProjectStatus(Enum):
+    SUCCESS = "success"
+    TIMEOUT = "timeout"
+    ABNORMAL_EXIT = "abnormal exit"
+    FLAKY = "flaky"
 
 
 def _compare_panic_messages(
     old_messages: list[str], new_messages: list[str]
 ) -> tuple[list[str], list[str], list[str]]:
     """Return introduced, fixed, and persistent panic messages."""
-    old_messages_by_key = _index_panic_messages(old_messages)
-    new_messages_by_key = _index_panic_messages(new_messages)
+    old_messages_by_key = index_panic_messages(old_messages)
+    new_messages_by_key = index_panic_messages(new_messages)
     introduced = []
     fixed = []
     persistent = []
@@ -341,16 +322,148 @@ class DiagnosticDiff:
             f"{diag['path']}:{diag['line']}:{diag['column']} - {diag['message']}"
         )
 
-    def _is_project_failed(self, project_data: RunOutput) -> tuple[bool, str]:
-        """Check if a project failed (timeout or abnormal exit) and return status."""
-        return_code = project_data.get("return_code")
-        time_s = project_data.get("time_s")
+    def _exit_statuses(self, project_data: RunOutput) -> list[ExitStatus]:
+        """Return the project's observed exit statuses."""
+        return project_data["exit_statuses"]
 
-        if return_code is None:
-            return True, "timeout"
-        if return_code not in (0, 1) or time_s is None:
-            return True, "abnormal exit"
-        return False, "success"
+    def _total_runs(self, project_data: RunOutput) -> int:
+        """Return the number of runs represented by an output."""
+        return sum(status["count"] for status in self._exit_statuses(project_data))
+
+    def _format_exit_statuses(self, statuses: list[ExitStatus]) -> str:
+        """Format observed exit statuses for Markdown and raw diff output."""
+        total = sum(status["count"] for status in statuses)
+        parts = []
+        for status in statuses:
+            label = (
+                "timeout"
+                if status["return_code"] is None
+                else f"exit {status['return_code']}"
+            )
+            if len(statuses) > 1:
+                label += f" ({status['count']}/{total})"
+            parts.append(label)
+        return ", ".join(parts)
+
+    def _stable_panic_messages(self, project_data: RunOutput) -> list[str]:
+        """Return panic identities present in every represented run."""
+        statuses = self._exit_statuses(project_data)
+        variants_by_status = []
+        all_keys = set()
+        for status in statuses:
+            variants_by_key: dict[str, list[OutputVariant]] = {}
+            for variant in status.get("panic_messages", []):
+                [key] = index_panic_messages([variant["message"]])
+                all_keys.add(key)
+                variants_by_key.setdefault(key, []).append(variant)
+            variants_by_status.append(variants_by_key)
+
+        stable = []
+        for key in all_keys:
+            stable_multiplicity = min(
+                sum(
+                    variant["count"] == status["count"]
+                    for variant in variants.get(key, [])
+                )
+                for status, variants in zip(statuses, variants_by_status, strict=True)
+            )
+            representatives = [
+                variant["message"]
+                for variants in variants_by_status
+                for variant in variants.get(key, [])
+            ]
+            stable.extend(representatives[:stable_multiplicity])
+        return sorted(stable)
+
+    def _project_status(self, project_data: RunOutput) -> _ProjectStatus:
+        """Return the project's aggregate exit status."""
+        has_normal_exit = any(
+            status["return_code"] in (0, 1)
+            for status in self._exit_statuses(project_data)
+        )
+        has_abnormal_exit = any(
+            status["return_code"] not in (0, 1)
+            for status in self._exit_statuses(project_data)
+        )
+        if has_normal_exit and has_abnormal_exit:
+            return _ProjectStatus.FLAKY
+        if not has_abnormal_exit:
+            return _ProjectStatus.SUCCESS
+
+        return_codes = {
+            status["return_code"] for status in self._exit_statuses(project_data)
+        }
+        if return_codes == {None}:
+            return _ProjectStatus.TIMEOUT
+        return _ProjectStatus.ABNORMAL_EXIT
+
+    def _has_flaky_exit_evidence(self, project_data: RunOutput) -> bool:
+        """Return whether exit outcomes or their evidence varied between runs."""
+        statuses = self._exit_statuses(project_data)
+        if len(statuses) > 1:
+            return True
+        return any(
+            variant["count"] != status["count"]
+            for status in statuses
+            for variant in chain(
+                status.get("panic_messages", []), status.get("stderr", [])
+            )
+        )
+
+    def _compare_flaky_exit_statuses(
+        self, old_project: RunOutput, new_project: RunOutput
+    ) -> dict[str, Any] | None:
+        """Return a flaky exit-status change, ignoring frequency-only noise."""
+        old_statuses = self._exit_statuses(old_project)
+        new_statuses = self._exit_statuses(new_project)
+        if not (
+            self._has_flaky_exit_evidence(old_project)
+            or self._has_flaky_exit_evidence(new_project)
+        ):
+            return None
+
+        old_codes = {status["return_code"] for status in old_statuses}
+        new_codes = {status["return_code"] for status in new_statuses}
+        old_panic_evidence = Counter(
+            (status["return_code"], key)
+            for status in old_statuses
+            for variant in status.get("panic_messages", [])
+            for key in index_panic_messages([variant["message"]])
+        )
+        new_panic_evidence = Counter(
+            (status["return_code"], key)
+            for status in new_statuses
+            for variant in status.get("panic_messages", [])
+            for key in index_panic_messages([variant["message"]])
+        )
+        old_stderr_evidence = {
+            (status["return_code"], variant["message"])
+            for status in old_statuses
+            for variant in status.get("stderr", [])
+        }
+        new_stderr_evidence = {
+            (status["return_code"], variant["message"])
+            for status in new_statuses
+            for variant in status.get("stderr", [])
+        }
+        # Frequencies from a finite sample of an already-flaky project are
+        # themselves noisy. Only a change in the observed outcome set is
+        # reliable enough to surface as a flaky exit-status change. Panic
+        # identities and stderr variants are evidence, rather than frequencies,
+        # so preserve changes to those even when the return-code set is stable.
+        if (
+            old_codes == new_codes
+            and old_panic_evidence == new_panic_evidence
+            and old_stderr_evidence == new_stderr_evidence
+        ):
+            return None
+
+        return {
+            "old": old_statuses,
+            "new": new_statuses,
+            "old_runs": self._total_runs(old_project),
+            "new_runs": self._total_runs(new_project),
+        }
 
     def _compute_diffs(self) -> dict[str, Any]:
         """Compute differences between the old and new diagnostic data."""
@@ -359,6 +472,7 @@ class DiagnosticDiff:
             "removed_projects": [],
             "modified_projects": [],
             "failed_projects": [],
+            "flaky_exit_status_changes": [],
         }
 
         # Get project names from both files
@@ -371,19 +485,53 @@ class DiagnosticDiff:
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
-            old_failed, old_status = self._is_project_failed(old_project)
-            new_failed, new_status = self._is_project_failed(new_project)
+            old_status = self._project_status(old_project)
+            new_status = self._project_status(new_project)
+            old_failed = old_status in {
+                _ProjectStatus.TIMEOUT,
+                _ProjectStatus.ABNORMAL_EXIT,
+            }
+            new_failed = new_status in {
+                _ProjectStatus.TIMEOUT,
+                _ProjectStatus.ABNORMAL_EXIT,
+            }
 
-            old_panics = old_project.get("panic_messages", [])
-            new_panics = new_project.get("panic_messages", [])
+            flaky_exit_status_change = self._compare_flaky_exit_statuses(
+                old_project, new_project
+            )
+            if flaky_exit_status_change:
+                result["flaky_exit_status_changes"].append({
+                    "project": project_name,
+                    "project_location": new_project.get("project_location", ""),
+                    **flaky_exit_status_change,
+                })
 
-            if old_failed or new_failed:
+            old_panics = self._stable_panic_messages(old_project)
+            new_panics = self._stable_panic_messages(new_project)
+
+            failure_transition_is_flaky = _ProjectStatus.FLAKY in {
+                old_status,
+                new_status,
+            }
+            if not failure_transition_is_flaky and (old_failed or new_failed):
                 introduced_panics, fixed_panics, persistent_panics = (
                     _compare_panic_messages(old_panics, new_panics)
                 )
                 abnormal_exit_kind_changed = (
-                    old_status == new_status == "abnormal exit"
-                    and old_project.get("return_code") != new_project.get("return_code")
+                    old_status is _ProjectStatus.ABNORMAL_EXIT
+                    and new_status is _ProjectStatus.ABNORMAL_EXIT
+                    and {
+                        status["return_code"]
+                        for status in self._exit_statuses(old_project)
+                    }
+                    != {
+                        status["return_code"]
+                        for status in self._exit_statuses(new_project)
+                    }
+                )
+                failure_mode_is_flaky = bool(
+                    len(self._exit_statuses(old_project)) > 1
+                    or len(self._exit_statuses(new_project)) > 1
                 )
 
                 # `failure_status` celebrates or flags overall state
@@ -401,9 +549,11 @@ class DiagnosticDiff:
                     failure_status = "fixed"
                 elif introduced_panics:
                     failure_status = "new_panics"
-                elif old_status != new_status or abnormal_exit_kind_changed:
+                elif not failure_mode_is_flaky and (
+                    old_status != new_status or abnormal_exit_kind_changed
+                ):
                     failure_status = "changed"
-                elif fixed_panics:
+                elif fixed_panics and flaky_exit_status_change is None:
                     failure_status = "reduced"
                 else:
                     failure_status = "persistent"
@@ -411,12 +561,12 @@ class DiagnosticDiff:
                 entry = {
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
-                    "old_status": old_status,
-                    "new_status": new_status,
-                    "old_return_code": old_project.get("return_code"),
-                    "new_return_code": new_project.get("return_code"),
-                    "old_stderr": old_project.get("stderr"),
-                    "new_stderr": new_project.get("stderr"),
+                    "old_status": old_status.value,
+                    "new_status": new_status.value,
+                    "old_exit_statuses": self._exit_statuses(old_project),
+                    "new_exit_statuses": self._exit_statuses(new_project),
+                    "old_runs": self._total_runs(old_project),
+                    "new_runs": self._total_runs(new_project),
                     "old_panic_messages": old_panics,
                     "new_panic_messages": new_panics,
                     "introduced_panic_messages": introduced_panics,
@@ -453,6 +603,17 @@ class DiagnosticDiff:
                 if flaky:
                     entry["flaky_diagnostics"] = flaky
                     entry["flaky_runs"] = project_data.get("flaky_runs")
+                entry["exit_statuses"] = self._exit_statuses(project_data)
+                entry["exit_status_runs"] = self._total_runs(project_data)
+                if len(self._exit_statuses(project_data)) > 1:
+                    result["flaky_exit_status_changes"].append({
+                        "project": project_name,
+                        "project_location": project_data.get("project_location", ""),
+                        "old": self._exit_statuses(project_data),
+                        "new": [],
+                        "old_runs": self._total_runs(project_data),
+                        "new_runs": 0,
+                    })
                 result["removed_projects"].append(entry)
 
         # Find added projects
@@ -479,6 +640,17 @@ class DiagnosticDiff:
                 if flaky:
                     entry["flaky_diagnostics"] = flaky
                     entry["flaky_runs"] = project_data.get("flaky_runs")
+                entry["exit_statuses"] = self._exit_statuses(project_data)
+                entry["exit_status_runs"] = self._total_runs(project_data)
+                if len(self._exit_statuses(project_data)) > 1:
+                    result["flaky_exit_status_changes"].append({
+                        "project": project_name,
+                        "project_location": project_data.get("project_location", ""),
+                        "old": [],
+                        "new": self._exit_statuses(project_data),
+                        "old_runs": 0,
+                        "new_runs": self._total_runs(project_data),
+                    })
                 result["added_projects"].append(entry)
 
         # Get list of failed projects to exclude from detailed analysis
@@ -1026,20 +1198,11 @@ class DiagnosticDiff:
 
     def introduced_project_failures(self) -> list[str]:
         """Return project names that regressed from a normal exit to an abnormal exit or timeout."""
-        introduced: list[str] = []
-
-        for project in self.diffs.get("failed_projects", []):
-            old_return_code = project.get("old_return_code")
-            new_return_code = project.get("new_return_code")
-
-            if old_return_code not in (0, 1):
-                continue
-            if new_return_code in (0, 1):
-                continue
-
-            introduced.append(project["project"])
-
-        return introduced
+        return [
+            project["project"]
+            for project in self.diffs.get("failed_projects", [])
+            if project["failure_status"] == "new"
+        ]
 
     def has_new_panics(self) -> bool:
         """Check if any still-failing project gained panic messages."""
@@ -1090,8 +1253,10 @@ class DiagnosticDiff:
 
         return lines
 
-    def _has_flaky_diagnostics(self) -> bool:
-        """Check whether any flaky diagnostics were omitted from the raw diff."""
+    def _has_flaky_changes(self) -> bool:
+        """Check whether any flaky changes were omitted from the raw diff."""
+        if self.diffs.get("flaky_exit_status_changes"):
+            return True
         if any(
             project.get("flaky_diagnostics")
             for project in chain(
@@ -1145,8 +1310,10 @@ class DiagnosticDiff:
                 case "new":
                     line = (
                         f"- FAILED "
-                        f"old={project['old_status']}({project.get('old_return_code')}) "
-                        f"new={project['new_status']}({project.get('new_return_code')})"
+                        f"old={project['old_status']}"
+                        f"({self._format_exit_statuses(project['old_exit_statuses'])}) "
+                        f"new={project['new_status']}"
+                        f"({self._format_exit_statuses(project['new_exit_statuses'])})"
                     )
                 case "new_panics":
                     line = (
@@ -1156,14 +1323,18 @@ class DiagnosticDiff:
                 case "fixed":
                     line = (
                         f"+ FIXED "
-                        f"old={project['old_status']}({project.get('old_return_code')}) "
-                        f"new={project['new_status']}({project.get('new_return_code')})"
+                        f"old={project['old_status']}"
+                        f"({self._format_exit_statuses(project['old_exit_statuses'])}) "
+                        f"new={project['new_status']}"
+                        f"({self._format_exit_statuses(project['new_exit_statuses'])})"
                     )
                 case "changed":
                     line = (
                         f"  FAILURE MODE CHANGED "
-                        f"old={project['old_status']}({project.get('old_return_code')}) "
-                        f"new={project['new_status']}({project.get('new_return_code')})"
+                        f"old={project['old_status']}"
+                        f"({self._format_exit_statuses(project['old_exit_statuses'])}) "
+                        f"new={project['new_status']}"
+                        f"({self._format_exit_statuses(project['new_exit_statuses'])})"
                     )
                 case _:
                     line = (
@@ -1288,7 +1459,7 @@ class DiagnosticDiff:
             markdown_content += "**Failing projects**:\n\n"
             markdown_content += (
                 "| Project | Status | Old Status | New Status | "
-                "Old Return Code | New Return Code |\n"
+                "Old Outcomes | New Outcomes |\n"
             )
             markdown_content += (
                 "|---------|--------|------------|------------|"
@@ -1298,14 +1469,14 @@ class DiagnosticDiff:
             for project in table_projects:
                 old_status = project["old_status"]
                 new_status = project["new_status"]
-                old_rc = project.get("old_return_code", "None")
-                new_rc = project.get("new_return_code", "None")
+                old_outcomes = self._format_exit_statuses(project["old_exit_statuses"])
+                new_outcomes = self._format_exit_statuses(project["new_exit_statuses"])
                 status_label = _FAILURE_STATUS_LABELS[project["failure_status"]]
 
                 markdown_content += (
                     f"| `{project['project']}` | {status_label} | "
                     f"{old_status} | {new_status} | "
-                    f"`{old_rc}` | `{new_rc}` |\n"
+                    f"`{old_outcomes}` | `{new_outcomes}` |\n"
                 )
 
             markdown_content += "\n"
@@ -1354,7 +1525,7 @@ class DiagnosticDiff:
         raw_diff_sections, total_raw_diff_changes = self._raw_diff_sections()
         raw_diff_lines = self._render_raw_diff_sections(raw_diff_sections)
 
-        if self._has_flaky_diagnostics():
+        if self._has_flaky_changes():
             markdown_content += (
                 "\n\n_Flaky changes detected. "
                 "This PR summary excludes flaky changes; see the HTML report for details._"
@@ -1577,23 +1748,33 @@ class DiagnosticDiff:
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
-            # Get timing data and return codes
-            old_time = old_project.get("time_s")
-            new_time = new_project.get("time_s")
-            old_return_code = old_project.get("return_code")
-            new_return_code = new_project.get("return_code")
+            # A timing comparison cannot represent a project that only
+            # succeeds on some runs without turning a flaky exit into a
+            # misleading improvement or regression.
+            old_status = self._project_status(old_project)
+            new_status = self._project_status(new_project)
+            if _ProjectStatus.FLAKY in {
+                old_status,
+                new_status,
+            }:
+                continue
 
-            # Determine the status based on return codes and timing data
-            old_is_timeout = old_time is None
-            new_is_timeout = new_time is None
-            old_is_abnormal = old_return_code is not None and old_return_code not in (
-                0,
-                1,
-            )
-            new_is_abnormal = new_return_code is not None and new_return_code not in (
-                0,
-                1,
-            )
+            old_time = old_project.get("median_time_s")
+            new_time = new_project.get("median_time_s")
+
+            # Imported diagnostic output may have a known successful exit status
+            # without a measured runtime. It has no useful timing comparison.
+            if (
+                old_status is _ProjectStatus.SUCCESS
+                and new_status is _ProjectStatus.SUCCESS
+                and (old_time is None or new_time is None)
+            ):
+                continue
+
+            old_is_timeout = old_status is _ProjectStatus.TIMEOUT
+            new_is_timeout = new_status is _ProjectStatus.TIMEOUT
+            old_is_abnormal = old_status is _ProjectStatus.ABNORMAL_EXIT
+            new_is_abnormal = new_status is _ProjectStatus.ABNORMAL_EXIT
 
             # Handle different failure cases
             if (old_is_timeout or old_is_abnormal) and (
@@ -1629,8 +1810,6 @@ class DiagnosticDiff:
                 "project": project_name,
                 "old_time": old_time,
                 "new_time": new_time,
-                "old_return_code": old_return_code,
-                "new_return_code": new_return_code,
                 "factor": factor,
                 "is_failed": is_failed,
                 "failure_type": failure_type,

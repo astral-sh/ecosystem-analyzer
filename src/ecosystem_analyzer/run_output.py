@@ -23,15 +23,29 @@ class FlakyLocation(TypedDict):
     variants: list[FlakyVariant]
 
 
+class OutputVariant(TypedDict):
+    """Output text seen in some or all runs, with its frequency."""
+
+    message: str
+    count: int
+
+
+class ExitStatus(TypedDict):
+    """An exit status observed across one or more runs."""
+
+    return_code: int | None
+    count: int
+    panic_messages: NotRequired[list[OutputVariant]]
+    stderr: NotRequired[list[OutputVariant]]
+
+
 class RunOutput(TypedDict):
     project: str
     project_location: str
     ty_commit: str
     diagnostics: list[Diagnostic]
     flaky_diagnostics: NotRequired[list[FlakyLocation]]
+    exit_statuses: list[ExitStatus]
     flaky_runs: NotRequired[int]  # Total number of runs used for flaky detection
-    time_s: float | None
-    return_code: int | None
-    stderr: NotRequired[str]
-    panic_messages: NotRequired[list[str]]
+    median_time_s: float | None
     project_metadata: NotRequired[ProjectMetadata]

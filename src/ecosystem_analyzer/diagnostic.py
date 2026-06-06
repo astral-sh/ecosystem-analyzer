@@ -13,6 +13,31 @@ NEW_DIAGNOSTIC_PATTERN = re.compile(
     r"(?P<message>.+)$"
 )
 PANIC_PATTERN = re.compile(r"^(?:error|fatal)\[panic\](?::)? (?P<message>.+)$")
+_RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
+_PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
+_VOLATILE_PANIC_METADATA_PREFIXES = ("info: Version:", "info: Args:")
+
+
+def normalize_panic_message(message: str) -> str:
+    """Remove volatile details before comparing panic messages."""
+    stable_lines = []
+    for line in message.splitlines():
+        stripped = line.strip()
+        if stripped in _PANIC_TRACE_HEADERS:
+            break
+        if stripped.startswith(_VOLATILE_PANIC_METADATA_PREFIXES):
+            continue
+        stable_lines.append(_RUST_SOURCE_LOCATION_PATTERN.sub(r"\g<path>:<line>", line))
+    return "\n".join(stable_lines)
+
+
+def index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
+    """Group raw panic messages by their normalized comparison key."""
+    indexed_messages: dict[str, list[str]] = {}
+    for message in messages:
+        key = normalize_panic_message(message)
+        indexed_messages.setdefault(key, []).append(message)
+    return indexed_messages
 
 
 class Diagnostic(TypedDict):

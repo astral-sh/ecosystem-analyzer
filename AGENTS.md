@@ -20,6 +20,12 @@ Use `uv` for all local work.
 - `uv run ecosystem-analyzer --repository ~/ty run --project-name <project> --commit <ty-commit> --output project-diagnostics.json`: analyze one project against a `ty` checkout.
 - `uv run ecosystem-analyzer generate-report project-diagnostics.json --output report.html`: render an HTML report from saved diagnostics.
 
+## Compatibility Policy
+
+This project has no public, stable API. Retaining compatibility code for old CLI behavior, output schemas, or other internal interfaces is unnecessary and undesirable; prefer updating callers and removing obsolete paths.
+
+The maintainers of this project are also the maintainers of Ruff and `ty`. We can easily update how `ecosystem-analyzer` is installed and invoked by the GitHub workflows in the Ruff repository, so those workflows should not be treated as a reason to preserve otherwise-unnecessary compatibility code here.
+
 ## `ty` CI Integration
 
 `ty` uses `ecosystem-analyzer` from the `ruff` repository's CI workflow at [`.github/workflows/ty-ecosystem-analyzer.yaml`](https://github.com/astral-sh/ruff/blob/main/.github/workflows/ty-ecosystem-analyzer.yaml).

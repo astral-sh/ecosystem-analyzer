@@ -634,6 +634,33 @@
 </div>
 {% endmacro %}
 
+{% macro render_exit_statuses(statuses, runs) %}
+{% if not statuses %}
+<span style="color: #6c757d;">not present</span>
+{% endif %}
+{% for status in statuses %}
+<div><span class="flaky-freq">({{ status.count }}/{{ runs }})</span>
+    {% if status.return_code is none %}
+    timeout
+    {% else %}
+    exit code <code>{{ status.return_code }}</code>
+    {% endif %}
+</div>
+{% for variant in status.get("panic_messages", []) %}
+<details class="failure-output-block panic-block-neutral">
+    <summary>panic ({{ variant.count }}/{{ runs }} runs)</summary>
+    <pre>{{ variant.message | e }}</pre>
+</details>
+{% endfor %}
+{% for variant in status.get("stderr", []) %}
+<details class="failure-output-block">
+    <summary>stderr ({{ variant.count }}/{{ runs }} runs)</summary>
+    <pre>{{ variant.message | e }}</pre>
+</details>
+{% endfor %}
+{% endfor %}
+{% endmacro %}
+
 <body>
     <div class="container">
         <div class="statistics">
@@ -793,8 +820,8 @@
                         <th style="padding: 12px; text-align: center;">Status</th>
                         <th style="padding: 12px; text-align: center;">Old Status</th>
                         <th style="padding: 12px; text-align: center;">New Status</th>
-                        <th style="padding: 12px; text-align: center;">Old Return Code</th>
-                        <th style="padding: 12px; text-align: center;">New Return Code</th>
+                        <th style="padding: 12px; text-align: center;">Old Outcomes</th>
+                        <th style="padding: 12px; text-align: center;">New Outcomes</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -827,21 +854,13 @@
                             {% endif %}
                         </td>
                         <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
-                            {% if project.old_return_code is none %}
-                                <span style="color: #6c757d;">None</span>
-                            {% else %}
-                                {{ project.old_return_code }}
-                            {% endif %}
+                            {{ render_exit_statuses(project.old_exit_statuses, project.old_runs) }}
                         </td>
                         <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
-                            {% if project.new_return_code is none %}
-                                <span style="color: #6c757d;">None</span>
-                            {% else %}
-                                {{ project.new_return_code }}
-                            {% endif %}
+                            {{ render_exit_statuses(project.new_exit_statuses, project.new_runs) }}
                         </td>
                     </tr>
-                    {% if project.old_panic_messages or project.new_panic_messages or project.old_stderr or project.new_stderr %}
+                    {% if project.old_panic_messages or project.new_panic_messages %}
                     <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td colspan="6" style="padding: 12px;">
                             {% if project.introduced_panic_messages %}
@@ -863,21 +882,37 @@
                                 <pre>{{ project.persistent_panic_messages | join('\n') | e }}</pre>
                             </details>
                             {% endif %}
-                            {% if project.old_stderr %}
-                            <details class="failure-output-block">
-                                <summary>Baseline stderr</summary>
-                                <pre>{{ project.old_stderr | e }}</pre>
-                            </details>
-                            {% endif %}
-                            {% if project.new_stderr %}
-                            <details class="failure-output-block">
-                                <summary>PR stderr</summary>
-                                <pre>{{ project.new_stderr | e }}</pre>
-                            </details>
-                            {% endif %}
                         </td>
                     </tr>
                     {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+
+        {% if diffs.flaky_exit_status_changes %}
+        <h2>Flaky Exit Status Changes</h2>
+        <div class="failed-projects">
+            <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+                <thead>
+                    <tr style="background: var(--flare); color: white;">
+                        <th style="padding: 12px; text-align: left;">Project</th>
+                        <th style="padding: 12px; text-align: left;">Baseline outcomes</th>
+                        <th style="padding: 12px; text-align: left;">PR outcomes</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for project in diffs.flaky_exit_status_changes %}
+                    <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
+                        <td style="padding: 12px;">
+                            <strong>{{ project.project }}</strong>
+                            <span class="flaky-badge" title="Exit status varied across repeated runs">flaky</span>
+                            <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
+                        </td>
+                        <td style="padding: 12px;">{{ render_exit_statuses(project.old, project.old_runs) }}</td>
+                        <td style="padding: 12px;">{{ render_exit_statuses(project.new, project.new_runs) }}</td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -889,6 +924,7 @@
         {% for project in diffs.added_projects %}
         <div class="project added"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
             <div class="file">
@@ -910,6 +946,7 @@
         {% for project in diffs.removed_projects %}
         <div class="project removed"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
             <div class="file">

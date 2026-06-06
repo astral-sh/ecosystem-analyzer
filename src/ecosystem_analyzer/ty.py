@@ -9,10 +9,10 @@ from pathlib import Path
 
 from git import Commit, Repo
 
-from .diagnostic import DiagnosticsParser
+from .diagnostic import Diagnostic, DiagnosticsParser, index_panic_messages
 from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
-from .run_output import RunOutput
+from .run_output import ExitStatus, OutputVariant, RunOutput
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +20,44 @@ logger = logging.getLogger(__name__)
 def _normalize_stderr(stderr: str) -> str | None:
     stderr = stderr.strip()
     return stderr or None
+
+
+def _aggregate_panic_messages(statuses: list[ExitStatus]) -> list[OutputVariant]:
+    """Aggregate normalized panic identities while preserving multiplicity."""
+    indexed_by_run = []
+    for status in statuses:
+        messages = [
+            variant["message"]
+            for variant in status.get("panic_messages", [])
+            for _ in range(variant["count"])
+        ]
+        indexed_by_run.append(index_panic_messages(messages))
+
+    variants = []
+    all_keys = set().union(*(indexed.keys() for indexed in indexed_by_run))
+    for key in all_keys:
+        messages_by_run = [indexed.get(key, []) for indexed in indexed_by_run]
+        max_multiplicity = max(map(len, messages_by_run))
+        for index in range(max_multiplicity):
+            present_messages = [
+                messages[index] for messages in messages_by_run if len(messages) > index
+            ]
+            variants.append(
+                OutputVariant(message=present_messages[0], count=len(present_messages))
+            )
+
+    return sorted(variants, key=lambda variant: variant["message"])
+
+
+def _aggregate_stderr(statuses: list[ExitStatus]) -> list[OutputVariant]:
+    """Aggregate exact stderr variants across runs with one count per run."""
+    counts: Counter[str] = Counter()
+    for status in statuses:
+        counts.update({variant["message"] for variant in status.get("stderr", [])})
+    return [
+        OutputVariant(message=message, count=count)
+        for message, count in sorted(counts.items())
+    ]
 
 
 class Ty:
@@ -155,60 +193,53 @@ class Ty:
             stderr = None
             panic_messages = []
 
-        output = RunOutput({
+        exit_status = ExitStatus(return_code=return_code, count=1)
+        if panic_messages:
+            exit_status["panic_messages"] = [
+                OutputVariant(message=message, count=1) for message in panic_messages
+            ]
+        if stderr:
+            exit_status["stderr"] = [OutputVariant(message=stderr, count=1)]
+
+        return RunOutput({
             "project": project.name,
             "project_location": project.location,
             "ty_commit": self.commit_sha,
             "diagnostics": diagnostics,
-            "time_s": execution_time,
-            "return_code": return_code,
+            "exit_statuses": [exit_status],
+            "median_time_s": execution_time,
         })
-        if stderr:
-            output["stderr"] = stderr
-        if panic_messages:
-            output["panic_messages"] = panic_messages
-        return output
 
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
-        """Run ty on a project N times and classify diagnostics as stable/flaky.
+        """Run ty on a project N times and classify diagnostics and exit statuses.
 
         Returns a single RunOutput where `diagnostics` contains only stable
-        diagnostics and `flaky_diagnostics` contains grouped flaky ones.
+        diagnostics, while flaky diagnostics and exit statuses retain their
+        frequencies across the runs.
         """
         assert n >= 2, "Use run_on_project for single runs"
         logger.info(
             f"Running ty on project '{project.name}' {n} times for flaky detection"
         )
 
-        all_diagnostics: list[list] = []
+        all_diagnostics: list[list[Diagnostic]] = []
         times: list[float] = []
-        return_codes: list[int | None] = []
+        statuses_by_return_code: dict[int | None, list[ExitStatus]] = {}
 
         for i in range(n):
             logger.info(f"  Run {i + 1}/{n} for '{project.name}'")
             output = self.run_on_project(project)
 
-            # If any run fails abnormally, bail out and return the failure
-            if output.get("return_code") is not None and output["return_code"] not in (
-                0,
-                1,
-            ):
-                logger.warning(
-                    f"Run {i + 1}/{n} for '{project.name}' failed with return code "
-                    f"{output['return_code']}; aborting flaky detection"
-                )
-                return output
-            if output.get("return_code") is None:
-                # Timeout
-                logger.warning(
-                    f"Run {i + 1}/{n} for '{project.name}' timed out; aborting flaky detection"
-                )
-                return output
-
             all_diagnostics.append(output["diagnostics"])
-            if (time_s := output.get("time_s")) is not None:
+            [exit_status] = output["exit_statuses"]
+            return_code = exit_status["return_code"]
+            statuses_by_return_code.setdefault(return_code, []).append(exit_status)
+
+            if (
+                return_code in (0, 1)
+                and (time_s := output.get("median_time_s")) is not None
+            ):
                 times.append(time_s)
-            return_codes.append(output.get("return_code"))
 
         stable, flaky_locations = classify_diagnostics(all_diagnostics)
 
@@ -219,9 +250,17 @@ class Ty:
             mid = len(sorted_times) // 2
             median_time = sorted_times[mid]
 
-        # Use most common return code
-        rc_counts = Counter(rc for rc in return_codes if rc is not None)
-        most_common_rc = rc_counts.most_common(1)[0][0] if rc_counts else None
+        exit_statuses = []
+        for return_code, statuses in sorted(
+            statuses_by_return_code.items(),
+            key=lambda item: (item[0] is None, item[0] or 0),
+        ):
+            exit_status = ExitStatus(return_code=return_code, count=len(statuses))
+            if panic_messages := _aggregate_panic_messages(statuses):
+                exit_status["panic_messages"] = panic_messages
+            if stderr := _aggregate_stderr(statuses):
+                exit_status["stderr"] = stderr
+            exit_statuses.append(exit_status)
 
         result = RunOutput({
             "project": project.name,
@@ -229,8 +268,8 @@ class Ty:
             "ty_commit": self.commit_sha,
             "diagnostics": stable,
             "flaky_runs": n,
-            "time_s": median_time,
-            "return_code": most_common_rc,
+            "exit_statuses": exit_statuses,
+            "median_time_s": median_time,
         })
 
         if flaky_locations:
@@ -240,6 +279,7 @@ class Ty:
         logger.info(
             f"  '{project.name}': {len(stable)} stable diagnostics, "
             f"{flaky_count} flaky diagnostics at {len(flaky_locations)} locations"
+            f", {len(exit_statuses)} exit status{'es' if len(exit_statuses) != 1 else ''}"
             f" ({n} runs)"
         )
 

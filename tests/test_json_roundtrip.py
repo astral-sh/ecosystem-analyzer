@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Any
 
 from ecosystem_analyzer.diff import DiagnosticDiff
+from ecosystem_analyzer.run_output import ExitStatus, OutputVariant
 
 
 def _make_output(
@@ -11,28 +12,37 @@ def _make_output(
     diagnostics: list,
     flaky_diagnostics: list | None = None,
     flaky_runs: int | None = None,
+    exit_statuses: list | None = None,
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
     time_s: float | None = 1.5,
     return_code: int | None = 1,
     project_metadata: dict | None = None,
 ):
+    run_count = flaky_runs or 1
+    if exit_statuses is None:
+        exit_status = ExitStatus(return_code=return_code, count=run_count)
+        if panic_messages is not None:
+            exit_status["panic_messages"] = [
+                OutputVariant(message=message, count=run_count)
+                for message in panic_messages
+            ]
+        if stderr is not None:
+            exit_status["stderr"] = [OutputVariant(message=stderr, count=run_count)]
+        exit_statuses = [exit_status]
+
     entry: dict[str, Any] = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
         "ty_commit": "abc123def456",
         "diagnostics": diagnostics,
-        "time_s": time_s,
-        "return_code": return_code,
+        "exit_statuses": exit_statuses,
+        "median_time_s": time_s,
     }
     if flaky_diagnostics is not None:
         entry["flaky_diagnostics"] = flaky_diagnostics
     if flaky_runs is not None:
         entry["flaky_runs"] = flaky_runs
-    if panic_messages is not None:
-        entry["panic_messages"] = panic_messages
-    if stderr is not None:
-        entry["stderr"] = stderr
     if project_metadata is not None:
         entry["project_metadata"] = project_metadata
     return entry
@@ -436,16 +446,16 @@ class TestJsonRoundtrip:
         assert "❌ newly failing" not in markdown
         assert "🎉" not in markdown
         assert (
-            "  FAILURE MODE CHANGED old=abnormal exit(101) new=timeout(None)"
-            in markdown
+            "  FAILURE MODE CHANGED old=abnormal exit(exit 101) "
+            "new=timeout(timeout)" in markdown
         )
         assert (
-            "  FAILURE MODE CHANGED old=timeout(None) new=abnormal exit(101)"
-            in markdown
+            "  FAILURE MODE CHANGED old=timeout(timeout) "
+            "new=abnormal exit(exit 101)" in markdown
         )
         assert (
-            "  FAILURE MODE CHANGED old=abnormal exit(101) "
-            "new=abnormal exit(139)" in markdown
+            "  FAILURE MODE CHANGED old=abnormal exit(exit 101) "
+            "new=abnormal exit(exit 139)" in markdown
         )
         assert "PARTIAL FIX" not in markdown
 
@@ -566,8 +576,6 @@ class TestJsonRoundtrip:
         entry = diff.diffs["failed_projects"][0]
 
         assert entry["failure_status"] == "persistent"
-        assert entry["old_stderr"] == old_stderr
-        assert entry["new_stderr"] == new_stderr
 
         markdown = diff.render_statistics_markdown()
         assert "same-code-error" not in markdown
@@ -576,8 +584,7 @@ class TestJsonRoundtrip:
 
         html = _render_html(diff)
         assert "same-code-error" in html
-        assert "<summary>Baseline stderr</summary>" in html
-        assert "<summary>PR stderr</summary>" in html
+        assert html.count("<summary>stderr (1/1 runs)</summary>") == 2
         assert "invalid invocation: &lt;old option&gt;" in html
         assert "invalid invocation: &lt;new option&gt;" in html
 
@@ -705,6 +712,371 @@ info: Args: /tmp/new_commit/ty check ."""
         )
 
         assert diff.introduced_project_failures() == ["proj"]
+
+    def test_intermittent_abnormal_exit_is_excluded_as_flaky(self):
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=3, return_code=1)],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 1, "count": 1},
+                        {
+                            "return_code": 2,
+                            "count": 2,
+                            "panic_messages": [
+                                {"message": "intermittent <panic>", "count": 2}
+                            ],
+                            "stderr": [
+                                {"message": "intermittent <stderr>", "count": 1}
+                            ],
+                        },
+                    ],
+                    return_code=1,
+                )
+            ],
+        )
+
+        assert diff.diffs["failed_projects"] == []
+        assert diff.introduced_project_failures() == []
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+        assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
+
+        markdown = diff.render_statistics_markdown()
+        assert "excludes flaky changes" in markdown
+        assert "new crashes detected" not in markdown
+
+        html = _render_html(diff)
+        assert "Flaky Exit Status Changes" in html
+        assert "(2/3)" in html
+        assert "exit code <code>2</code>" in html
+        assert "panic (2/3 runs)" in html
+        assert "intermittent &lt;panic&gt;" in html
+        assert "stderr (1/3 runs)" in html
+        assert "intermittent &lt;stderr&gt;" in html
+
+    def test_intermittent_timeout_is_excluded_as_flaky(self):
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=3, return_code=1)],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 1, "count": 2},
+                        {"return_code": None, "count": 1},
+                    ],
+                    return_code=1,
+                )
+            ],
+        )
+
+        assert diff.diffs["failed_projects"] == []
+        assert diff.introduced_project_failures() == []
+        assert "timeout" in _render_html(diff)
+
+    def test_stable_failure_to_intermittent_success_is_not_fixed(self):
+        diff = _make_diff(
+            [_make_failed_output("proj", return_code=2)],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 1, "count": 1},
+                        {"return_code": 2, "count": 2},
+                    ],
+                    return_code=1,
+                )
+            ],
+        )
+
+        assert diff.diffs["failed_projects"] == []
+        assert "ecosystem failure fixed" not in diff.generate_comment_title()
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+
+    def test_intermittent_failure_to_stable_failure_is_not_new(self):
+        diff = _make_diff(
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 1, "count": 2},
+                        {"return_code": 2, "count": 1},
+                    ],
+                    return_code=1,
+                )
+            ],
+            [_make_failed_output("proj", return_code=2)],
+        )
+
+        assert diff.diffs["failed_projects"] == []
+        assert diff.introduced_project_failures() == []
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+
+    def test_varying_abnormal_exit_codes_still_form_stable_failure(self):
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=3, return_code=1)],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 2, "count": 2},
+                        {"return_code": 3, "count": 1},
+                    ],
+                    time_s=None,
+                    return_code=2,
+                )
+            ],
+        )
+
+        assert diff.introduced_project_failures() == ["proj"]
+        assert diff.diffs["failed_projects"][0]["failure_status"] == "new"
+
+    def test_varying_failure_codes_on_both_sides_are_persistent(self):
+        old_statuses = [
+            {"return_code": 2, "count": 2},
+            {"return_code": 3, "count": 1},
+        ]
+        new_statuses = [
+            {"return_code": 2, "count": 1},
+            {"return_code": 3, "count": 2},
+        ]
+        diff = _make_diff(
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=old_statuses,
+                    time_s=None,
+                    return_code=2,
+                )
+            ],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    exit_statuses=new_statuses,
+                    time_s=None,
+                    return_code=3,
+                )
+            ],
+        )
+
+        assert diff.diffs["flaky_exit_status_changes"] == []
+        assert diff.diffs["failed_projects"][0]["failure_status"] == "persistent"
+
+    def test_stable_diagnostic_changes_survive_flaky_exit_status(self):
+        old_diagnostic = {
+            "level": "error",
+            "lint_name": "some-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "old",
+        }
+        new_diagnostic = {
+            **old_diagnostic,
+            "line": 2,
+            "message": "new stable diagnostic",
+        }
+        diff = _make_diff(
+            [_make_output("proj", [old_diagnostic], flaky_runs=3, return_code=1)],
+            [
+                _make_output(
+                    "proj",
+                    [old_diagnostic, new_diagnostic],
+                    flaky_runs=3,
+                    exit_statuses=[
+                        {"return_code": 1, "count": 2},
+                        {"return_code": 2, "count": 1},
+                    ],
+                    return_code=1,
+                )
+            ],
+        )
+
+        assert diff._calculate_statistics()["total_added"] == 1
+
+    def test_added_project_preserves_flaky_exit_status_evidence(self):
+        output = _make_output(
+            "new-project",
+            [],
+            flaky_runs=3,
+            exit_statuses=[
+                {"return_code": 1, "count": 2},
+                {
+                    "return_code": 2,
+                    "count": 1,
+                    "stderr": [{"message": "new project crashed", "count": 1}],
+                },
+            ],
+        )
+        diff = _make_diff([], [output])
+
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+        assert "excludes flaky changes" in diff.render_statistics_markdown()
+        html = _render_html(diff)
+        assert "Flaky Exit Status Changes" in html
+        assert "new project crashed" in html
+        assert "not present" in html
+
+    def test_removed_project_preserves_flaky_exit_status_evidence(self):
+        output = _make_output(
+            "old-project",
+            [],
+            flaky_runs=3,
+            exit_statuses=[
+                {"return_code": 1, "count": 2},
+                {
+                    "return_code": None,
+                    "count": 1,
+                    "stderr": [{"message": "old project timed out", "count": 1}],
+                },
+            ],
+        )
+        diff = _make_diff([output], [])
+
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+        assert "excludes flaky changes" in diff.render_statistics_markdown()
+        html = _render_html(diff)
+        assert "Flaky Exit Status Changes" in html
+        assert "old project timed out" in html
+        assert "not present" in html
+
+    def test_flaky_exit_evidence_changes_with_same_statuses_are_preserved(self):
+        old_statuses = [
+            {"return_code": 1, "count": 2},
+            {
+                "return_code": 2,
+                "count": 1,
+                "panic_messages": [{"message": "old panic", "count": 1}],
+                "stderr": [{"message": "old stderr", "count": 1}],
+            },
+        ]
+        new_statuses = [
+            {"return_code": 1, "count": 2},
+            {
+                "return_code": 2,
+                "count": 1,
+                "panic_messages": [{"message": "new panic", "count": 1}],
+                "stderr": [{"message": "new stderr", "count": 1}],
+            },
+        ]
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=3, exit_statuses=old_statuses)],
+            [_make_output("proj", [], flaky_runs=3, exit_statuses=new_statuses)],
+        )
+
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+        html = _render_html(diff)
+        assert "old panic" in html
+        assert "new panic" in html
+        assert "old stderr" in html
+        assert "new stderr" in html
+
+    def test_intermittent_panic_change_with_one_exit_status_is_preserved(self):
+        old_statuses = [
+            {
+                "return_code": 101,
+                "count": 3,
+                "panic_messages": [{"message": "panic A", "count": 3}],
+            }
+        ]
+        new_statuses = [
+            {
+                "return_code": 101,
+                "count": 3,
+                "panic_messages": [
+                    {"message": "panic A", "count": 2},
+                    {"message": "panic B", "count": 1},
+                ],
+            }
+        ]
+        diff = _make_diff(
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    time_s=None,
+                    exit_statuses=old_statuses,
+                )
+            ],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=3,
+                    time_s=None,
+                    exit_statuses=new_statuses,
+                )
+            ],
+        )
+
+        assert len(diff.diffs["flaky_exit_status_changes"]) == 1
+        assert diff.diffs["failed_projects"][0]["failure_status"] == "persistent"
+        assert "panics reduced" not in diff.generate_comment_title()
+        html = _render_html(diff)
+        assert "panic A" in html
+        assert "panic B" in html
+
+    def test_added_and_removed_projects_render_stable_exit_evidence(self):
+        added = _make_output(
+            "added",
+            [],
+            return_code=2,
+            panic_messages=["added panic"],
+            stderr="added stderr",
+        )
+        removed = _make_output(
+            "removed",
+            [],
+            return_code=2,
+            panic_messages=["removed panic"],
+            stderr="removed stderr",
+        )
+        diff = _make_diff([removed], [added])
+
+        assert (
+            diff.diffs["added_projects"][0]["exit_statuses"] == added["exit_statuses"]
+        )
+        assert (
+            diff.diffs["removed_projects"][0]["exit_statuses"]
+            == removed["exit_statuses"]
+        )
+        html = _render_html(diff)
+        assert "added panic" in html
+        assert "added stderr" in html
+        assert "removed panic" in html
+        assert "removed stderr" in html
+
+    def test_flaky_exit_frequency_changes_are_ignored(self):
+        old_statuses = [
+            {"return_code": 1, "count": 9},
+            {"return_code": 2, "count": 1},
+        ]
+        new_statuses = [
+            {"return_code": 1, "count": 1},
+            {"return_code": 2, "count": 9},
+        ]
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=10, exit_statuses=old_statuses)],
+            [_make_output("proj", [], flaky_runs=10, exit_statuses=new_statuses)],
+        )
+
+        assert diff.diffs["flaky_exit_status_changes"] == []
+        assert diff.diffs["failed_projects"] == []
 
     def test_comment_title_combines_panics_crashes_and_timeouts(self):
         diff = _make_diff(
