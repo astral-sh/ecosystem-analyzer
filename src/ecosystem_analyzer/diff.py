@@ -932,32 +932,31 @@ class DiagnosticDiff:
                 changed_old_formatted = set()
                 changed_new_formatted = set()
 
-                # Track which new diagnostics have been matched to avoid double-matching
-                matched_new_strs = set()
+                removed_diagnostics = [
+                    d for d in old_diagnostics if self._format_diagnostic(d) in removed
+                ]
+                added_diagnostics = [
+                    d for d in new_diagnostics if self._format_diagnostic(d) in added
+                ]
 
-                # For simplicity, we'll just show all removed and added diagnostics
-                for old_diag in old_diagnostics:
+                # Exact string matches are gone. A diagnostic whose text changed
+                # should be reported as one change, not as one removal plus one
+                # addition. Match likely old and new versions before recording
+                # anything left over.
+                for old_diag, new_diag in self._match_changed_diagnostics(
+                    removed_diagnostics, added_diagnostics
+                ):
                     old_str = self._format_diagnostic(old_diag)
-                    if old_str in removed:
-                        for new_diag in new_diagnostics:
-                            new_str = self._format_diagnostic(new_diag)
-                            if (
-                                new_str in added
-                                and new_str not in matched_new_strs
-                                and self._similar_diagnostics(old_diag, new_diag)
-                            ):
-                                # Generate line diff
-                                diff = self._generate_text_diff(old_str, new_str)
-                                if diff:
-                                    text_diffs.append({
-                                        "old": old_diag,
-                                        "new": new_diag,
-                                        "diff": diff,
-                                    })
-                                    changed_old_formatted.add(old_str)
-                                    changed_new_formatted.add(new_str)
-                                    matched_new_strs.add(new_str)
-                                break
+                    new_str = self._format_diagnostic(new_diag)
+                    diff = self._generate_text_diff(old_str, new_str)
+                    if diff:
+                        text_diffs.append({
+                            "old": old_diag,
+                            "new": new_diag,
+                            "diff": diff,
+                        })
+                        changed_old_formatted.add(old_str)
+                        changed_new_formatted.add(new_str)
 
                 # Filter out diagnostics that are part of changes
                 removed_diagnostics = [
@@ -991,9 +990,197 @@ class DiagnosticDiff:
 
         return result
 
-    def _similar_diagnostics(self, diag1: Diagnostic, diag2: Diagnostic) -> bool:
-        """Check if two diagnostics are similar (same lint name)."""
-        return diag1["lint_name"] == diag2["lint_name"]
+    def _match_changed_diagnostics(
+        self,
+        old_diagnostics: list[Diagnostic],
+        new_diagnostics: list[Diagnostic],
+    ) -> list[tuple[Diagnostic, Diagnostic]]:
+        """Match old diagnostics to new diagnostics when only their text changed.
+
+        For example, ty might change a message from::
+
+            Argument to bound method `__init__` is incorrect
+
+        to::
+
+            Argument to `A.__init__` is incorrect
+
+        Those messages should appear in the report as one changed diagnostic,
+        not as one removal and one addition.
+
+        Only two diagnostics with the same lint name can be old/new versions
+        of each other. A line can contain several diagnostics with the same
+        error code, so choose the combination whose messages are most similar
+        overall. If one "side" (old vs new) has more distinct diagnostics,
+        return one match for each diagnostic on the smaller side. After we've
+        matched as many "changed diagnostic" pairs as possible, report all
+        remaining diagnostics on the old side as removals and all remaining
+        diagnostics on the new side as additions.
+        """
+        old_by_lint: dict[str, list[Diagnostic]] = {}
+        new_by_lint: dict[str, list[Diagnostic]] = {}
+        for diag in old_diagnostics:
+            old_by_lint.setdefault(diag["lint_name"], []).append(diag)
+        for diag in new_diagnostics:
+            new_by_lint.setdefault(diag["lint_name"], []).append(diag)
+
+        result = []
+        for lint_name in sorted(old_by_lint.keys() & new_by_lint.keys()):
+            old_group = self._distinct_diagnostics(old_by_lint[lint_name])
+            new_group = self._distinct_diagnostics(new_by_lint[lint_name])
+            result.extend(
+                (old_group[old_index], new_group[new_index])
+                for old_index, new_index in self._maximum_similarity_assignment(
+                    old_group, new_group
+                )
+            )
+        return result
+
+    def _distinct_diagnostics(self, diagnostics: list[Diagnostic]) -> list[Diagnostic]:
+        """Remove exact duplicates before matching old diagnostics to new ones.
+
+        This is called separately for the old and new diagnostics from one line
+        that have the same error code. Multiple diagnostics can produce exactly
+        the same text in the diff report. Those duplicates should count as one
+        possible old/new match; otherwise one value could count more than once
+        and cause false additions or removals. Keep the first diagnostic so it
+        can be included in the report if selected as a match.
+        """
+        result = {}
+        for diag in diagnostics:
+            result.setdefault(self._format_diagnostic(diag), diag)
+        return list(result.values())
+
+    def _maximum_similarity_assignment(
+        self,
+        old_diagnostics: list[Diagnostic],
+        new_diagnostics: list[Diagnostic],
+    ) -> list[tuple[int, int]]:
+        """Return old/new index pairs whose diagnostic text is most similar.
+
+        For each possible old/new combination, calculate the ``SequenceMatcher``
+        similarity score for the diagnostic text. Then use the "Hungarian
+        algorithm" to choose the combination with the highest total score,
+        without using any diagnostic more than once. This avoids choosing a
+        good match for the first old diagnostic if that would force worse
+        matches for the remaining diagnostics.
+
+        The two lists can have different lengths. The implementation below
+        stores the score for each possible match in a table: one row for each
+        diagnostic in the shorter list and one column for each diagnostic in
+        the longer list. It matches every row to one column. The caller reports
+        diagnostics represented only by unused columns as additions or
+        removals.
+
+        ``SequenceMatcher``:
+        https://docs.python.org/3/library/difflib.html#difflib.SequenceMatcher
+
+        Hungarian algorithm:
+        https://en.wikipedia.org/wiki/Hungarian_algorithm
+        """
+        if not old_diagnostics or not new_diagnostics:
+            return []
+
+        old_formatted = [self._format_diagnostic(diag) for diag in old_diagnostics]
+        new_formatted = [self._format_diagnostic(diag) for diag in new_diagnostics]
+        rows_are_new_diagnostics = len(old_formatted) > len(new_formatted)
+        # The implementation below chooses the smallest numbers, whereas
+        # SequenceMatcher gives larger scores to more similar strings. Store
+        # negated scores so the smallest total represents the best matches.
+        # Keep the old string as SequenceMatcher's first argument even when a
+        # row represents a new diagnostic: SequenceMatcher's score can depend
+        # on argument order.
+        #
+        # The table has one entry for every possible match. A single source
+        # line is extremely unlikely to emit enough distinct diagnostics of one
+        # lint for the table size to matter in ecosystem analysis.
+        if rows_are_new_diagnostics:
+            negated_similarities = [
+                [
+                    -difflib.SequenceMatcher(None, old_str, new_str).ratio()
+                    for old_str in old_formatted
+                ]
+                for new_str in new_formatted
+            ]
+        else:
+            negated_similarities = [
+                [
+                    -difflib.SequenceMatcher(None, old_str, new_str).ratio()
+                    for new_str in new_formatted
+                ]
+                for old_str in old_formatted
+            ]
+
+        # This is the Hungarian algorithm linked above. Use 1-based indexes
+        # because slot 0 is reserved for bookkeeping. Each pass adds a match
+        # for one more row.
+        row_count = len(negated_similarities)
+        column_count = len(negated_similarities[0])
+        row_offsets = [0.0] * (row_count + 1)
+        column_offsets = [0.0] * (column_count + 1)
+        matched_rows_by_column = [0] * (column_count + 1)
+        previous_columns = [0] * (column_count + 1)
+
+        for row in range(1, row_count + 1):
+            matched_rows_by_column[0] = row
+            column = 0
+            min_values = [float("inf")] * (column_count + 1)
+            used_columns = [False] * (column_count + 1)
+            while True:
+                used_columns[column] = True
+                matched_row = matched_rows_by_column[column]
+                delta = float("inf")
+                next_column = 0
+                for candidate_column in range(1, column_count + 1):
+                    if used_columns[candidate_column]:
+                        continue
+                    current_value = (
+                        negated_similarities[matched_row - 1][candidate_column - 1]
+                        - row_offsets[matched_row]
+                        - column_offsets[candidate_column]
+                    )
+                    if current_value < min_values[candidate_column]:
+                        min_values[candidate_column] = current_value
+                        previous_columns[candidate_column] = column
+                    if min_values[candidate_column] < delta:
+                        delta = min_values[candidate_column]
+                        next_column = candidate_column
+
+                # Update the bookkeeping offsets before considering the next
+                # available column.
+                for candidate_column in range(column_count + 1):
+                    if used_columns[candidate_column]:
+                        row_offsets[matched_rows_by_column[candidate_column]] += delta
+                        column_offsets[candidate_column] -= delta
+                    else:
+                        min_values[candidate_column] -= delta
+                column = next_column
+                if matched_rows_by_column[column] == 0:
+                    break
+
+            # Save the new match. Following previous_columns may move earlier
+            # matches to different columns to make room for it.
+            while True:
+                previous_column = previous_columns[column]
+                matched_rows_by_column[column] = matched_rows_by_column[previous_column]
+                column = previous_column
+                if column == 0:
+                    break
+
+        # Convert the one-based bookkeeping indexes back into indexes for the
+        # input lists.
+        assignments = sorted(
+            (matched_rows_by_column[column] - 1, column - 1)
+            for column in range(1, column_count + 1)
+            if matched_rows_by_column[column] != 0
+        )
+        if rows_are_new_diagnostics:
+            # Rows represent new diagnostics in this case. Swap the indexes so
+            # callers always receive (old_index, new_index).
+            return sorted(
+                (old_index, new_index) for new_index, old_index in assignments
+            )
+        return assignments
 
     def _generate_text_diff(self, old_text: str, new_text: str) -> list[str]:
         """Generate a text diff between two strings."""
