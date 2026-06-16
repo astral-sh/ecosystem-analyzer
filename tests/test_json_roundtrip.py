@@ -841,6 +841,42 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.introduced_project_failures() == ["proj"]
         assert diff.diffs["failed_projects"][0]["failure_status"] == "new"
 
+    def test_stable_stack_overflow_with_varying_thread_ids_is_not_flaky(self):
+        stack_overflows = [
+            {
+                "message": (
+                    f"thread '<unknown>' ({thread_id}) has overflowed its stack\n"
+                    "fatal runtime error: stack overflow, aborting"
+                ),
+                "count": 1,
+            }
+            for thread_id in range(10)
+        ]
+        diff = _make_diff(
+            [_make_output("proj", [], flaky_runs=10, return_code=1)],
+            [
+                _make_output(
+                    "proj",
+                    [],
+                    flaky_runs=10,
+                    exit_statuses=[
+                        {
+                            "return_code": -6,
+                            "count": 10,
+                            "stderr": stack_overflows,
+                        }
+                    ],
+                    time_s=None,
+                )
+            ],
+        )
+
+        assert diff.diffs["flaky_exit_status_changes"] == []
+        assert diff.diffs["failed_projects"][0]["failure_status"] == "new"
+        html = _render_html(diff)
+        assert "Failed Projects" in html
+        assert "Flaky Exit Status Changes" not in html
+
     def test_varying_failure_codes_on_both_sides_are_persistent(self):
         old_statuses = [
             {"return_code": 2, "count": 2},
