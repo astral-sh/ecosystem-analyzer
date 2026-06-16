@@ -14,6 +14,9 @@ NEW_DIAGNOSTIC_PATTERN = re.compile(
 )
 PANIC_PATTERN = re.compile(r"^(?:error|fatal)\[panic\](?::)? (?P<message>.+)$")
 _RUST_SOURCE_LOCATION_PATTERN = re.compile(r"(?P<path>\S+\.rs):\d+(?::\d+)?")
+_STACK_OVERFLOW_THREAD_ID_PATTERN = re.compile(
+    r"(?m)^(thread .+?) \(\d+\)( has overflowed its stack)$"
+)
 _PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
 _VOLATILE_PANIC_METADATA_PREFIXES = ("info: Version:", "info: Args:")
 
@@ -38,6 +41,11 @@ def index_panic_messages(messages: list[str]) -> dict[str, list[str]]:
         key = normalize_panic_message(message)
         indexed_messages.setdefault(key, []).append(message)
     return indexed_messages
+
+
+def normalize_stderr(message: str) -> str:
+    """Remove volatile details before comparing stderr output."""
+    return _STACK_OVERFLOW_THREAD_ID_PATTERN.sub(r"\1 (<thread-id>)\2", message)
 
 
 class Diagnostic(TypedDict):

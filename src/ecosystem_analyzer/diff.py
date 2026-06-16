@@ -10,7 +10,7 @@ from typing import Any, Literal, TypedDict
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
-from .diagnostic import Diagnostic, index_panic_messages
+from .diagnostic import Diagnostic, index_panic_messages, normalize_stderr
 from .run_output import ExitStatus, OutputVariant, RunOutput
 
 
@@ -402,13 +402,20 @@ class DiagnosticDiff:
         statuses = self._exit_statuses(project_data)
         if len(statuses) > 1:
             return True
-        return any(
-            variant["count"] != status["count"]
-            for status in statuses
-            for variant in chain(
-                status.get("panic_messages", []), status.get("stderr", [])
-            )
-        )
+        for status in statuses:
+            if any(
+                variant["count"] != status["count"]
+                for variant in status.get("panic_messages", [])
+            ):
+                return True
+
+            stderr_counts: Counter[str] = Counter()
+            for variant in status.get("stderr", []):
+                stderr_counts[normalize_stderr(variant["message"])] += variant["count"]
+            if any(count != status["count"] for count in stderr_counts.values()):
+                return True
+
+        return False
 
     def _compare_flaky_exit_statuses(
         self, old_project: RunOutput, new_project: RunOutput
@@ -437,12 +444,12 @@ class DiagnosticDiff:
             for key in index_panic_messages([variant["message"]])
         )
         old_stderr_evidence = {
-            (status["return_code"], variant["message"])
+            (status["return_code"], normalize_stderr(variant["message"]))
             for status in old_statuses
             for variant in status.get("stderr", [])
         }
         new_stderr_evidence = {
-            (status["return_code"], variant["message"])
+            (status["return_code"], normalize_stderr(variant["message"]))
             for status in new_statuses
             for variant in status.get("stderr", [])
         }
