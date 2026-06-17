@@ -395,6 +395,13 @@
             color: #dc3545;
         }
 
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 20px;
+            margin-top: 16px;
+        }
+
         .stats-table {
             font-family: 'Fira Code', monospace;
             font-size: 13px;
@@ -588,6 +595,32 @@
             background: rgba(99, 64, 172, 0.2);
             border-color: var(--flare);
         }
+
+        @media (max-width: 800px) {
+            body {
+                padding: 12px;
+            }
+
+            .statistics {
+                padding: 12px;
+            }
+
+            .stats-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+
+            .stats-table {
+                width: 100%;
+                table-layout: fixed;
+            }
+
+            .stats-table th,
+            .stats-table td,
+            .stats-table .total-row td {
+                padding: 4px;
+                overflow-wrap: anywhere;
+            }
+        }
     </style>
 </head>
 
@@ -673,7 +706,7 @@
                 <a href="{{ ty_repo_url }}/commit/{{ new_commit }}" target="_blank" style="color: var(--flare); text-decoration: none;">{{ new_commit[:8] }}</a>
             </div>
             {% if statistics.merged_by_lint or statistics.merged_by_project %}
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 16px;">
+            <div class="stats-grid">
                 {% if statistics.merged_by_lint %}
                 <div>
                     <table class="stats-table">
