@@ -667,7 +667,7 @@
 </div>
 {% endmacro %}
 
-{% macro render_exit_statuses(statuses, runs) %}
+{% macro render_exit_statuses(statuses, runs, summarized_panic_messages=()) %}
 {% if not statuses %}
 <span style="color: #6c757d;">not present</span>
 {% endif %}
@@ -679,11 +679,16 @@
     exit code <code>{{ status.return_code }}</code>
     {% endif %}
 </div>
+{% set summarized_messages = namespace(remaining=summarized_panic_messages | list) %}
 {% for variant in status.get("panic_messages", []) %}
+{% if variant.count == status.count and variant.message in summarized_messages.remaining %}
+{% set _ = summarized_messages.remaining.remove(variant.message) %}
+{% else %}
 <details class="failure-output-block panic-block-neutral">
     <summary>panic ({{ variant.count }}/{{ runs }} runs)</summary>
     <pre>{{ variant.message | e }}</pre>
 </details>
+{% endif %}
 {% endfor %}
 {% for variant in status.get("stderr", []) %}
 <details class="failure-output-block">
@@ -860,6 +865,8 @@
                 <tbody>
                     {% for project in diffs.failed_projects %}
                     {% set failure_status = project.failure_status %}
+                    {% set old_summarized_panic_messages = project.fixed_panic_messages + project.old_persistent_panic_messages %}
+                    {% set new_summarized_panic_messages = project.introduced_panic_messages + project.new_persistent_panic_messages %}
                     <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td style="padding: 12px;">
                             <strong>{{ project.project }}</strong>
@@ -887,10 +894,10 @@
                             {% endif %}
                         </td>
                         <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
-                            {{ render_exit_statuses(project.old_exit_statuses, project.old_runs) }}
+                            {{ render_exit_statuses(project.old_exit_statuses, project.old_runs, summarized_panic_messages=old_summarized_panic_messages) }}
                         </td>
                         <td style="padding: 12px; text-align: center; font-family: 'Fira Code', monospace;">
-                            {{ render_exit_statuses(project.new_exit_statuses, project.new_runs) }}
+                            {{ render_exit_statuses(project.new_exit_statuses, project.new_runs, summarized_panic_messages=new_summarized_panic_messages) }}
                         </td>
                     </tr>
                     {% if project.old_panic_messages or project.new_panic_messages %}
@@ -912,7 +919,14 @@
                             {% if project.persistent_panic_messages %}
                             <details class="failure-output-block panic-block-persistent">
                                 <summary>➖ Persistent panic message{{ 's' if project.persistent_panic_messages|length != 1 }} (present on both baseline and PR)</summary>
+                                {% if project.old_persistent_panic_messages != project.new_persistent_panic_messages %}
+                                <strong>Baseline</strong>
+                                <pre>{{ project.old_persistent_panic_messages | join('\n') | e }}</pre>
+                                <strong>PR</strong>
+                                <pre>{{ project.new_persistent_panic_messages | join('\n') | e }}</pre>
+                                {% else %}
                                 <pre>{{ project.persistent_panic_messages | join('\n') | e }}</pre>
+                                {% endif %}
                             </details>
                             {% endif %}
                         </td>

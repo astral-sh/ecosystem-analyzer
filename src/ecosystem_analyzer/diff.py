@@ -10,7 +10,11 @@ from typing import Any, Literal, TypedDict
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
-from .diagnostic import Diagnostic, index_panic_messages, normalize_stderr
+from .diagnostic import (
+    Diagnostic,
+    index_panic_messages,
+    normalize_stderr,
+)
 from .run_output import ExitStatus, OutputVariant, RunOutput
 
 
@@ -78,15 +82,16 @@ class _ProjectStatus(Enum):
     FLAKY = "flaky"
 
 
-def _compare_panic_messages(
+def _partition_panic_messages(
     old_messages: list[str], new_messages: list[str]
-) -> tuple[list[str], list[str], list[str]]:
-    """Return introduced, fixed, and persistent panic messages."""
+) -> tuple[list[str], list[str], list[str], list[str]]:
+    """Return introduced, fixed, old-persistent, and new-persistent messages."""
     old_messages_by_key = index_panic_messages(old_messages)
     new_messages_by_key = index_panic_messages(new_messages)
     introduced = []
     fixed = []
-    persistent = []
+    old_persistent = []
+    new_persistent = []
 
     for key in old_messages_by_key.keys() | new_messages_by_key.keys():
         old_counts = Counter(old_messages_by_key.get(key, []))
@@ -95,16 +100,23 @@ def _compare_panic_messages(
         # Match unchanged raw messages first so any count delta reports the
         # most likely added or removed panic site.
         exact_matches = old_counts & new_counts
+        old_persistent.extend(exact_matches.elements())
+        new_persistent.extend(exact_matches.elements())
         unmatched_old = list((old_counts - exact_matches).elements())
         unmatched_new = list((new_counts - exact_matches).elements())
-        persistent.extend(exact_matches.elements())
 
         persistent_count = min(len(unmatched_old), len(unmatched_new))
-        persistent.extend(unmatched_new[:persistent_count])
+        old_persistent.extend(unmatched_old[:persistent_count])
+        new_persistent.extend(unmatched_new[:persistent_count])
         fixed.extend(unmatched_old[persistent_count:])
         introduced.extend(unmatched_new[persistent_count:])
 
-    return sorted(introduced), sorted(fixed), sorted(persistent)
+    return (
+        sorted(introduced),
+        sorted(fixed),
+        sorted(old_persistent),
+        sorted(new_persistent),
+    )
 
 
 def _failure_descriptor(
@@ -369,10 +381,11 @@ class DiagnosticDiff:
             )
             representatives = [
                 variant["message"]
-                for variants in variants_by_status
+                for status, variants in zip(statuses, variants_by_status, strict=True)
                 for variant in variants.get(key, [])
+                if variant["count"] == status["count"]
             ]
-            stable.extend(representatives[:stable_multiplicity])
+            stable.extend(sorted(representatives)[:stable_multiplicity])
         return sorted(stable)
 
     def _project_status(self, project_data: RunOutput) -> _ProjectStatus:
@@ -521,9 +534,12 @@ class DiagnosticDiff:
                 new_status,
             }
             if not failure_transition_is_flaky and (old_failed or new_failed):
-                introduced_panics, fixed_panics, persistent_panics = (
-                    _compare_panic_messages(old_panics, new_panics)
-                )
+                (
+                    introduced_panics,
+                    fixed_panics,
+                    old_persistent_panics,
+                    new_persistent_panics,
+                ) = _partition_panic_messages(old_panics, new_panics)
                 abnormal_exit_kind_changed = (
                     old_status is _ProjectStatus.ABNORMAL_EXIT
                     and new_status is _ProjectStatus.ABNORMAL_EXIT
@@ -578,7 +594,9 @@ class DiagnosticDiff:
                     "new_panic_messages": new_panics,
                     "introduced_panic_messages": introduced_panics,
                     "fixed_panic_messages": fixed_panics,
-                    "persistent_panic_messages": persistent_panics,
+                    "persistent_panic_messages": new_persistent_panics,
+                    "old_persistent_panic_messages": old_persistent_panics,
+                    "new_persistent_panic_messages": new_persistent_panics,
                     "failure_status": failure_status,
                 }
                 self._add_project_kind(entry, new_project)

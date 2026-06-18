@@ -521,6 +521,139 @@ class TestJsonRoundtrip:
         assert "&lt;img src=x onerror=alert" in html
         assert "&lt;svg onload=alert" in html
 
+    def test_failed_project_panic_messages_only_render_in_full_width_row(self):
+        old_only = "panic from the baseline"
+        new_only = "panic from the PR"
+        persistent = "panic on both revisions"
+        diff = _make_diff(
+            [_make_failed_output("proj", panic_messages=[old_only, persistent])],
+            [_make_failed_output("proj", panic_messages=[new_only, persistent])],
+        )
+
+        html = _render_html(diff)
+
+        assert "<summary>panic (1/1 runs)</summary>" not in html
+        assert html.count(old_only) == 1
+        assert html.count(new_only) == 1
+        assert html.count(persistent) == 1
+        assert "New panic message (introduced by this PR)" in html
+        assert "Previous panic message (no longer present)" in html
+        assert "Persistent panic message (present on both baseline and PR)" in html
+
+    def test_failed_project_preserves_nonduplicated_panic_evidence(self):
+        intermittent = (
+            "Panicked at crates/ty_python_semantic/src/types/infer.rs:70:9 "
+            "when checking `example.py`: `query error`"
+        )
+        stable = (
+            "Panicked at crates/ty_python_semantic/src/types/infer.rs:80:9 "
+            "when checking `example.py`: `query error`"
+        )
+        statuses = [
+            {
+                "return_code": 101,
+                "count": 3,
+                "panic_messages": [
+                    {"message": intermittent, "count": 1},
+                    {"message": stable, "count": 3},
+                ],
+            }
+        ]
+        diff = _make_diff(
+            [
+                _make_output(
+                    "proj", [], flaky_runs=3, exit_statuses=statuses, time_s=None
+                )
+            ],
+            [
+                _make_output(
+                    "proj", [], flaky_runs=3, exit_statuses=statuses, time_s=None
+                )
+            ],
+        )
+
+        html = _render_html(diff)
+
+        entry = diff.diffs["failed_projects"][0]
+        assert entry["persistent_panic_messages"] == [stable]
+        assert html.count(intermittent) == 2
+        assert html.count(stable) == 1
+        assert html.count("<summary>panic (1/3 runs)</summary>") == 2
+        assert "<summary>panic (3/3 runs)</summary>" not in html
+
+    def test_failed_project_preserves_panic_that_becomes_stable(self):
+        panic = "panic that becomes stable"
+        old_statuses = [
+            {
+                "return_code": 101,
+                "count": 3,
+                "panic_messages": [{"message": panic, "count": 1}],
+            }
+        ]
+        new_statuses = [
+            {
+                "return_code": 101,
+                "count": 3,
+                "panic_messages": [{"message": panic, "count": 3}],
+            }
+        ]
+        diff = _make_diff(
+            [
+                _make_output(
+                    "proj", [], flaky_runs=3, exit_statuses=old_statuses, time_s=None
+                )
+            ],
+            [
+                _make_output(
+                    "proj", [], flaky_runs=3, exit_statuses=new_statuses, time_s=None
+                )
+            ],
+        )
+
+        html = _render_html(diff)
+
+        assert html.count(panic) == 2
+        assert html.count("<summary>panic (1/3 runs)</summary>") == 1
+        assert "<summary>panic (3/3 runs)</summary>" not in html
+        assert "New panic message (introduced by this PR)" in html
+
+    def test_failed_project_preserves_raw_evidence_across_exit_statuses(self):
+        def panic_at(line: int) -> str:
+            return (
+                "Panicked at crates/ty_python_semantic/src/types/infer.rs:"
+                f"{line}:9 when checking `example.py`: `query error`"
+            )
+
+        statuses = [
+            {
+                "return_code": 101,
+                "count": 1,
+                "panic_messages": [{"message": panic_at(70), "count": 1}],
+            },
+            {
+                "return_code": 139,
+                "count": 1,
+                "panic_messages": [{"message": panic_at(80), "count": 1}],
+            },
+        ]
+        diff = _make_diff(
+            [_make_output("proj", [], exit_statuses=statuses, time_s=None)],
+            [
+                _make_output(
+                    "proj", [], exit_statuses=list(reversed(statuses)), time_s=None
+                )
+            ],
+        )
+
+        html = _render_html(diff)
+
+        entry = diff.diffs["failed_projects"][0]
+        assert entry["old_persistent_panic_messages"] == [panic_at(70)]
+        assert entry["new_persistent_panic_messages"] == [panic_at(70)]
+        assert html.count(panic_at(70)) == 1
+        assert html.count(panic_at(80)) == 2
+        assert html.count("<summary>panic (1/2 runs)</summary>") == 2
+
     def test_persistent_failures_hidden_from_markdown_table(self):
         """Projects failing on both sides are kept out of the PR-comment
         summary table but remain in the full diff data (for the HTML report)."""
@@ -635,6 +768,14 @@ info: query stacktrace:
             assert entry["old_panic_messages"] == [old_panics[project]]
             assert entry["new_panic_messages"] == [new_panic]
 
+        html = _render_html(diff)
+        assert "<summary>panic (1/1 runs)</summary>" not in html
+        assert html.count("<strong>Baseline</strong>") == 2
+        assert html.count("<strong>PR</strong>") == 2
+        for project, new_panic in new_panics.items():
+            assert old_panics[project] in html
+            assert new_panic in html
+
         assert not diff.has_new_panics()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
@@ -691,6 +832,12 @@ info: Args: /tmp/new_commit/ty check ."""
         assert removed_entry["introduced_panic_messages"] == []
         assert removed_entry["fixed_panic_messages"] == [panic_at(60)]
         assert removed_entry["persistent_panic_messages"] == two_panics
+
+        html = _render_html(diff)
+        assert "<summary>panic (1/1 runs)</summary>" not in html
+        assert html.count(panic_at(60)) == 2
+        assert html.count(panic_at(70)) == 2
+        assert html.count(panic_at(80)) == 2
 
     def test_introduced_project_failures_detects_new_abnormal_exit_code(self):
         diff = _make_diff(
