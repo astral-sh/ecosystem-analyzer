@@ -206,7 +206,7 @@ class DiagnosticDiff:
         locs: set[SourceLocationKey] = set()
         for d in project["diagnostics"]:
             locs.add((d["path"], d["line"], d["column"]))
-        for loc in project.get("flaky_diagnostics", []):
+        for loc in project["flaky_diagnostics"]:
             locs.add((loc["path"], loc["line"], loc["column"]))
         return locs
 
@@ -246,7 +246,7 @@ class DiagnosticDiff:
 
     @staticmethod
     def _annotate_flaky_location(
-        location: FlakyLocation, flaky_runs: int | None
+        location: FlakyLocation, flaky_runs: int
     ) -> AnnotatedFlakyLocation:
         return {
             "path": location["path"],
@@ -260,8 +260,8 @@ class DiagnosticDiff:
         self,
         old_flaky: list[FlakyLocation],
         new_flaky: list[FlakyLocation],
-        old_flaky_runs: int | None,
-        new_flaky_runs: int | None,
+        old_flaky_runs: int,
+        new_flaky_runs: int,
     ) -> FlakyDiagnosticDiffData:
         """Compare flaky locations between old and new.
 
@@ -330,10 +330,7 @@ class DiagnosticDiff:
 
     def _count_diagnostics(self, data: RunData) -> int:
         """Count the total number of diagnostics in the data."""
-        total_diagnostics = 0
-        for output in data["outputs"]:
-            total_diagnostics += len(output["diagnostics"])
-        return total_diagnostics
+        return sum(len(output["diagnostics"]) for output in data["outputs"])
 
     def _format_diagnostic(self, diag: Diagnostic) -> str:
         """Format a diagnostic entry as a string for comparison."""
@@ -372,7 +369,7 @@ class DiagnosticDiff:
         all_keys = set()
         for status in statuses:
             variants_by_key: dict[str, list[OutputVariant]] = {}
-            for variant in status.get("panic_messages", []):
+            for variant in status["panic_messages"]:
                 [key] = index_panic_messages([variant["message"]])
                 all_keys.add(key)
                 variants_by_key.setdefault(key, []).append(variant)
@@ -426,7 +423,7 @@ class DiagnosticDiff:
         for status in statuses:
             if any(
                 variant["count"] != status["count"]
-                for variant in status.get("panic_messages", [])
+                for variant in status["panic_messages"]
             ):
                 return True
 
@@ -455,13 +452,13 @@ class DiagnosticDiff:
         old_panic_evidence = Counter(
             (status["return_code"], key)
             for status in old_statuses
-            for variant in status.get("panic_messages", [])
+            for variant in status["panic_messages"]
             for key in index_panic_messages([variant["message"]])
         )
         new_panic_evidence = Counter(
             (status["return_code"], key)
             for status in new_statuses
-            for variant in status.get("panic_messages", [])
+            for variant in status["panic_messages"]
             for key in index_panic_messages([variant["message"]])
         )
         old_stderr_evidence = {
@@ -636,12 +633,10 @@ class DiagnosticDiff:
                     "diagnostics": diagnostics,
                     "exit_statuses": self._exit_statuses(project_data),
                     "exit_status_runs": self._total_runs(project_data),
+                    "flaky_diagnostics": project_data["flaky_diagnostics"],
+                    "flaky_runs": project_data["flaky_runs"],
                 }
                 self._add_project_kind(removed_project, project_data)
-                flaky = project_data.get("flaky_diagnostics", [])
-                if flaky:
-                    removed_project["flaky_diagnostics"] = flaky
-                    removed_project["flaky_runs"] = project_data.get("flaky_runs")
                 if len(self._exit_statuses(project_data)) > 1:
                     result["flaky_exit_status_changes"].append({
                         "project": project_name,
@@ -673,12 +668,10 @@ class DiagnosticDiff:
                     "diagnostics": diagnostics,
                     "exit_statuses": self._exit_statuses(project_data),
                     "exit_status_runs": self._total_runs(project_data),
+                    "flaky_diagnostics": project_data["flaky_diagnostics"],
+                    "flaky_runs": project_data["flaky_runs"],
                 }
                 self._add_project_kind(added_project, project_data)
-                flaky = project_data.get("flaky_diagnostics", [])
-                if flaky:
-                    added_project["flaky_diagnostics"] = flaky
-                    added_project["flaky_runs"] = project_data.get("flaky_runs")
                 if len(self._exit_statuses(project_data)) > 1:
                     result["flaky_exit_status_changes"].append({
                         "project": project_name,
@@ -701,8 +694,8 @@ class DiagnosticDiff:
             old_project = old_projects[project_name]
             new_project = new_projects[project_name]
 
-            old_flaky = old_project.get("flaky_diagnostics", [])
-            new_flaky = new_project.get("flaky_diagnostics", [])
+            old_flaky = old_project["flaky_diagnostics"]
+            new_flaky = new_project["flaky_diagnostics"]
 
             # Reconcile stable vs flaky: exclude stable diagnostics at
             # locations that are flaky on either side.  A stable diagnostic
@@ -744,8 +737,8 @@ class DiagnosticDiff:
             flaky_diffs = self._compare_flaky_locations(
                 old_flaky_filtered,
                 new_flaky_filtered,
-                old_project.get("flaky_runs"),
-                new_project.get("flaky_runs"),
+                old_project["flaky_runs"],
+                new_project["flaky_runs"],
             )
 
             has_stable_changes = (
@@ -808,7 +801,7 @@ class DiagnosticDiff:
     @staticmethod
     def _project_kind(output: RunOutput) -> str | None:
         metadata = output.get("project_metadata")
-        return metadata.get("kind") if metadata is not None else None
+        return metadata["kind"] if metadata is not None else None
 
     @classmethod
     def _add_project_kind(cls, entry: ProjectInfo, output: RunOutput) -> None:
@@ -1246,26 +1239,18 @@ class DiagnosticDiff:
         removed_by_project: Counter[str] = Counter()
         changed_by_project: Counter[str] = Counter()
 
-        total_added = 0
-        total_removed = 0
-        total_changed = 0
-
         # Count diagnostics from added projects
         for project in self.diffs["added_projects"]:
             project_name = project["project"]
             for diag in project["diagnostics"]:
-                total_added += 1
-                lint_name = diag["lint_name"]
-                added_by_lint[lint_name] += 1
+                added_by_lint[diag["lint_name"]] += 1
                 added_by_project[project_name] += 1
 
         # Count diagnostics from removed projects
         for project in self.diffs["removed_projects"]:
             project_name = project["project"]
             for diag in project["diagnostics"]:
-                total_removed += 1
-                lint_name = diag["lint_name"]
-                removed_by_lint[lint_name] += 1
+                removed_by_lint[diag["lint_name"]] += 1
                 removed_by_project[project_name] += 1
 
         # Count diagnostics from modified projects
@@ -1274,17 +1259,13 @@ class DiagnosticDiff:
             # Added files in modified projects
             for file_data in project["diffs"]["added_files"]:
                 for diag in file_data["diagnostics"]:
-                    total_added += 1
-                    lint_name = diag["lint_name"]
-                    added_by_lint[lint_name] += 1
+                    added_by_lint[diag["lint_name"]] += 1
                     added_by_project[project_name] += 1
 
             # Removed files in modified projects
             for file_data in project["diffs"]["removed_files"]:
                 for diag in file_data["diagnostics"]:
-                    total_removed += 1
-                    lint_name = diag["lint_name"]
-                    removed_by_lint[lint_name] += 1
+                    removed_by_lint[diag["lint_name"]] += 1
                     removed_by_project[project_name] += 1
 
             # Modified files in modified projects
@@ -1292,39 +1273,29 @@ class DiagnosticDiff:
                 # Added lines
                 for line_data in file_data["diffs"]["added_lines"]:
                     for diag in line_data["diagnostics"]:
-                        total_added += 1
-                        lint_name = diag["lint_name"]
-                        added_by_lint[lint_name] += 1
+                        added_by_lint[diag["lint_name"]] += 1
                         added_by_project[project_name] += 1
 
                 # Removed lines
                 for line_data in file_data["diffs"]["removed_lines"]:
                     for diag in line_data["diagnostics"]:
-                        total_removed += 1
-                        lint_name = diag["lint_name"]
-                        removed_by_lint[lint_name] += 1
+                        removed_by_lint[diag["lint_name"]] += 1
                         removed_by_project[project_name] += 1
 
                 # Modified lines
                 for line_data in file_data["diffs"]["modified_lines"]:
                     # Count text_diffs as changed diagnostics
                     for diff_item in line_data["text_diffs"]:
-                        total_changed += 1
-                        lint_name = diff_item["old"]["lint_name"]
-                        changed_by_lint[lint_name] += 1
+                        changed_by_lint[diff_item["old"]["lint_name"]] += 1
                         changed_by_project[project_name] += 1
 
                     # Count pure additions and removals (already filtered in diff computation)
                     for diag in line_data["added"]:
-                        total_added += 1
-                        lint_name = diag["lint_name"]
-                        added_by_lint[lint_name] += 1
+                        added_by_lint[diag["lint_name"]] += 1
                         added_by_project[project_name] += 1
 
                     for diag in line_data["removed"]:
-                        total_removed += 1
-                        lint_name = diag["lint_name"]
-                        removed_by_lint[lint_name] += 1
+                        removed_by_lint[diag["lint_name"]] += 1
                         removed_by_project[project_name] += 1
 
             # Flaky location diffs are excluded from statistics — they
@@ -1332,9 +1303,7 @@ class DiagnosticDiff:
 
         # Create merged lint breakdown sorted by total absolute change (descending)
         all_lints = (
-            set(added_by_lint.keys())
-            | set(removed_by_lint.keys())
-            | set(changed_by_lint.keys())
+            added_by_lint.keys() | removed_by_lint.keys() | changed_by_lint.keys()
         )
         merged_lints: list[MergedLintStats] = []
 
@@ -1359,7 +1328,7 @@ class DiagnosticDiff:
         flaky_project_names: set[str] = {
             proj["project"]
             for proj in self.diffs["added_projects"]
-            if proj.get("flaky_diagnostics")
+            if proj["flaky_diagnostics"]
         }
 
         # Create merged project breakdown sorted by total absolute change (descending)
@@ -1389,9 +1358,9 @@ class DiagnosticDiff:
         merged_projects.sort(key=lambda x: (-x["total_change"], x["project_name"]))
 
         return {
-            "total_added": total_added,
-            "total_removed": total_removed,
-            "total_changed": total_changed,
+            "total_added": added_by_lint.total(),
+            "total_removed": removed_by_lint.total(),
+            "total_changed": changed_by_lint.total(),
             "failed_projects": len(self.diffs["failed_projects"]),
             "merged_by_lint": merged_lints,
             "merged_by_project": merged_projects,
@@ -1465,7 +1434,7 @@ class DiagnosticDiff:
         if self.diffs["flaky_exit_status_changes"]:
             return True
         if any(
-            project.get("flaky_diagnostics")
+            project["flaky_diagnostics"]
             for project in chain(
                 self.diffs["removed_projects"], self.diffs["added_projects"]
             )

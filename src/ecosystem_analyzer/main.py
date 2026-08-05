@@ -733,18 +733,22 @@ def parse_diagnostics(
     diagnostics = parser.parse(diagnostic_content)
     panic_messages = parser.parse_panic_messages(diagnostic_content)
 
-    exit_status = ExitStatus(return_code=return_code, count=1)
-    if panic_messages:
-        exit_status["panic_messages"] = [
+    exit_status: ExitStatus = {
+        "return_code": return_code,
+        "count": 1,
+        "panic_messages": [
             OutputVariant(message=message, count=1) for message in panic_messages
-        ]
+        ],
+    }
 
-    # Create output structure - only include fields that have meaningful values
+    # Include every required field in the output structure.
     run_output: RunOutput = {
         "project": project_name,
         "diagnostics": diagnostics,
         "exit_statuses": [exit_status],
         "median_time_s": None,
+        "flaky_runs": 0,
+        "flaky_diagnostics": [],
     }
 
     # Only include optional fields if they're provided

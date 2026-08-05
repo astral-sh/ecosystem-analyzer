@@ -680,7 +680,7 @@
     {% endif %}
 </div>
 {% set summarized_messages = namespace(remaining=summarized_panic_messages | list) %}
-{% for variant in status.get("panic_messages", []) %}
+{% for variant in status.panic_messages %}
 {% if variant.count == status.count and variant.message in summarized_messages.remaining %}
 {% set _ = summarized_messages.remaining.remove(variant.message) %}
 {% else %}
@@ -969,7 +969,7 @@
         {% if diffs.added_projects %}
         <h2>Added Projects</h2>
         {% for project in diffs.added_projects %}
-        <div class="project added"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
+        <div class="project added"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
@@ -991,7 +991,7 @@
         {% if diffs.removed_projects %}
         <h2>Removed Projects</h2>
         {% for project in diffs.removed_projects %}
-        <div class="project removed"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
+        <div class="project removed"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
@@ -1012,7 +1012,7 @@
 
         {% if diffs.modified_projects %}
         {% for project in diffs.modified_projects %}
-        <div class="project modified"{% if project.project_metadata is defined and project.project_metadata.kind is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
+        <div class="project modified"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
             <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             {% if project.diffs.added_files %}
             {% for file_data in project.diffs.added_files %}

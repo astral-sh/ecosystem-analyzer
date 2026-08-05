@@ -30,7 +30,7 @@ def _aggregate_panic_messages(statuses: list[ExitStatus]) -> list[OutputVariant]
     for status in statuses:
         messages = [
             variant["message"]
-            for variant in status.get("panic_messages", [])
+            for variant in status["panic_messages"]
             for _ in range(variant["count"])
         ]
         indexed_by_run.append(index_panic_messages(messages))
@@ -203,11 +203,14 @@ class Ty:
             stderr = None
             panic_messages = []
 
-        exit_status = ExitStatus(return_code=return_code, count=1)
-        if panic_messages:
-            exit_status["panic_messages"] = [
+        exit_status: ExitStatus = {
+            "return_code": return_code,
+            "count": 1,
+            "panic_messages": [
                 OutputVariant(message=message, count=1) for message in panic_messages
-            ]
+            ],
+        }
+
         if stderr:
             exit_status["stderr"] = [OutputVariant(message=stderr, count=1)]
 
@@ -218,6 +221,8 @@ class Ty:
             "diagnostics": diagnostics,
             "exit_statuses": [exit_status],
             "median_time_s": execution_time,
+            "flaky_runs": 0,
+            "flaky_diagnostics": [],
         })
 
     def run_on_project_multiple(self, project: InstalledProject, n: int) -> RunOutput:
@@ -265,9 +270,11 @@ class Ty:
             statuses_by_return_code.items(),
             key=lambda item: (item[0] is None, item[0] or 0),
         ):
-            exit_status = ExitStatus(return_code=return_code, count=len(statuses))
-            if panic_messages := _aggregate_panic_messages(statuses):
-                exit_status["panic_messages"] = panic_messages
+            exit_status = ExitStatus(
+                return_code=return_code,
+                count=len(statuses),
+                panic_messages=_aggregate_panic_messages(statuses),
+            )
             if stderr := _aggregate_stderr(statuses):
                 exit_status["stderr"] = stderr
             exit_statuses.append(exit_status)
@@ -280,10 +287,8 @@ class Ty:
             "flaky_runs": n,
             "exit_statuses": exit_statuses,
             "median_time_s": median_time,
+            "flaky_diagnostics": flaky_locations,
         })
-
-        if flaky_locations:
-            result["flaky_diagnostics"] = flaky_locations
 
         flaky_count = sum(len(loc["variants"]) for loc in flaky_locations)
         logger.info(

@@ -37,7 +37,7 @@ class Diagnostic(SourceLocation):
 class ProjectMetadata(TypedDict, closed=True):
     """Optional classification metadata attached to an analyzed project."""
 
-    kind: NotRequired[str]
+    kind: str
 
 
 class ProjectIdentity(TypedDict):
@@ -78,7 +78,7 @@ class ExitStatus(TypedDict, closed=True):
 
     return_code: int | None
     count: int
-    panic_messages: NotRequired[list[OutputVariant]]
+    panic_messages: list[OutputVariant]
     stderr: NotRequired[list[OutputVariant]]
 
 
@@ -88,9 +88,10 @@ class RunOutput(ProjectIdentity, closed=True):
     project_location: NotRequired[str]
     ty_commit: NotRequired[str]
     diagnostics: list[Diagnostic]
-    flaky_diagnostics: NotRequired[list[FlakyLocation]]
+    flaky_diagnostics: list[FlakyLocation]
     exit_statuses: list[ExitStatus]
-    flaky_runs: NotRequired[int]  # Total number of runs used for flaky detection
+    flaky_runs: int
+    """Total number of runs used for flaky detection"""
     median_time_s: float | None
 
 
@@ -126,9 +127,9 @@ class HistoryData(TypedDict, closed=True):
 class ReportDiagnostic(Diagnostic, ProjectInfo, closed=True):
     """A project-qualified diagnostic prepared for HTML report rendering."""
 
-    is_flaky: NotRequired[bool]
-    flaky_runs: NotRequired[int | None]
-    variants: NotRequired[list[FlakyVariant]]
+    is_flaky: bool
+    flaky_runs: int
+    variants: list[FlakyVariant]
 
 
 class DiagnosticTextDiff(TypedDict, closed=True):
@@ -188,7 +189,7 @@ class FileDiffData(TypedDict, closed=True):
 class AnnotatedFlakyLocation(FlakyLocation, closed=True):
     """A flaky source location annotated with its observed run count."""
 
-    flaky_runs: int | None
+    flaky_runs: int
 
 
 class ChangedFlakyLocation(TypedDict, closed=True):
@@ -212,8 +213,8 @@ class AddedOrRemovedProjectDiff(ProjectInfo, closed=True):
     diagnostics: list[Diagnostic]
     exit_statuses: list[ExitStatus]
     exit_status_runs: int
-    flaky_diagnostics: NotRequired[list[FlakyLocation]]
-    flaky_runs: NotRequired[int | None]
+    flaky_diagnostics: list[FlakyLocation]
+    flaky_runs: int
 
 
 class ModifiedProjectDiff(ProjectInfo, closed=True):

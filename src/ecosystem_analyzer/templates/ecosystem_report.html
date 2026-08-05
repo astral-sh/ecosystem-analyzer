@@ -296,7 +296,7 @@
         </thead>
         <tbody>
             {% for diagnostic in diagnostics %}
-            <tr class="diagnostic-row{% if diagnostic.is_flaky is defined and diagnostic.is_flaky %} is-flaky{% endif %}" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
+            <tr class="diagnostic-row{% if diagnostic.is_flaky %} is-flaky{% endif %}" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
                 data-level="{{ diagnostic.level }}">
                 <td>
                     {% if diagnostic.project_location %}
@@ -307,7 +307,7 @@
                 </td>
                 <td class="{{ diagnostic.level }}">
                     {{ diagnostic.lint_name }}
-                    {% if diagnostic.is_flaky is defined and diagnostic.is_flaky %}
+                    {% if diagnostic.is_flaky %}
                     <span class="flaky-badge" title="Flaky: nondeterministic across {{ diagnostic.flaky_runs }} runs">flaky</span>
                     {% endif %}
                 </td>
@@ -319,7 +319,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if diagnostic.is_flaky is defined and diagnostic.is_flaky %}
+                    {% if diagnostic.is_flaky %}
                         {% for v in diagnostic.variants %}
                         <div class="flaky-variant">
                             <span class="flaky-freq">({{ v.count }}/{{ diagnostic.flaky_runs }})</span>

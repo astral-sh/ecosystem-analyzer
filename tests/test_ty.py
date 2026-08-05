@@ -14,11 +14,13 @@ def _output(
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
 ) -> RunOutput:
-    exit_status = ExitStatus(return_code=return_code, count=1)
-    if panic_messages:
-        exit_status["panic_messages"] = [
-            OutputVariant(message=message, count=1) for message in panic_messages
-        ]
+    exit_status: ExitStatus = {
+        "return_code": return_code,
+        "count": 1,
+        "panic_messages": [
+            OutputVariant(message=message, count=1) for message in panic_messages or []
+        ],
+    }
     if stderr:
         exit_status["stderr"] = [OutputVariant(message=stderr, count=1)]
     output = RunOutput({
@@ -28,6 +30,8 @@ def _output(
         "diagnostics": diagnostics or [],
         "exit_statuses": [exit_status],
         "median_time_s": time_s,
+        "flaky_runs": 0,
+        "flaky_diagnostics": [],
     })
     return output
 
@@ -66,7 +70,7 @@ def test_multiple_runs_classify_intermittent_abnormal_exit_as_flaky() -> None:
 
     assert run.call_count == 3
     assert result["exit_statuses"] == [
-        {"return_code": 1, "count": 2},
+        {"return_code": 1, "count": 2, "panic_messages": []},
         {
             "return_code": 2,
             "count": 1,
@@ -95,8 +99,8 @@ def test_multiple_runs_classify_intermittent_timeout_as_flaky() -> None:
 
     assert run.call_count == 3
     assert result["exit_statuses"] == [
-        {"return_code": 1, "count": 2},
-        {"return_code": None, "count": 1},
+        {"return_code": 1, "count": 2, "panic_messages": []},
+        {"return_code": None, "count": 1, "panic_messages": []},
     ]
 
 
@@ -132,7 +136,9 @@ def test_multiple_runs_preserve_stable_timeout() -> None:
     with patch.object(ty, "run_on_project", side_effect=[_output(None)] * 3):
         result = ty.run_on_project_multiple(_project(), 3)
 
-    assert result["exit_statuses"] == [{"return_code": None, "count": 3}]
+    assert result["exit_statuses"] == [
+        {"return_code": None, "count": 3, "panic_messages": []}
+    ]
     assert result["median_time_s"] is None
 
 
@@ -148,6 +154,6 @@ def test_multiple_runs_preserve_mixed_status_frequencies() -> None:
         result = ty.run_on_project_multiple(_project(), 3)
 
     assert result["exit_statuses"] == [
-        {"return_code": 1, "count": 1},
-        {"return_code": 2, "count": 2},
+        {"return_code": 1, "count": 1, "panic_messages": []},
+        {"return_code": 2, "count": 2, "panic_messages": []},
     ]
