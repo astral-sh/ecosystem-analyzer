@@ -21,6 +21,9 @@ def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagn
         "level": diagnostic["level"],
         "lint_name": diagnostic["lint_name"],
         "message": diagnostic["message"],
+        "is_flaky": False,
+        "flaky_runs": output["flaky_runs"],
+        "variants": [],
     }
     if github_ref := diagnostic.get("github_ref"):
         report_diagnostic["github_ref"] = github_ref
@@ -36,11 +39,10 @@ def process_diagnostics(
     total_diagnostics = 0
     for output in data["outputs"]:
         project = output["project"]
-        flaky_runs = output.get("flaky_runs")
 
         # Count stable + flaky locations for the per-project limit
-        num_stable = len(output.get("diagnostics", []))
-        num_flaky_locs = len(output.get("flaky_diagnostics", []))
+        num_stable = len(output["diagnostics"])
+        num_flaky_locs = len(output["flaky_diagnostics"])
         num_diagnostics = num_stable + num_flaky_locs
 
         if (
@@ -55,15 +57,14 @@ def process_diagnostics(
         total_diagnostics += num_diagnostics
 
         # Add stable diagnostics
-        for diagnostic in output.get("diagnostics", []):
+        for diagnostic in output["diagnostics"]:
             all_diagnostics.append(_report_diagnostic(output, diagnostic))
 
         # Add flaky locations as entries with flaky metadata
-        for loc in output.get("flaky_diagnostics", []):
+        for loc in output["flaky_diagnostics"]:
             first_diagnostic = loc["variants"][0]["diagnostic"]
             entry = _report_diagnostic(output, first_diagnostic)
             entry["is_flaky"] = True
-            entry["flaky_runs"] = flaky_runs
             entry["variants"] = loc["variants"]
             all_diagnostics.append(entry)
 
@@ -160,7 +161,7 @@ def generate(
 
     flaky_project_names = set()
     for output in data["outputs"]:
-        if output.get("flaky_diagnostics"):
+        if output["flaky_diagnostics"]:
             flaky_project_names.add(output["project"])
 
     output_file = generate_html_report(

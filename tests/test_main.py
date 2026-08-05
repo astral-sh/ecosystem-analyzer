@@ -70,7 +70,9 @@ def test_parse_diagnostics_preserves_empty_output_exit_status(tmp_path: Path) ->
     assert result.exit_code == 0, result.output
     [run_output] = json.loads(output.read_text())["outputs"]
     assert run_output["diagnostics"] == []
-    assert run_output["exit_statuses"] == [{"return_code": 101, "count": 1}]
+    assert run_output["exit_statuses"] == [
+        {"return_code": 101, "count": 1, "panic_messages": []}
+    ]
 
 
 def test_statistics_skip_missing_timings_from_parsed_diagnostics(

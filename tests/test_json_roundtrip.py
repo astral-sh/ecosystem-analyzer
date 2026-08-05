@@ -20,7 +20,7 @@ def _make_output(
     project: str,
     diagnostics: list[Diagnostic],
     flaky_diagnostics: list[FlakyLocation] | None = None,
-    flaky_runs: int | None = None,
+    flaky_runs: int = 0,
     exit_statuses: list[ExitStatus] | None = None,
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
@@ -30,12 +30,14 @@ def _make_output(
 ) -> RunOutput:
     run_count = flaky_runs or 1
     if exit_statuses is None:
-        exit_status = ExitStatus(return_code=return_code, count=run_count)
-        if panic_messages is not None:
-            exit_status["panic_messages"] = [
+        exit_status: ExitStatus = {
+            "return_code": return_code,
+            "count": run_count,
+            "panic_messages": [
                 OutputVariant(message=message, count=run_count)
-                for message in panic_messages
-            ]
+                for message in panic_messages or []
+            ],
+        }
         if stderr is not None:
             exit_status["stderr"] = [OutputVariant(message=stderr, count=run_count)]
         exit_statuses = [exit_status]
@@ -47,11 +49,9 @@ def _make_output(
         "diagnostics": diagnostics,
         "exit_statuses": exit_statuses,
         "median_time_s": time_s,
+        "flaky_runs": flaky_runs,
+        "flaky_diagnostics": flaky_diagnostics or [],
     }
-    if flaky_diagnostics is not None:
-        entry["flaky_diagnostics"] = flaky_diagnostics
-    if flaky_runs is not None:
-        entry["flaky_runs"] = flaky_runs
     if project_metadata is not None:
         entry["project_metadata"] = project_metadata
     return entry
@@ -889,7 +889,7 @@ info: Args: /tmp/new_commit/ty check ."""
                     [],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 1, "count": 1},
+                        {"return_code": 1, "count": 1, "panic_messages": []},
                         {
                             "return_code": 2,
                             "count": 2,
@@ -933,8 +933,8 @@ info: Args: /tmp/new_commit/ty check ."""
                     [],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 1, "count": 2},
-                        {"return_code": None, "count": 1},
+                        {"return_code": 1, "count": 2, "panic_messages": []},
+                        {"return_code": None, "count": 1, "panic_messages": []},
                     ],
                     return_code=1,
                 )
@@ -954,8 +954,8 @@ info: Args: /tmp/new_commit/ty check ."""
                     [],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 1, "count": 1},
-                        {"return_code": 2, "count": 2},
+                        {"return_code": 1, "count": 1, "panic_messages": []},
+                        {"return_code": 2, "count": 2, "panic_messages": []},
                     ],
                     return_code=1,
                 )
@@ -974,8 +974,8 @@ info: Args: /tmp/new_commit/ty check ."""
                     [],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 1, "count": 2},
-                        {"return_code": 2, "count": 1},
+                        {"return_code": 1, "count": 2, "panic_messages": []},
+                        {"return_code": 2, "count": 1, "panic_messages": []},
                     ],
                     return_code=1,
                 )
@@ -996,8 +996,8 @@ info: Args: /tmp/new_commit/ty check ."""
                     [],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 2, "count": 2},
-                        {"return_code": 3, "count": 1},
+                        {"return_code": 2, "count": 2, "panic_messages": []},
+                        {"return_code": 3, "count": 1, "panic_messages": []},
                     ],
                     time_s=None,
                     return_code=2,
@@ -1030,6 +1030,7 @@ info: Args: /tmp/new_commit/ty check ."""
                         {
                             "return_code": -6,
                             "count": 10,
+                            "panic_messages": [],
                             "stderr": stack_overflows,
                         }
                     ],
@@ -1046,12 +1047,12 @@ info: Args: /tmp/new_commit/ty check ."""
 
     def test_varying_failure_codes_on_both_sides_are_persistent(self) -> None:
         old_statuses: list[ExitStatus] = [
-            {"return_code": 2, "count": 2},
-            {"return_code": 3, "count": 1},
+            {"return_code": 2, "count": 2, "panic_messages": []},
+            {"return_code": 3, "count": 1, "panic_messages": []},
         ]
         new_statuses: list[ExitStatus] = [
-            {"return_code": 2, "count": 1},
-            {"return_code": 3, "count": 2},
+            {"return_code": 2, "count": 1, "panic_messages": []},
+            {"return_code": 3, "count": 2, "panic_messages": []},
         ]
         diff = _make_diff(
             [
@@ -1101,8 +1102,8 @@ info: Args: /tmp/new_commit/ty check ."""
                     [old_diagnostic, new_diagnostic],
                     flaky_runs=3,
                     exit_statuses=[
-                        {"return_code": 1, "count": 2},
-                        {"return_code": 2, "count": 1},
+                        {"return_code": 1, "count": 2, "panic_messages": []},
+                        {"return_code": 2, "count": 1, "panic_messages": []},
                     ],
                     return_code=1,
                 )
@@ -1117,11 +1118,12 @@ info: Args: /tmp/new_commit/ty check ."""
             [],
             flaky_runs=3,
             exit_statuses=[
-                {"return_code": 1, "count": 2},
+                {"return_code": 1, "count": 2, "panic_messages": []},
                 {
                     "return_code": 2,
                     "count": 1,
                     "stderr": [{"message": "new project crashed", "count": 1}],
+                    "panic_messages": [],
                 },
             ],
         )
@@ -1140,11 +1142,12 @@ info: Args: /tmp/new_commit/ty check ."""
             [],
             flaky_runs=3,
             exit_statuses=[
-                {"return_code": 1, "count": 2},
+                {"return_code": 1, "count": 2, "panic_messages": []},
                 {
                     "return_code": None,
                     "count": 1,
                     "stderr": [{"message": "old project timed out", "count": 1}],
+                    "panic_messages": [],
                 },
             ],
         )
@@ -1159,7 +1162,7 @@ info: Args: /tmp/new_commit/ty check ."""
 
     def test_flaky_exit_evidence_changes_with_same_statuses_are_preserved(self) -> None:
         old_statuses: list[ExitStatus] = [
-            {"return_code": 1, "count": 2},
+            {"return_code": 1, "count": 2, "panic_messages": []},
             {
                 "return_code": 2,
                 "count": 1,
@@ -1168,7 +1171,7 @@ info: Args: /tmp/new_commit/ty check ."""
             },
         ]
         new_statuses: list[ExitStatus] = [
-            {"return_code": 1, "count": 2},
+            {"return_code": 1, "count": 2, "panic_messages": []},
             {
                 "return_code": 2,
                 "count": 1,
@@ -1266,12 +1269,12 @@ info: Args: /tmp/new_commit/ty check ."""
 
     def test_flaky_exit_frequency_changes_are_ignored(self) -> None:
         old_statuses: list[ExitStatus] = [
-            {"return_code": 1, "count": 9},
-            {"return_code": 2, "count": 1},
+            {"return_code": 1, "count": 9, "panic_messages": []},
+            {"return_code": 2, "count": 1, "panic_messages": []},
         ]
         new_statuses: list[ExitStatus] = [
-            {"return_code": 1, "count": 1},
-            {"return_code": 2, "count": 9},
+            {"return_code": 1, "count": 1, "panic_messages": []},
+            {"return_code": 2, "count": 9, "panic_messages": []},
         ]
         diff = _make_diff(
             [_make_output("proj", [], flaky_runs=10, exit_statuses=old_statuses)],
