@@ -21,8 +21,78 @@ build-backend = "uv_build"
 [tool.ruff.lint]
 preview = true
 
+extend-select = [
+    "ANN",
+    "ARG",
+    "B",
+    "D",
+    "E",
+    "EXE",
+    "F",
+    "I",
+    "ISC",
+    "PGH",
+    "PYI",
+    "PT",
+    "RUF",
+    "SIM",
+    "UP",
+    "read-whole-file",
+    "write-whole-file",
+]
+
+ignore = [
+    # Unnecessarily strict/pedantic
+    "undocumented-public-init",
+    "blank-line-after-function",
+    # These are all enforced by, or incompatible with, the ruff formatter:
+    "whitespace-before-punctuation",
+    "line-too-long",
+    "trailing-whitespace",
+    "blank-line-with-whitespace",
+    # It's often necessary to compare types instead of using isinstance()
+    "type-comparison",
+    "collection-literal-concatenation",
+    # annoying false positives in this repo
+    "ambiguous-unicode-character-string",
+]
+
+unfixable = [
+    # ruff keeps the call, but mostly we want to get rid of it all
+    "unused-variable",
+    # automatic fix might obscure issue
+    "multi-value-repeated-key-literal",
+    # automatic fix might obscure issue
+    "multi-value-repeated-key-variable",
+    # automatic fix might obscure issue
+    "useless-expression",
+    # automatic fix might obscure issue
+    "subprocess-run-without-check",
+    # Ruff's fix is faster, but I prefer using itertools.chain_from_iterable
+    "quadratic-list-summation",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["D"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+split-on-trailing-comma = false
+
 [tool.ruff.format]
 preview = true
+
+[tool.ty.analysis]
+strict-literal-narrowing = true
+
+[tool.ty.rules]
+blanket-ignore-comment = "error"
+missing-type-argument = "error"
+possibly-unresolved-reference = "warn"
+unsupported-dynamic-base = "warn"
 
 [tool.ty.src]
 exclude = ["plots"]

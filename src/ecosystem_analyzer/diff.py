@@ -1,3 +1,5 @@
+"""Compare ecosystem runs and render diagnostic and timing reports."""
+
 import difflib
 import json
 import os
@@ -6,182 +8,40 @@ from collections import Counter
 from enum import Enum
 from itertools import chain
 from pathlib import Path
-from typing import Any, Literal, NotRequired
+from typing import Literal
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
-from typing_extensions import TypedDict
 
-from .diagnostic import (
+from .diagnostic import index_panic_messages, normalize_stderr
+from .schema import (
+    AddedOrRemovedProjectDiff,
+    AnnotatedFlakyLocation,
     Diagnostic,
-    index_panic_messages,
-    normalize_stderr,
-)
-from .run_output import (
+    DiagnosticContentKey,
+    DiagnosticDiffData,
+    DiagnosticTextDiff,
+    DiffStatistics,
     ExitStatus,
+    ExitStatusDiff,
+    FailedProjectDiff,
+    FailureStatus,
+    FileDiffData,
+    FlakyDiagnosticDiffData,
     FlakyLocation,
     FlakyVariant,
+    LargeTimingChange,
+    LineDiffData,
+    MergedLintStats,
+    MergedProjectStats,
+    ModifiedProjectDiff,
     OutputVariant,
-    ProjectMetadata,
+    ProjectInfo,
+    RunData,
     RunOutput,
+    SourceLocationKey,
+    TimingComparison,
+    TimingSummary,
 )
-
-
-class JsonData(TypedDict, closed=True):
-    outputs: list[RunOutput]
-
-
-class DiagnosticTextDiff(TypedDict, closed=True):
-    old: Diagnostic
-    new: Diagnostic
-    diff: list[str]
-
-
-class DiagnosticLine(TypedDict, closed=True):
-    line: int
-    diagnostics: list[Diagnostic]
-
-
-class ModifiedDiagnosticLine(TypedDict, closed=True):
-    line: int
-    removed: list[Diagnostic]
-    added: list[Diagnostic]
-    text_diffs: list[DiagnosticTextDiff]
-
-
-class LineDiffData(TypedDict, closed=True):
-    added_lines: list[DiagnosticLine]
-    removed_lines: list[DiagnosticLine]
-    modified_lines: list[ModifiedDiagnosticLine]
-
-
-class DiagnosticFile(TypedDict, closed=True):
-    path: str
-    diagnostics: list[Diagnostic]
-
-
-class ModifiedDiagnosticFile(TypedDict, closed=True):
-    path: str
-    diffs: LineDiffData
-
-
-class FileDiffData(TypedDict, closed=True):
-    added_files: list[DiagnosticFile]
-    removed_files: list[DiagnosticFile]
-    modified_files: list[ModifiedDiagnosticFile]
-
-
-class AnnotatedFlakyLocation(FlakyLocation, closed=True):
-    flaky_runs: int | None
-
-
-class ChangedFlakyLocation(TypedDict, closed=True):
-    old: AnnotatedFlakyLocation
-    new: AnnotatedFlakyLocation
-
-
-class FlakyDiagnosticDiffData(TypedDict, closed=True):
-    added: list[AnnotatedFlakyLocation]
-    removed: list[AnnotatedFlakyLocation]
-    changed: list[ChangedFlakyLocation]
-
-
-class ProjectDiff(TypedDict):
-    project: str
-    project_location: str
-    project_metadata: NotRequired[ProjectMetadata]
-
-
-class AddedOrRemovedProjectDiff(ProjectDiff, closed=True):
-    diagnostics: list[Diagnostic]
-    exit_statuses: list[ExitStatus]
-    exit_status_runs: int
-    flaky_diagnostics: NotRequired[list[FlakyLocation]]
-    flaky_runs: NotRequired[int | None]
-
-
-class ModifiedProjectDiff(ProjectDiff, closed=True):
-    diffs: FileDiffData
-    flaky_diffs: NotRequired[FlakyDiagnosticDiffData]
-    flaky_file_diffs: NotRequired[dict[str, FlakyDiagnosticDiffData]]
-
-
-type FailureStatus = Literal[
-    "new", "new_panics", "changed", "persistent", "reduced", "fixed"
-]
-
-
-class FailedProjectDiff(ProjectDiff, closed=True):
-    old_status: str
-    new_status: str
-    old_exit_statuses: list[ExitStatus]
-    new_exit_statuses: list[ExitStatus]
-    old_runs: int
-    new_runs: int
-    old_panic_messages: list[str]
-    new_panic_messages: list[str]
-    introduced_panic_messages: list[str]
-    fixed_panic_messages: list[str]
-    persistent_panic_messages: list[str]
-    old_persistent_panic_messages: list[str]
-    new_persistent_panic_messages: list[str]
-    failure_status: FailureStatus
-
-
-class ExitStatusDiff(TypedDict):
-    old: list[ExitStatus]
-    new: list[ExitStatus]
-    old_runs: int
-    new_runs: int
-
-
-class FlakyExitStatusChange(ExitStatusDiff, closed=True):
-    project: str
-    project_location: str
-
-
-class DiagnosticDiffData(TypedDict, closed=True):
-    """Project-level differences between two ecosystem analyzer runs."""
-
-    added_projects: list[AddedOrRemovedProjectDiff]
-    removed_projects: list[AddedOrRemovedProjectDiff]
-    modified_projects: list[ModifiedProjectDiff]
-    failed_projects: list[FailedProjectDiff]
-    flaky_exit_status_changes: list[FlakyExitStatusChange]
-
-
-class MergedLintStats(TypedDict, closed=True):
-    """Statistics for a single lint rule in the merged view."""
-
-    lint_name: str
-    added: int
-    removed: int
-    changed: int
-    net_change: int
-    total_change: int
-
-
-class MergedProjectStats(TypedDict, closed=True):
-    """Statistics for a single project in the merged view."""
-
-    project_name: str
-    added: int
-    removed: int
-    changed: int
-    net_change: int
-    total_change: int
-    is_flaky: bool
-
-
-class DiffStatistics(TypedDict, closed=True):
-    """Statistics about diagnostic changes."""
-
-    total_added: int
-    total_removed: int
-    total_changed: int
-    failed_projects: int
-    merged_by_lint: list[MergedLintStats]
-    merged_by_project: list[MergedProjectStats]
-
 
 _FAILURE_STATUS_LABELS = {
     "new": "❌ newly failing",
@@ -285,13 +145,13 @@ class DiagnosticDiff:
         new_file: str,
         old_name: str | None = None,
         new_name: str | None = None,
-    ):
+    ) -> None:
         """Initialize with paths to the old and new JSON files."""
         self.old_file = old_file
         self.new_file = new_file
         self.ty_repo_url = "https://github.com/astral-sh/ruff"
-        self.old_data: JsonData = self._load_json(old_file)
-        self.new_data: JsonData = self._load_json(new_file)
+        self.old_data: RunData = self._load_json(old_file)
+        self.new_data: RunData = self._load_json(new_file)
 
         self.old_commit = self._get_commit(self.old_data)
         self.new_commit = self._get_commit(self.new_data)
@@ -305,14 +165,14 @@ class DiagnosticDiff:
 
         self.diffs = self._compute_diffs()
 
-    def _load_json(self, file_path: str) -> JsonData:
+    def _load_json(self, file_path: str) -> RunData:
         """Load and parse a JSON file."""
         with open(file_path) as f:
             data = json.load(f)
 
         return data
 
-    def _get_commit(self, data: JsonData) -> str:
+    def _get_commit(self, data: RunData) -> str:
         ty_commits = {
             output.get("ty_commit", "unknown")
             for output in data["outputs"]
@@ -338,12 +198,12 @@ class DiagnosticDiff:
             "Error: The JSON file must contain diagnostics from a single ty commit."
         )
 
-    def _all_diagnostic_locations(self, project: RunOutput) -> set[tuple]:
+    def _all_diagnostic_locations(self, project: RunOutput) -> set[SourceLocationKey]:
         """Build a set of (path, line, column) locations from all diagnostics.
 
         Includes locations from both stable diagnostics and flaky variants.
         """
-        locs: set[tuple] = set()
+        locs: set[SourceLocationKey] = set()
         for d in project.get("diagnostics", []):
             locs.add((d["path"], d["line"], d["column"]))
         for loc in project.get("flaky_diagnostics", []):
@@ -353,7 +213,7 @@ class DiagnosticDiff:
     def _exclude_known_overlaps(
         self,
         flaky_locations: list[FlakyLocation],
-        other_all_locations: set[tuple],
+        other_all_locations: set[SourceLocationKey],
     ) -> list[FlakyLocation]:
         """Remove flaky locations that exist at a known location on the other side.
 
@@ -373,14 +233,14 @@ class DiagnosticDiff:
             if (loc["path"], loc["line"], loc["column"]) not in other_all_locations
         ]
 
-    def _flaky_variant_key(self, variant: FlakyVariant) -> tuple[str, str, str]:
+    def _flaky_variant_key(self, variant: FlakyVariant) -> DiagnosticContentKey:
         """Hashable key for a single flaky variant."""
         d = variant["diagnostic"]
         return (d["level"], d["lint_name"], d["message"])
 
     def _flaky_location_variant_set(
         self, location: FlakyLocation
-    ) -> frozenset[tuple[str, str, str]]:
+    ) -> frozenset[DiagnosticContentKey]:
         """Frozenset of variant keys for a flaky location."""
         return frozenset(self._flaky_variant_key(v) for v in location["variants"])
 
@@ -468,7 +328,7 @@ class DiagnosticDiff:
 
         return by_file
 
-    def _count_diagnostics(self, data: JsonData) -> int:
+    def _count_diagnostics(self, data: RunData) -> int:
         """Count the total number of diagnostics in the data."""
         total_diagnostics = 0
         for output in data["outputs"]:
@@ -848,7 +708,7 @@ class DiagnosticDiff:
             # locations that are flaky on either side.  A stable diagnostic
             # at a flaky location is unreliable — it just happened to appear
             # in all N runs of this batch, but is nondeterministic.
-            all_flaky_locs: set[tuple] = set()
+            all_flaky_locs: set[SourceLocationKey] = set()
             for loc in old_flaky:
                 all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
             for loc in new_flaky:
@@ -951,7 +811,7 @@ class DiagnosticDiff:
         return metadata.get("kind") if metadata is not None else None
 
     @classmethod
-    def _add_project_kind(cls, entry: ProjectDiff, output: RunOutput) -> None:
+    def _add_project_kind(cls, entry: ProjectInfo, output: RunOutput) -> None:
         if kind := cls._project_kind(output):
             entry["project_metadata"] = {"kind": kind}
 
@@ -1813,6 +1673,8 @@ class DiagnosticDiff:
         *,
         inline_threshold: int = 15,
     ) -> str:
+        """Render the pull-request summary of diagnostic and failure changes."""
+
         statistics = self._calculate_statistics()
         failed_projects = self.diffs.get("failed_projects", [])
 
@@ -1925,8 +1787,8 @@ class DiagnosticDiff:
         #   - details/summary (worst case): ~80 chars
         #   - sampling note (worst case): ~120 chars
         #   - extra newlines / padding: ~30 chars
-        _wrapper_overhead = 250
-        char_budget -= _wrapper_overhead
+        wrapper_overhead = 250
+        char_budget -= wrapper_overhead
 
         displayed_lines = raw_diff_lines
         sampled = False
@@ -1959,9 +1821,9 @@ class DiagnosticDiff:
             for header, entries in sorted(raw_diff_sections.items()):
                 # header line + newline
                 non_change_cost += len(header) + 1
-                for _lines, counts_as_change in entries:
+                for entry_lines, counts_as_change in entries:
                     if not counts_as_change:
-                        non_change_cost += sum(len(line) + 1 for line in _lines)
+                        non_change_cost += sum(len(line) + 1 for line in entry_lines)
                 # trailing blank line between sections
                 non_change_cost += 1
 
@@ -2053,8 +1915,7 @@ class DiagnosticDiff:
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
         # Render the template and write to file
-        with open(output_path, "w") as f:
-            f.write(template.render(context))
+        Path(output_path).write_text(template.render(context))
 
         print(f"HTML report generated at: {output_path}")
 
@@ -2100,18 +1961,17 @@ class DiagnosticDiff:
         os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
 
         # Render the template and write to file
-        with open(output_path, "w") as f:
-            f.write(template.render(context))
+        Path(output_path).write_text(template.render(context))
 
         print(f"Timing diff HTML report generated at: {output_path}")
 
-    def _compute_timing_comparison(self) -> list[dict[str, Any]]:
+    def _compute_timing_comparison(self) -> list[TimingComparison]:
         """Compute timing comparison data between old and new runs."""
         # Get project timing data from both files
         old_projects = {proj["project"]: proj for proj in self.old_data["outputs"]}
         new_projects = {proj["project"]: proj for proj in self.new_data["outputs"]}
 
-        timing_data = []
+        timing_data: list[TimingComparison] = []
 
         # Find projects that exist in both old and new data
         common_projects = set(old_projects.keys()) & set(new_projects.keys())
@@ -2192,7 +2052,7 @@ class DiagnosticDiff:
             })
 
         # Sort by failure type first (abnormal exits, then timeouts, then normal), then by factor significance
-        def sort_key(x):
+        def sort_key(x: TimingComparison) -> tuple[int, float]:
             if x["old_is_abnormal"] or x["new_is_abnormal"]:
                 return (2, 0)  # Abnormal exits first
             if x["old_is_timeout"] or x["new_is_timeout"]:
@@ -2207,8 +2067,8 @@ class DiagnosticDiff:
         return timing_data
 
     def _calculate_timing_summary(
-        self, timing_data: list[dict[str, Any]]
-    ) -> dict[str, Any]:
+        self, timing_data: list[TimingComparison]
+    ) -> TimingSummary:
         """Calculate summary statistics for timing comparison."""
         if not timing_data:
             return {
@@ -2246,11 +2106,11 @@ class DiagnosticDiff:
             "avg_factor": avg_factor,
         }
 
-    def _large_timing_changes(self) -> list[dict[str, Any]]:
+    def _large_timing_changes(self) -> list[LargeTimingChange]:
         """Return projects whose runtime changed substantially between runs."""
         threshold = self.LARGE_TIMING_CHANGE_THRESHOLD
         timing_data = self._compute_timing_comparison()
-        large_changes = []
+        large_changes: list[LargeTimingChange] = []
 
         for row in timing_data:
             if row.get("is_failed", False):

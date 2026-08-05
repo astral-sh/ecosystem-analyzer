@@ -1,11 +1,12 @@
 import json
+from pathlib import Path
 
 from click.testing import CliRunner
 
 from ecosystem_analyzer.main import cli
 
 
-def test_parse_diagnostics_requires_return_code(tmp_path):
+def test_parse_diagnostics_requires_return_code(tmp_path: Path) -> None:
     output = tmp_path / "diagnostics.json"
 
     result = CliRunner().invoke(
@@ -19,7 +20,7 @@ def test_parse_diagnostics_requires_return_code(tmp_path):
     assert not output.exists()
 
 
-def test_parse_diagnostics_preserves_exit_status_and_panic(tmp_path):
+def test_parse_diagnostics_preserves_exit_status_and_panic(tmp_path: Path) -> None:
     output = tmp_path / "diagnostics.json"
     panic = """error[panic]: internal error
 info: Version: 0.0.1
@@ -51,7 +52,7 @@ info: Version: 0.0.1
     ]
 
 
-def test_parse_diagnostics_preserves_empty_output_exit_status(tmp_path):
+def test_parse_diagnostics_preserves_empty_output_exit_status(tmp_path: Path) -> None:
     output = tmp_path / "diagnostics.json"
 
     result = CliRunner().invoke(
@@ -72,7 +73,9 @@ def test_parse_diagnostics_preserves_empty_output_exit_status(tmp_path):
     assert run_output["exit_statuses"] == [{"return_code": 101, "count": 1}]
 
 
-def test_statistics_skip_missing_timings_from_parsed_diagnostics(tmp_path):
+def test_statistics_skip_missing_timings_from_parsed_diagnostics(
+    tmp_path: Path,
+) -> None:
     runner = CliRunner()
     old_output = tmp_path / "old.json"
     new_output = tmp_path / "new.json"

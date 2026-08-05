@@ -1,3 +1,5 @@
+"""Install ecosystem projects and coordinate ty analysis runs."""
+
 import json
 import logging
 import time
@@ -9,13 +11,15 @@ from mypy_primer.model import Project
 from mypy_primer.projects import get_projects
 
 from .installed_project import InstalledProject
-from .run_output import RunOutput
+from .schema import RunData, RunOutput
 from .ty import Ty
 
 logger = logging.getLogger(__name__)
 
 
 def get_ecosystem_projects() -> dict[str, Project]:
+    """Index the mypy_primer ecosystem projects by their configured names."""
+
     projects: dict[str, Project] = {}
     for project in get_projects():
         project_name = (
@@ -30,6 +34,8 @@ def get_ecosystem_projects() -> dict[str, Project]:
 
 
 class Manager:
+    """Coordinate project installation, ty builds, and ecosystem analysis."""
+
     _project_names: list[str]
     _installed_projects: list[InstalledProject]
 
@@ -170,7 +176,9 @@ class Manager:
     def write_run_outputs(
         self, run_outputs: list[RunOutput], output_path: str | Path
     ) -> None:
+        """Write project run outputs to a formatted JSON report."""
+
         output_path = Path(output_path)
         with output_path.open("w") as json_file:
-            json.dump({"outputs": run_outputs}, json_file, indent=4)
+            json.dump(RunData(outputs=run_outputs), json_file, indent=4)
         logger.info(f"Output written to {output_path}")

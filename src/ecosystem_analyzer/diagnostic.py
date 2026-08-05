@@ -1,6 +1,9 @@
+"""Parse ty diagnostics and normalize panic and stderr output."""
+
 import re
 from pathlib import Path
-from typing import NotRequired, TypedDict
+
+from .schema import Diagnostic, DiagnosticLevel
 
 OLD_DIAGNOSTIC_PATTERN = re.compile(
     r"^(?P<level>error|warning|fatal)\[(?P<lint_name>.+?)\] "
@@ -19,6 +22,11 @@ _STACK_OVERFLOW_THREAD_ID_PATTERN = re.compile(
 )
 _PANIC_TRACE_HEADERS = {"info: Backtrace:", "info: query stacktrace:"}
 _VOLATILE_PANIC_METADATA_PREFIXES = ("info: Version:", "info: Args:")
+_DIAGNOSTIC_LEVELS: dict[str, DiagnosticLevel] = {
+    "error": "error",
+    "warning": "warning",
+    "fatal": "fatal",
+}
 
 
 def normalize_panic_message(message: str) -> str:
@@ -48,20 +56,9 @@ def normalize_stderr(message: str) -> str:
     return _STACK_OVERFLOW_THREAD_ID_PATTERN.sub(r"\1 (<thread-id>)\2", message)
 
 
-class Diagnostic(TypedDict):
-    level: str
-    lint_name: str
-
-    path: str
-    line: int
-    column: int
-
-    message: str
-
-    github_ref: NotRequired[str]
-
-
 class DiagnosticsParser:
+    """Extract diagnostics and panic evidence from ty command output."""
+
     def __init__(
         self,
         repo_location: str | None = None,
@@ -80,7 +77,7 @@ class DiagnosticsParser:
             line_num = str(match.group("line"))
 
             diagnostic: Diagnostic = {
-                "level": str(match.group("level")),
+                "level": _DIAGNOSTIC_LEVELS[match.group("level")],
                 "lint_name": str(match.group("lint_name")),
                 "path": path,
                 "line": int(line_num),
@@ -105,6 +102,8 @@ class DiagnosticsParser:
         )
 
     def parse_panic_messages(self, content: str) -> list[str]:
+        """Extract complete panic messages, including continuation lines."""
+
         panic_messages = []
         lines = content.splitlines()
         index = 0
@@ -139,6 +138,8 @@ class DiagnosticsParser:
         return panic_messages
 
     def parse(self, content: str) -> list[Diagnostic]:
+        """Parse recognized diagnostic lines from ty command output."""
+
         messages = []
         for raw_line in content.splitlines():
             line = raw_line.strip()

@@ -1,24 +1,33 @@
 import json
 import tempfile
 from pathlib import Path
-from typing import Any
 
 from ecosystem_analyzer.diff import DiagnosticDiff
-from ecosystem_analyzer.run_output import ExitStatus, OutputVariant
+from ecosystem_analyzer.schema import (
+    Diagnostic,
+    DiagnosticLevel,
+    ExitStatus,
+    FlakyLocation,
+    FlakyVariant,
+    OutputVariant,
+    ProjectMetadata,
+    RunData,
+    RunOutput,
+)
 
 
 def _make_output(
     project: str,
-    diagnostics: list,
-    flaky_diagnostics: list | None = None,
+    diagnostics: list[Diagnostic],
+    flaky_diagnostics: list[FlakyLocation] | None = None,
     flaky_runs: int | None = None,
-    exit_statuses: list | None = None,
+    exit_statuses: list[ExitStatus] | None = None,
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
     time_s: float | None = 1.5,
     return_code: int | None = 1,
-    project_metadata: dict | None = None,
-):
+    project_metadata: ProjectMetadata | None = None,
+) -> RunOutput:
     run_count = flaky_runs or 1
     if exit_statuses is None:
         exit_status = ExitStatus(return_code=return_code, count=run_count)
@@ -31,7 +40,7 @@ def _make_output(
             exit_status["stderr"] = [OutputVariant(message=stderr, count=run_count)]
         exit_statuses = [exit_status]
 
-    entry: dict[str, Any] = {
+    entry: RunOutput = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
         "ty_commit": "abc123def456",
@@ -49,8 +58,14 @@ def _make_output(
 
 
 def _make_variant(
-    path, line, column, message, count, lint_name="some-lint", level="error"
-):
+    path: str,
+    line: int,
+    column: int,
+    message: str,
+    count: int,
+    lint_name: str = "some-lint",
+    level: DiagnosticLevel = "error",
+) -> FlakyVariant:
     return {
         "diagnostic": {
             "level": level,
@@ -64,7 +79,9 @@ def _make_variant(
     }
 
 
-def _make_flaky_loc(path, line, column, variants):
+def _make_flaky_loc(
+    path: str, line: int, column: int, variants: list[FlakyVariant]
+) -> FlakyLocation:
     return {"path": path, "line": line, "column": column, "variants": variants}
 
 
@@ -74,7 +91,7 @@ def _make_failed_output(
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
     return_code: int | None = 101,
-):
+) -> RunOutput:
     return _make_output(
         project,
         [],
@@ -85,13 +102,15 @@ def _make_failed_output(
     )
 
 
-def _make_diff(old_outputs, new_outputs):
+def _make_diff(
+    old_outputs: list[RunOutput], new_outputs: list[RunOutput]
+) -> DiagnosticDiff:
     paths = []
     for outputs in (old_outputs, new_outputs):
         with tempfile.NamedTemporaryFile(
             mode="w", suffix=".json", delete=False
         ) as file:
-            json.dump({"outputs": outputs}, file)
+            json.dump(RunData(outputs=outputs), file)
             paths.append(file.name)
     return DiagnosticDiff(paths[0], paths[1])
 
@@ -100,12 +119,11 @@ def _render_html(diff: DiagnosticDiff) -> str:
     with tempfile.NamedTemporaryFile(mode="w", suffix=".html", delete=False) as file:
         html_path = file.name
     diff.generate_html_report(html_path)
-    with open(html_path) as file:
-        return file.read()
+    return Path(html_path).read_text()
 
 
 class TestJsonRoundtrip:
-    def test_project_metadata_is_rendered_as_filterable_html(self):
+    def test_project_metadata_is_rendered_as_filterable_html(self) -> None:
         old_data = {
             "outputs": [
                 _make_output(
@@ -155,9 +173,9 @@ class TestJsonRoundtrip:
             "kind": "example-kind"
         }
 
-    def test_roundtrip_without_flaky(self):
+    def test_roundtrip_without_flaky(self) -> None:
         """JSON files without flaky data load and diff correctly."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -178,9 +196,9 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_same_on_both_sides_no_diff(self):
+    def test_flaky_same_on_both_sides_no_diff(self) -> None:
         """When flaky locations have identical variants on both sides, no diff."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -206,9 +224,9 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_same_location_different_variants_suppressed(self):
+    def test_flaky_same_location_different_variants_suppressed(self) -> None:
         """Flaky locations at the same position are suppressed even with different variants."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -252,7 +270,7 @@ class TestJsonRoundtrip:
         assert stats["total_added"] == 0
         assert stats["total_removed"] == 0
 
-    def test_flaky_diffs_organized_by_file(self):
+    def test_flaky_diffs_organized_by_file(self) -> None:
         """Flaky diffs are organized by file path for inline rendering."""
         old_data = {"outputs": [_make_output("proj", [])]}
         new_flaky = [
@@ -280,7 +298,7 @@ class TestJsonRoundtrip:
         assert len(proj["flaky_file_diffs"]["a.py"]["added"]) == 1
         assert len(proj["flaky_file_diffs"]["b.py"]["added"]) == 1
 
-    def test_failed_project_preserves_panic_messages(self):
+    def test_failed_project_preserves_panic_messages(self) -> None:
         diff = _make_diff(
             [
                 _make_failed_output(
@@ -297,7 +315,7 @@ class TestJsonRoundtrip:
         assert failed["old_panic_messages"] == ["thread 'main' panicked at old panic"]
         assert failed["new_panic_messages"] == ["thread 'main' panicked at new panic"]
 
-    def test_failure_status_categorizes_new_persistent_and_fixed(self):
+    def test_failure_status_categorizes_new_persistent_and_fixed(self) -> None:
         shared = "thread 'main' panicked at shared site"
         old_only = "thread 'main' panicked at old-only site"
         new_only = "thread 'main' panicked at new-only site"
@@ -360,7 +378,7 @@ class TestJsonRoundtrip:
         )
         assert 'title="Same failure on both baseline and PR"' in html
 
-    def test_comment_title_celebrates_when_only_panic_change_is_a_fix(self):
+    def test_comment_title_celebrates_when_only_panic_change_is_a_fix(self) -> None:
         diff = _make_diff(
             [
                 _make_failed_output(
@@ -378,7 +396,7 @@ class TestJsonRoundtrip:
         assert "🎉" in markdown
         assert "🎉 crashes fixed" in markdown
 
-    def test_new_and_fixed_timeouts_are_called_out(self):
+    def test_new_and_fixed_timeouts_are_called_out(self) -> None:
         """Timeouts get the same banner treatment as panics."""
         diff = _make_diff(
             [
@@ -394,7 +412,7 @@ class TestJsonRoundtrip:
         assert "| `newly-timing-out` | ❌ newly failing |" in markdown
         assert "| `newly-passing` | 🎉 crashes fixed |" in markdown
 
-    def test_new_and_fixed_abnormal_exits_without_panics(self):
+    def test_new_and_fixed_abnormal_exits_without_panics(self) -> None:
         """Stack-overflow-style crashes (no panic message) get parity too."""
         diff = _make_diff(
             [
@@ -413,7 +431,7 @@ class TestJsonRoundtrip:
         assert "| `newly-crashing` | ❌ newly failing |" in markdown
         assert "| `newly-passing` | 🎉 crashes fixed |" in markdown
 
-    def test_changed_failure_modes_are_neutral_but_visible(self):
+    def test_changed_failure_modes_are_neutral_but_visible(self) -> None:
         old_panic = "thread 'main' panicked at old site"
         diff = _make_diff(
             [
@@ -467,7 +485,7 @@ class TestJsonRoundtrip:
         assert "➖ Previous panic message (no longer present)" in html
         assert "Fixed panic message" not in html
 
-    def test_introduced_panics_outrank_changed_failure_modes(self):
+    def test_introduced_panics_outrank_changed_failure_modes(self) -> None:
         shared = "thread 'main' panicked at shared site"
         introduced = "thread 'main' panicked at new site"
         diff = _make_diff(
@@ -504,7 +522,7 @@ class TestJsonRoundtrip:
             'remains failing"'
         ) in html
 
-    def test_html_report_escapes_panic_messages(self):
+    def test_html_report_escapes_panic_messages(self) -> None:
         introduced = "</pre><script>alert('introduced')</script><pre>"
         fixed = "<img src=x onerror=alert('fixed')>"
         persistent = "<svg onload=alert('persistent')>"
@@ -521,7 +539,7 @@ class TestJsonRoundtrip:
         assert "&lt;img src=x onerror=alert" in html
         assert "&lt;svg onload=alert" in html
 
-    def test_failed_project_panic_messages_only_render_in_full_width_row(self):
+    def test_failed_project_panic_messages_only_render_in_full_width_row(self) -> None:
         old_only = "panic from the baseline"
         new_only = "panic from the PR"
         persistent = "panic on both revisions"
@@ -540,7 +558,7 @@ class TestJsonRoundtrip:
         assert "Previous panic message (no longer present)" in html
         assert "Persistent panic message (present on both baseline and PR)" in html
 
-    def test_failed_project_preserves_nonduplicated_panic_evidence(self):
+    def test_failed_project_preserves_nonduplicated_panic_evidence(self) -> None:
         intermittent = (
             "Panicked at crates/ty_python_semantic/src/types/infer.rs:70:9 "
             "when checking `example.py`: `query error`"
@@ -549,7 +567,7 @@ class TestJsonRoundtrip:
             "Panicked at crates/ty_python_semantic/src/types/infer.rs:80:9 "
             "when checking `example.py`: `query error`"
         )
-        statuses = [
+        statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 3,
@@ -581,16 +599,16 @@ class TestJsonRoundtrip:
         assert html.count("<summary>panic (1/3 runs)</summary>") == 2
         assert "<summary>panic (3/3 runs)</summary>" not in html
 
-    def test_failed_project_preserves_panic_that_becomes_stable(self):
+    def test_failed_project_preserves_panic_that_becomes_stable(self) -> None:
         panic = "panic that becomes stable"
-        old_statuses = [
+        old_statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 3,
                 "panic_messages": [{"message": panic, "count": 1}],
             }
         ]
-        new_statuses = [
+        new_statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 3,
@@ -617,14 +635,14 @@ class TestJsonRoundtrip:
         assert "<summary>panic (3/3 runs)</summary>" not in html
         assert "New panic message (introduced by this PR)" in html
 
-    def test_failed_project_preserves_raw_evidence_across_exit_statuses(self):
+    def test_failed_project_preserves_raw_evidence_across_exit_statuses(self) -> None:
         def panic_at(line: int) -> str:
             return (
                 "Panicked at crates/ty_python_semantic/src/types/infer.rs:"
                 f"{line}:9 when checking `example.py`: `query error`"
             )
 
-        statuses = [
+        statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 1,
@@ -654,7 +672,7 @@ class TestJsonRoundtrip:
         assert html.count(panic_at(80)) == 2
         assert html.count("<summary>panic (1/2 runs)</summary>") == 2
 
-    def test_persistent_failures_hidden_from_markdown_table(self):
+    def test_persistent_failures_hidden_from_markdown_table(self) -> None:
         """Projects failing on both sides are kept out of the PR-comment
         summary table but remain in the full diff data (for the HTML report)."""
         persistent_panic = "thread 'main' panicked at shared site"
@@ -688,7 +706,7 @@ class TestJsonRoundtrip:
         # (summary table AND raw diff section).
         assert "still-broken" not in markdown
 
-    def test_persistent_only_suppresses_failing_projects_table(self):
+    def test_persistent_only_suppresses_failing_projects_table(self) -> None:
         """When the only failures are persistent, no failing-projects table."""
         persistent_panic = "thread 'main' panicked at shared site"
         diff = _make_diff(
@@ -699,7 +717,7 @@ class TestJsonRoundtrip:
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
         assert "**Failing projects**:" not in markdown
 
-    def test_changed_stderr_is_visible_only_in_html_report(self):
+    def test_changed_stderr_is_visible_only_in_html_report(self) -> None:
         old_stderr = "invalid invocation: <old option>"
         new_stderr = "invalid invocation: <new option>"
         diff = _make_diff(
@@ -721,7 +739,7 @@ class TestJsonRoundtrip:
         assert "invalid invocation: &lt;old option&gt;" in html
         assert "invalid invocation: &lt;new option&gt;" in html
 
-    def test_panic_location_and_trace_changes_are_persistent(self):
+    def test_panic_location_and_trace_changes_are_persistent(self) -> None:
         old_panics = {
             "backtrace": """Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
 info: This indicates a bug in ty.
@@ -779,7 +797,7 @@ info: query stacktrace:
         assert not diff.has_new_panics()
         assert diff.generate_comment_title() == "## `ecosystem-analyzer` results"
 
-    def test_panic_version_and_args_changes_are_persistent(self):
+    def test_panic_version_and_args_changes_are_persistent(self) -> None:
         old_panic = """Panicked at somewhere: `internal error`
 info: This indicates a bug in ty.
 info: Version: 0.0.1
@@ -800,7 +818,9 @@ info: Args: /tmp/new_commit/ty check ."""
         assert entry["persistent_panic_messages"] == [new_panic]
         assert not diff.has_new_panics()
 
-    def test_multiple_panics_with_same_normalized_key_preserve_multiplicity(self):
+    def test_multiple_panics_with_same_normalized_key_preserve_multiplicity(
+        self,
+    ) -> None:
         def panic_at(line: int) -> str:
             return (
                 "Panicked at crates/ty_python_semantic/src/types/infer.rs:"
@@ -839,7 +859,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert html.count(panic_at(70)) == 2
         assert html.count(panic_at(80)) == 2
 
-    def test_introduced_project_failures_detects_new_abnormal_exit_code(self):
+    def test_introduced_project_failures_detects_new_abnormal_exit_code(self) -> None:
         diff = _make_diff(
             [_make_output("proj", [], time_s=1.5, return_code=1)],
             [
@@ -852,7 +872,7 @@ info: Args: /tmp/new_commit/ty check ."""
 
         assert introduced_failures == ["proj"]
 
-    def test_introduced_project_failures_detects_new_timeouts(self):
+    def test_introduced_project_failures_detects_new_timeouts(self) -> None:
         diff = _make_diff(
             [_make_output("proj", [], time_s=1.5, return_code=0)],
             [_make_failed_output("proj", return_code=None)],
@@ -860,7 +880,7 @@ info: Args: /tmp/new_commit/ty check ."""
 
         assert diff.introduced_project_failures() == ["proj"]
 
-    def test_intermittent_abnormal_exit_is_excluded_as_flaky(self):
+    def test_intermittent_abnormal_exit_is_excluded_as_flaky(self) -> None:
         diff = _make_diff(
             [_make_output("proj", [], flaky_runs=3, return_code=1)],
             [
@@ -904,7 +924,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "stderr (1/3 runs)" in html
         assert "intermittent &lt;stderr&gt;" in html
 
-    def test_intermittent_timeout_is_excluded_as_flaky(self):
+    def test_intermittent_timeout_is_excluded_as_flaky(self) -> None:
         diff = _make_diff(
             [_make_output("proj", [], flaky_runs=3, return_code=1)],
             [
@@ -925,7 +945,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.introduced_project_failures() == []
         assert "timeout" in _render_html(diff)
 
-    def test_stable_failure_to_intermittent_success_is_not_fixed(self):
+    def test_stable_failure_to_intermittent_success_is_not_fixed(self) -> None:
         diff = _make_diff(
             [_make_failed_output("proj", return_code=2)],
             [
@@ -946,7 +966,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "ecosystem failure fixed" not in diff.generate_comment_title()
         assert len(diff.diffs["flaky_exit_status_changes"]) == 1
 
-    def test_intermittent_failure_to_stable_failure_is_not_new(self):
+    def test_intermittent_failure_to_stable_failure_is_not_new(self) -> None:
         diff = _make_diff(
             [
                 _make_output(
@@ -967,7 +987,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.introduced_project_failures() == []
         assert len(diff.diffs["flaky_exit_status_changes"]) == 1
 
-    def test_varying_abnormal_exit_codes_still_form_stable_failure(self):
+    def test_varying_abnormal_exit_codes_still_form_stable_failure(self) -> None:
         diff = _make_diff(
             [_make_output("proj", [], flaky_runs=3, return_code=1)],
             [
@@ -988,8 +1008,8 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.introduced_project_failures() == ["proj"]
         assert diff.diffs["failed_projects"][0]["failure_status"] == "new"
 
-    def test_stable_stack_overflow_with_varying_thread_ids_is_not_flaky(self):
-        stack_overflows = [
+    def test_stable_stack_overflow_with_varying_thread_ids_is_not_flaky(self) -> None:
+        stack_overflows: list[OutputVariant] = [
             {
                 "message": (
                     f"thread '<unknown>' ({thread_id}) has overflowed its stack\n"
@@ -1024,12 +1044,12 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "Failed Projects" in html
         assert "Flaky Exit Status Changes" not in html
 
-    def test_varying_failure_codes_on_both_sides_are_persistent(self):
-        old_statuses = [
+    def test_varying_failure_codes_on_both_sides_are_persistent(self) -> None:
+        old_statuses: list[ExitStatus] = [
             {"return_code": 2, "count": 2},
             {"return_code": 3, "count": 1},
         ]
-        new_statuses = [
+        new_statuses: list[ExitStatus] = [
             {"return_code": 2, "count": 1},
             {"return_code": 3, "count": 2},
         ]
@@ -1059,8 +1079,8 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.diffs["flaky_exit_status_changes"] == []
         assert diff.diffs["failed_projects"][0]["failure_status"] == "persistent"
 
-    def test_stable_diagnostic_changes_survive_flaky_exit_status(self):
-        old_diagnostic = {
+    def test_stable_diagnostic_changes_survive_flaky_exit_status(self) -> None:
+        old_diagnostic: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1068,7 +1088,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "old",
         }
-        new_diagnostic = {
+        new_diagnostic: Diagnostic = {
             **old_diagnostic,
             "line": 2,
             "message": "new stable diagnostic",
@@ -1091,7 +1111,7 @@ info: Args: /tmp/new_commit/ty check ."""
 
         assert diff._calculate_statistics()["total_added"] == 1
 
-    def test_added_project_preserves_flaky_exit_status_evidence(self):
+    def test_added_project_preserves_flaky_exit_status_evidence(self) -> None:
         output = _make_output(
             "new-project",
             [],
@@ -1114,7 +1134,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "new project crashed" in html
         assert "not present" in html
 
-    def test_removed_project_preserves_flaky_exit_status_evidence(self):
+    def test_removed_project_preserves_flaky_exit_status_evidence(self) -> None:
         output = _make_output(
             "old-project",
             [],
@@ -1137,8 +1157,8 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "old project timed out" in html
         assert "not present" in html
 
-    def test_flaky_exit_evidence_changes_with_same_statuses_are_preserved(self):
-        old_statuses = [
+    def test_flaky_exit_evidence_changes_with_same_statuses_are_preserved(self) -> None:
+        old_statuses: list[ExitStatus] = [
             {"return_code": 1, "count": 2},
             {
                 "return_code": 2,
@@ -1147,7 +1167,7 @@ info: Args: /tmp/new_commit/ty check ."""
                 "stderr": [{"message": "old stderr", "count": 1}],
             },
         ]
-        new_statuses = [
+        new_statuses: list[ExitStatus] = [
             {"return_code": 1, "count": 2},
             {
                 "return_code": 2,
@@ -1168,15 +1188,15 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "old stderr" in html
         assert "new stderr" in html
 
-    def test_intermittent_panic_change_with_one_exit_status_is_preserved(self):
-        old_statuses = [
+    def test_intermittent_panic_change_with_one_exit_status_is_preserved(self) -> None:
+        old_statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 3,
                 "panic_messages": [{"message": "panic A", "count": 3}],
             }
         ]
-        new_statuses = [
+        new_statuses: list[ExitStatus] = [
             {
                 "return_code": 101,
                 "count": 3,
@@ -1214,7 +1234,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "panic A" in html
         assert "panic B" in html
 
-    def test_added_and_removed_projects_render_stable_exit_evidence(self):
+    def test_added_and_removed_projects_render_stable_exit_evidence(self) -> None:
         added = _make_output(
             "added",
             [],
@@ -1244,12 +1264,12 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "removed panic" in html
         assert "removed stderr" in html
 
-    def test_flaky_exit_frequency_changes_are_ignored(self):
-        old_statuses = [
+    def test_flaky_exit_frequency_changes_are_ignored(self) -> None:
+        old_statuses: list[ExitStatus] = [
             {"return_code": 1, "count": 9},
             {"return_code": 2, "count": 1},
         ]
-        new_statuses = [
+        new_statuses: list[ExitStatus] = [
             {"return_code": 1, "count": 1},
             {"return_code": 2, "count": 9},
         ]
@@ -1261,7 +1281,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert diff.diffs["flaky_exit_status_changes"] == []
         assert diff.diffs["failed_projects"] == []
 
-    def test_comment_title_combines_panics_crashes_and_timeouts(self):
+    def test_comment_title_combines_panics_crashes_and_timeouts(self) -> None:
         diff = _make_diff(
             [
                 _make_output("panic_proj", [], time_s=1.5, return_code=0),
@@ -1281,7 +1301,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "## `ecosystem-analyzer` results: new crashes detected ❌"
         )
 
-    def test_comment_title_for_only_new_timeouts(self):
+    def test_comment_title_for_only_new_timeouts(self) -> None:
         """When every new failure is a timeout, say so — calling them
         'crashes' would be misleading."""
         diff = _make_diff(
@@ -1298,7 +1318,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "## `ecosystem-analyzer` results: new timeouts detected ❌"
         )
 
-    def test_partial_panic_fix_is_celebrated_precisely(self):
+    def test_partial_panic_fix_is_celebrated_precisely(self) -> None:
         """A project that loses some (but not all) panics while still
         failing is celebrated without claiming that the project recovered."""
         shared = "thread 'main' panicked at shared"
@@ -1333,7 +1353,9 @@ info: Args: /tmp/new_commit/ty check ."""
             'are no longer present"'
         ) in html
 
-    def test_disjoint_panics_on_still_failing_project_counts_as_regression(self):
+    def test_disjoint_panics_on_still_failing_project_counts_as_regression(
+        self,
+    ) -> None:
         """A project failing with panic A, then failing with a completely
         different panic B, is a regression — the introduced panic wins over
         the fact that the old panic went away."""
@@ -1364,9 +1386,9 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "➖ Previous panic message (no longer present)" in html
         assert "Fixed panic message" not in html
 
-    def test_no_flaky_keys_when_absent(self):
+    def test_no_flaky_keys_when_absent(self) -> None:
         """When no flaky data exists, no flaky keys in output."""
-        diag1 = {
+        diag1: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1374,7 +1396,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "old",
         }
-        diag2 = {
+        diag2: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1398,10 +1420,10 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "flaky_diffs" not in proj
         assert "flaky_file_diffs" not in proj
 
-    def test_duplicate_diagnostics_do_not_cascade_into_phantom_removals(self):
+    def test_duplicate_diagnostics_do_not_cascade_into_phantom_removals(self) -> None:
         """Repeated representations are matched once without leaving duplicate noise."""
 
-        def make_diag(message):
+        def make_diag(message: str) -> Diagnostic:
             return {
                 "level": "error",
                 "lint_name": "invalid-argument-type",
@@ -1451,10 +1473,10 @@ info: Args: /tmp/new_commit/ty check ."""
             for item in modified_line["text_diffs"]
         } == {(old_int, new_int), (old_str, new_str)}
 
-    def test_competing_rewritten_diagnostics_are_matched_globally(self):
+    def test_competing_rewritten_diagnostics_are_matched_globally(self) -> None:
         """Competing rewrites are paired by the best assignment for the whole group."""
 
-        def make_diag(message):
+        def make_diag(message: str) -> Diagnostic:
             return {
                 "level": "error",
                 "lint_name": "invalid-assignment",
@@ -1492,10 +1514,12 @@ info: Args: /tmp/new_commit/ty check ."""
             for item in modified_line["text_diffs"]
         } == {(old_int, new_int), (old_str, new_str)}
 
-    def test_rectangular_matching_preserves_old_to_new_similarity_direction(self):
+    def test_rectangular_matching_preserves_old_to_new_similarity_direction(
+        self,
+    ) -> None:
         """Transposed assignments still calculate similarity from old text to new text."""
 
-        def make_diag(message):
+        def make_diag(message: str) -> Diagnostic:
             return {
                 "level": "error",
                 "lint_name": "invalid-assignment",
@@ -1529,7 +1553,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert [item["message"] for item in modified_line["removed"]] == ["babba"]
         assert modified_line["added"] == []
 
-    def test_statistics_markdown_includes_large_timing_changes(self):
+    def test_statistics_markdown_includes_large_timing_changes(self) -> None:
         old_data = {
             "outputs": [
                 _make_output("slow-project", [], time_s=10.0, return_code=0),
@@ -1557,9 +1581,9 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "| `slow-project` | 10.00s | 15.00s | +50% |" in markdown
         assert "| `very-fast-project` | 10.00s | 5.00s | -50% |" in markdown
 
-    def test_flaky_diffs_excluded_from_statistics(self):
+    def test_flaky_diffs_excluded_from_statistics(self) -> None:
         """Flaky diffs are excluded from statistics but stable diffs from the same project are kept."""
-        stable_diag = {
+        stable_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1567,7 +1591,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "stable",
         }
-        new_stable_diag = {
+        new_stable_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1608,9 +1632,9 @@ info: Args: /tmp/new_commit/ty check ."""
         )
         assert lint_entry["added"] == 1
 
-    def test_stable_diffs_kept_from_flaky_projects(self):
+    def test_stable_diffs_kept_from_flaky_projects(self) -> None:
         """Stable diagnostic changes from a project with flaky_runs > 1 are still counted."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1618,7 +1642,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "msg",
         }
-        new_diag = {
+        new_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1643,9 +1667,9 @@ info: Args: /tmp/new_commit/ty check ."""
         stats = diff._calculate_statistics()
         assert stats["total_added"] == 1
 
-    def test_flaky_only_project_absent_from_project_breakdown(self):
+    def test_flaky_only_project_absent_from_project_breakdown(self) -> None:
         """A project whose only changes are flaky does not appear in merged_by_project."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1686,9 +1710,9 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "stable_proj" in project_names
         assert "flaky_proj" not in project_names
 
-    def test_flaky_notice_shown_when_flaky_diagnostics_present(self):
+    def test_flaky_notice_shown_when_flaky_diagnostics_present(self) -> None:
         """The rendered markdown includes a notice when flaky diagnostics were excluded."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1716,9 +1740,9 @@ info: Args: /tmp/new_commit/ty check ."""
         markdown = diff.render_statistics_markdown()
         assert "excludes flaky changes" in markdown
 
-    def test_flaky_notice_absent_when_no_flaky_diagnostics(self):
+    def test_flaky_notice_absent_when_no_flaky_diagnostics(self) -> None:
         """The rendered markdown omits the flaky notice when there are no flaky diagnostics."""
-        diag = {
+        diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1726,7 +1750,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "stable",
         }
-        new_diag = {
+        new_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1749,9 +1773,9 @@ info: Args: /tmp/new_commit/ty check ."""
         markdown = diff.render_statistics_markdown()
         assert "flaky" not in markdown.lower()
 
-    def test_flaky_entries_excluded_from_raw_diff_output(self):
+    def test_flaky_entries_excluded_from_raw_diff_output(self) -> None:
         """Flaky diagnostic messages do not appear in the rendered markdown raw diff."""
-        stable_diag = {
+        stable_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1759,7 +1783,7 @@ info: Args: /tmp/new_commit/ty check ."""
             "column": 1,
             "message": "stable message",
         }
-        new_stable_diag = {
+        new_stable_diag: Diagnostic = {
             "level": "error",
             "lint_name": "some-lint",
             "path": "a.py",
@@ -1800,7 +1824,7 @@ info: Args: /tmp/new_commit/ty check ."""
         # The flaky diagnostic should NOT appear in the raw diff
         assert "flaky variant msg" not in markdown
 
-    def test_added_project_with_only_flaky_diagnostics(self):
+    def test_added_project_with_only_flaky_diagnostics(self) -> None:
         """An added project with only flaky diagnostics produces zero stats and shows the notice."""
         flaky = [
             _make_flaky_loc(
@@ -1829,7 +1853,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "excludes flaky changes" in markdown
         assert "flaky only msg" not in markdown
 
-    def test_removed_project_with_only_flaky_diagnostics(self):
+    def test_removed_project_with_only_flaky_diagnostics(self) -> None:
         """A removed project with only flaky diagnostics produces zero stats and shows the notice."""
         flaky = [
             _make_flaky_loc(
@@ -1861,7 +1885,7 @@ info: Args: /tmp/new_commit/ty check ."""
         assert "excludes flaky changes" in markdown
         assert "removed flaky msg" not in markdown
 
-    def test_statistics_markdown_omits_small_or_failed_timing_changes(self):
+    def test_statistics_markdown_omits_small_or_failed_timing_changes(self) -> None:
         old_data = {
             "outputs": [
                 _make_output("medium-change", [], time_s=10.0, return_code=0),

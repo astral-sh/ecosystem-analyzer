@@ -1,4 +1,9 @@
+"""Visualize the projects with the most and fewest ty diagnostics."""
+
+
 def read_from_json_and_plot(filename: str) -> None:
+    """Render diagnostic-count comparisons for the highest- and lowest-ranked projects."""
+
     import json
 
     import matplotlib.pyplot as plt
