@@ -1,10 +1,15 @@
 """Logic for detecting flaky diagnostics by comparing multiple ty runs."""
 
-from .diagnostic import Diagnostic
-from .run_output import FlakyLocation, FlakyVariant
+from .schema import (
+    Diagnostic,
+    DiagnosticKey,
+    FlakyLocation,
+    FlakyVariant,
+    SourceLocationKey,
+)
 
 
-def _diagnostic_key(diag: Diagnostic) -> tuple[str, int, int, str, str, str]:
+def _diagnostic_key(diag: Diagnostic) -> DiagnosticKey:
     """Return a hashable key that uniquely identifies a diagnostic."""
     return (
         diag["path"],
@@ -16,7 +21,7 @@ def _diagnostic_key(diag: Diagnostic) -> tuple[str, int, int, str, str, str]:
     )
 
 
-def _location_key(diag: Diagnostic) -> tuple[str, int, int]:
+def _location_key(diag: Diagnostic) -> SourceLocationKey:
     """Return a (path, line, column) key for grouping flaky diagnostics."""
     return (diag["path"], diag["line"], diag["column"])
 
@@ -37,13 +42,13 @@ def classify_diagnostics(
     assert n >= 2, "Need at least 2 runs to detect flakiness"
 
     # Count how many runs each diagnostic key appears in
-    key_counts: dict[tuple[str, int, int, str, str, str], int] = {}
+    key_counts: dict[DiagnosticKey, int] = {}
     # Keep one representative Diagnostic for each key
-    key_to_diag: dict[tuple[str, int, int, str, str, str], Diagnostic] = {}
+    key_to_diag: dict[DiagnosticKey, Diagnostic] = {}
 
     for run_diagnostics in all_runs:
         # Deduplicate within a single run — a key counts once per run
-        seen_in_run: set[tuple[str, int, int, str, str, str]] = set()
+        seen_in_run: set[DiagnosticKey] = set()
         for diag in run_diagnostics:
             key = _diagnostic_key(diag)
             if key not in seen_in_run:
@@ -54,7 +59,7 @@ def classify_diagnostics(
 
     # Partition into stable and flaky
     stable: list[Diagnostic] = []
-    flaky_by_location: dict[tuple[str, int, int], list[FlakyVariant]] = {}
+    flaky_by_location: dict[SourceLocationKey, list[FlakyVariant]] = {}
 
     for key, count in key_counts.items():
         diag = key_to_diag[key]
@@ -74,7 +79,7 @@ def classify_diagnostics(
     # Build sorted FlakyLocation list
     flaky_locations: list[FlakyLocation] = []
     for path, line, column in sorted(flaky_by_location.keys()):
-        variants = flaky_by_location[(path, line, column)]
+        variants = flaky_by_location[path, line, column]
         # Sort variants by lint_name, message
         variants.sort(
             key=lambda v: (

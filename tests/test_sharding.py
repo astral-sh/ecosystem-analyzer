@@ -1,7 +1,7 @@
 from pathlib import Path
 
 import pytest
-from click.testing import CliRunner
+from click.testing import CliRunner, Result
 from git import Repo
 from mypy_primer.model import Project
 
@@ -19,12 +19,12 @@ def _projects(*costs: tuple[str, int]) -> dict[str, Project]:
     }
 
 
-def test_all_project_names_are_sorted():
+def test_all_project_names_are_sorted() -> None:
     projects = _projects(("charlie", 1), ("alpha", 1), ("bravo", 1))
     assert get_all_project_names(projects) == ["alpha", "bravo", "charlie"]
 
 
-def test_two_shards_partition_all_projects():
+def test_two_shards_partition_all_projects() -> None:
     """All shards together cover the full project list with no overlaps."""
     projects = ["alpha", "bravo", "charlie", "delta", "echo"]
     shard_0 = shard_projects(projects, shard=0, num_shards=2, ecosystem_projects={})
@@ -33,7 +33,7 @@ def test_two_shards_partition_all_projects():
     assert not set(shard_0) & set(shard_1)
 
 
-def test_three_shards_partition_all_projects():
+def test_three_shards_partition_all_projects() -> None:
     """Works correctly with an uneven split across three shards."""
     projects = ["a", "b", "c", "d", "e", "f", "g"]
     all_sharded: list[str] = []
@@ -43,7 +43,7 @@ def test_three_shards_partition_all_projects():
     assert sorted(all_sharded) == sorted(projects)
 
 
-def test_bin_packing_spreads_expensive_projects():
+def test_bin_packing_spreads_expensive_projects() -> None:
     """Expensive projects are spread across shards, not clustered."""
     ep = _projects(("heavy_a", 100), ("heavy_b", 100), ("light_c", 1), ("light_d", 1))
     projects = ["heavy_a", "heavy_b", "light_c", "light_d"]
@@ -55,7 +55,7 @@ def test_bin_packing_spreads_expensive_projects():
     assert s1 == ["heavy_b", "light_d"]
 
 
-def test_bin_packing_deterministic_assignment():
+def test_bin_packing_deterministic_assignment() -> None:
     """Verify the exact greedy assignment with known costs."""
     ep = _projects(("a", 10), ("b", 7), ("c", 5), ("d", 3), ("e", 1))
     projects = ["a", "b", "c", "d", "e"]
@@ -69,7 +69,7 @@ def test_bin_packing_deterministic_assignment():
     assert s1 == ["b", "c", "e"]
 
 
-def test_preserves_input_order():
+def test_preserves_input_order() -> None:
     """Output order matches the input list order, not sorted order."""
     projects = ["delta", "alpha", "charlie", "bravo"]
     result = shard_projects(projects, shard=0, num_shards=2, ecosystem_projects={})
@@ -77,14 +77,14 @@ def test_preserves_input_order():
     assert input_indices == sorted(input_indices)
 
 
-def test_single_shard_returns_everything():
+def test_single_shard_returns_everything() -> None:
     """With num_shards=1, the sole shard gets all projects."""
     projects = ["x", "y", "z"]
     sharded = shard_projects(projects, shard=0, num_shards=1, ecosystem_projects={})
     assert sharded == projects
 
 
-def test_more_shards_than_projects():
+def test_more_shards_than_projects() -> None:
     """Shards beyond the project count are empty."""
     projects = ["a", "b"]
     all_sharded: list[str] = []
@@ -102,7 +102,7 @@ def test_more_shards_than_projects():
         assert shard_result == [], f"shard {s} should be empty"
 
 
-def test_unknown_projects_get_default_cost():
+def test_unknown_projects_get_default_cost() -> None:
     """Projects not in ecosystem_projects use the default cost."""
     ep = _projects(("known", 100))
     projects = ["known", "unknown_a", "unknown_b"]
@@ -114,7 +114,7 @@ def test_unknown_projects_get_default_cost():
     assert sorted(s0 + s1) == sorted(projects)
 
 
-def test_flaky_projects_cost_multiplied_by_flaky_runs():
+def test_flaky_projects_cost_multiplied_by_flaky_runs() -> None:
     """Flaky projects have their cost multiplied by flaky_runs."""
     ep = _projects(("stable_big", 20), ("stable_small", 5), ("flaky", 10))
     projects = ["stable_big", "stable_small", "flaky"]
@@ -148,7 +148,7 @@ def test_flaky_projects_cost_multiplied_by_flaky_runs():
     assert s1 == ["stable_big", "stable_small"]
 
 
-def _invoke_diff(tmp_path, extra_args):
+def _invoke_diff(tmp_path: Path, extra_args: list[str]) -> Result:
     """Invoke the `diff` subcommand with minimal valid required args."""
     Repo.init(tmp_path)
     runner = CliRunner()
@@ -167,14 +167,14 @@ def _invoke_diff(tmp_path, extra_args):
     )
 
 
-def test_shard_without_num_shards_is_error(tmp_path):
+def test_shard_without_num_shards_is_error(tmp_path: Path) -> None:
     """Providing --shard alone is an error."""
     result = _invoke_diff(tmp_path, ["--shard", "0"])
     assert result.exit_code != 0
     assert "--shard and --num-shards must be used together" in result.output
 
 
-def test_num_shards_without_shard_is_error(tmp_path):
+def test_num_shards_without_shard_is_error(tmp_path: Path) -> None:
     """Providing --num-shards alone is an error."""
     result = _invoke_diff(tmp_path, ["--num-shards", "2"])
     assert result.exit_code != 0
@@ -182,7 +182,7 @@ def test_num_shards_without_shard_is_error(tmp_path):
 
 
 @pytest.mark.parametrize("command", ["analyze", "diff", "history"])
-def test_ecosystem_command_help_omits_project_selection_options(command):
+def test_ecosystem_command_help_omits_project_selection_options(command: str) -> None:
     """Ecosystem-wide commands always analyze every mypy_primer project."""
     result = CliRunner().invoke(cli, [command, "--help"])
     assert result.exit_code == 0
@@ -194,7 +194,7 @@ def test_ecosystem_command_help_omits_project_selection_options(command):
 # -- Prebuilt binary tests --
 
 
-def test_use_prebuilt_sets_executable_and_commit():
+def test_use_prebuilt_sets_executable_and_commit() -> None:
     """use_prebuilt sets the executable path and overrides the commit SHA."""
     ty = Ty()
     binary = Path("/tmp/ty-prebuilt")
@@ -203,7 +203,7 @@ def test_use_prebuilt_sets_executable_and_commit():
     assert ty.commit_sha == "abc123"
 
 
-def test_use_prebuilt_overrides_previous_commit():
+def test_use_prebuilt_overrides_previous_commit() -> None:
     """Calling use_prebuilt twice updates the commit SHA."""
     ty = Ty()
     ty.use_prebuilt(Path("/tmp/ty-old"), "aaa")
@@ -211,14 +211,14 @@ def test_use_prebuilt_overrides_previous_commit():
     assert ty.commit_sha == "bbb"
 
 
-def test_commit_sha_without_repo_or_override_raises():
+def test_commit_sha_without_repo_or_override_raises() -> None:
     """Accessing commit_sha with no repo and no override is an error."""
     ty = Ty()
     with pytest.raises(RuntimeError, match="No commit SHA available"):
         _ = ty.commit_sha
 
 
-def test_commit_sha_falls_back_to_repo(tmp_path):
+def test_commit_sha_falls_back_to_repo(tmp_path: Path) -> None:
     """Without an override, commit_sha reads from the repository HEAD."""
     repo = Repo.init(tmp_path)
     (tmp_path / "f.txt").write_text("x")
@@ -228,7 +228,7 @@ def test_commit_sha_falls_back_to_repo(tmp_path):
     assert ty.commit_sha == repo.head.commit.hexsha
 
 
-def test_diff_without_repository_requires_prebuilt_binaries():
+def test_diff_without_repository_requires_prebuilt_binaries() -> None:
     """Omitting --repository is an error unless both --ty-binary-* are given."""
     runner = CliRunner()
     result = runner.invoke(

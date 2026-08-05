@@ -1,3 +1,5 @@
+"""Clone ecosystem projects and prepare their isolated dependencies."""
+
 import datetime as dt
 import hashlib
 import logging
@@ -60,6 +62,8 @@ def validate_exclude_newer(value: str) -> dt.datetime:
 
 
 class InstalledProject:
+    """An ecosystem project with a cached checkout and isolated environment."""
+
     _repo: Repo
 
     def __init__(self, project: Project, exclude_newer: str | None = None) -> None:
@@ -76,34 +80,50 @@ class InstalledProject:
 
     @property
     def root_directory(self) -> Path:
+        """The cached root directory of the project checkout."""
+
         return self._cache_path
 
     @property
     def paths(self) -> list[str]:
+        """The project-relative paths passed to ty for analysis."""
+
         return self._project.paths or []
 
     @property
     def name(self) -> str:
+        """The configured project name or repository-name fallback."""
+
         return self._project.name_override or self._project.location.split("/")[-1]
 
     @property
     def location(self) -> str:
+        """The repository location configured by mypy_primer."""
+
         return self._project.location
 
     @property
     def default_branch(self) -> str:
+        """The active branch of the cached project checkout."""
+
         return self._repo.active_branch.name
 
     @property
     def venv_path(self) -> Path:
+        """The isolated virtual-environment path for this project."""
+
         return Path(self._temp_dir.name) / ".venv"
 
     @property
     def current_commit(self) -> str:
+        """The commit SHA currently checked out for this project."""
+
         return self._repo.head.commit.hexsha
 
     @property
     def ty_cmd(self) -> str | None:
+        """The optional project-specific ty command template."""
+
         return self._project.ty_cmd
 
     def _clone_or_update(self) -> None:

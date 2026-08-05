@@ -2,14 +2,14 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from ecosystem_analyzer.installed_project import InstalledProject
-from ecosystem_analyzer.run_output import ExitStatus, OutputVariant, RunOutput
+from ecosystem_analyzer.schema import Diagnostic, ExitStatus, OutputVariant, RunOutput
 from ecosystem_analyzer.ty import Ty
 
 
 def _output(
     return_code: int | None,
     *,
-    diagnostics: list | None = None,
+    diagnostics: list[Diagnostic] | None = None,
     time_s: float | None = None,
     panic_messages: list[str] | None = None,
     stderr: str | None = None,
@@ -45,8 +45,8 @@ def _project() -> InstalledProject:
     return project
 
 
-def test_multiple_runs_classify_intermittent_abnormal_exit_as_flaky():
-    diagnostic = {
+def test_multiple_runs_classify_intermittent_abnormal_exit_as_flaky() -> None:
+    diagnostic: Diagnostic = {
         "level": "error",
         "lint_name": "some-lint",
         "path": "a.py",
@@ -82,7 +82,7 @@ def test_multiple_runs_classify_intermittent_abnormal_exit_as_flaky():
     assert "stderr" not in result
 
 
-def test_multiple_runs_classify_intermittent_timeout_as_flaky():
+def test_multiple_runs_classify_intermittent_timeout_as_flaky() -> None:
     outputs = [
         _output(1, time_s=1.0),
         _output(None),
@@ -100,7 +100,7 @@ def test_multiple_runs_classify_intermittent_timeout_as_flaky():
     ]
 
 
-def test_multiple_runs_preserve_stable_abnormal_exit_evidence():
+def test_multiple_runs_preserve_stable_abnormal_exit_evidence() -> None:
     panic_messages = [
         "Panicked at crates/ty_python_semantic/src/types/infer.rs:10:2: `bug`\n"
         f"info: Version: 0.0.{version}"
@@ -126,7 +126,7 @@ def test_multiple_runs_preserve_stable_abnormal_exit_evidence():
     ]
 
 
-def test_multiple_runs_preserve_stable_timeout():
+def test_multiple_runs_preserve_stable_timeout() -> None:
     ty = _ty()
 
     with patch.object(ty, "run_on_project", side_effect=[_output(None)] * 3):
@@ -136,7 +136,7 @@ def test_multiple_runs_preserve_stable_timeout():
     assert result["median_time_s"] is None
 
 
-def test_multiple_runs_preserve_mixed_status_frequencies():
+def test_multiple_runs_preserve_mixed_status_frequencies() -> None:
     outputs = [
         _output(2),
         _output(2),

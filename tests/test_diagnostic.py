@@ -2,7 +2,7 @@ from ecosystem_analyzer.diagnostic import DiagnosticsParser
 
 
 class TestDiagnosticsParser:
-    def test_parse_error_diagnostic(self):
+    def test_parse_error_diagnostic(self) -> None:
         """Test parsing a basic error diagnostic message."""
         parser = DiagnosticsParser()
         content = "error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assignable to `str`"
@@ -22,7 +22,7 @@ class TestDiagnosticsParser:
         )
         assert "github_ref" not in diagnostic
 
-    def test_parse_warning_diagnostic(self):
+    def test_parse_warning_diagnostic(self) -> None:
         """Test parsing a warning diagnostic message."""
         parser = DiagnosticsParser()
         content = "warning[unused-variable] main.py:10:5: Variable `x` is not used"
@@ -38,7 +38,7 @@ class TestDiagnosticsParser:
         assert diagnostic["column"] == 5
         assert diagnostic["message"] == "Variable `x` is not used"
 
-    def test_parse_with_github_ref(self):
+    def test_parse_with_github_ref(self) -> None:
         """Test parsing with GitHub reference generation."""
         parser = DiagnosticsParser(
             repo_location="https://github.com/user/repo", repo_commit="abc123"
@@ -55,7 +55,7 @@ class TestDiagnosticsParser:
             == "https://github.com/user/repo/blob/abc123/src/module.py#L25"
         )
 
-    def test_parse_multiple_diagnostics(self):
+    def test_parse_multiple_diagnostics(self) -> None:
         """Test parsing multiple diagnostic messages."""
         parser = DiagnosticsParser()
         content = """error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assignable to `str`
@@ -81,7 +81,7 @@ error[missing-return] calc.py:15:20: Function must return a value"""
         assert diagnostics[2]["lint_name"] == "missing-return"
         assert diagnostics[2]["path"] == "calc.py"
 
-    def test_parse_invalid_format(self):
+    def test_parse_invalid_format(self) -> None:
         """Test parsing content that doesn't match the expected format."""
         parser = DiagnosticsParser()
         content = """This is not a diagnostic message
@@ -92,7 +92,7 @@ info: This is just info, not an error or warning"""
 
         assert len(diagnostics) == 0
 
-    def test_parse_new_format_error_diagnostic(self):
+    def test_parse_new_format_error_diagnostic(self) -> None:
         """Test parsing a basic error diagnostic message in new format."""
         parser = DiagnosticsParser()
         content = "try.py:3:1: error[invalid-assignment] Object of type `Literal[1]` is not assignable to `str`"
@@ -112,7 +112,7 @@ info: This is just info, not an error or warning"""
         )
         assert "github_ref" not in diagnostic
 
-    def test_parse_new_format_warning_diagnostic(self):
+    def test_parse_new_format_warning_diagnostic(self) -> None:
         """Test parsing a warning diagnostic message in new format."""
         parser = DiagnosticsParser()
         content = "main.py:10:5: warning[unused-variable] Variable `x` is not used"
@@ -128,7 +128,7 @@ info: This is just info, not an error or warning"""
         assert diagnostic["column"] == 5
         assert diagnostic["message"] == "Variable `x` is not used"
 
-    def test_parse_new_format_with_github_ref(self):
+    def test_parse_new_format_with_github_ref(self) -> None:
         """Test parsing new format with GitHub reference generation."""
         parser = DiagnosticsParser(
             repo_location="https://github.com/user/repo", repo_commit="abc123"
@@ -145,7 +145,7 @@ info: This is just info, not an error or warning"""
             == "https://github.com/user/repo/blob/abc123/src/module.py#L25"
         )
 
-    def test_parse_multiline_panic_message(self):
+    def test_parse_multiline_panic_message(self) -> None:
         parser = DiagnosticsParser()
         content = """fatal[panic] Panicked at crates/ty_python_semantic/src/types/signatures.rs:1719:42 when checking `/tmp/project.py`: `internal error`
 info: This indicates a bug in ty.
@@ -165,7 +165,7 @@ info: query stacktrace:
              at crates/ty_python_semantic/src/types/infer.rs:70"""
         ]
 
-    def test_parse_multiline_panic_message_stops_at_next_diagnostic(self):
+    def test_parse_multiline_panic_message_stops_at_next_diagnostic(self) -> None:
         parser = DiagnosticsParser()
         content = """fatal[panic] Panicked at somewhere: `internal error`
 info: This indicates a bug in ty.
@@ -180,7 +180,7 @@ error[invalid-assignment] try.py:3:1: Object of type `Literal[1]` is not assigna
         assert len(diagnostics) == 1
         assert diagnostics[0]["lint_name"] == "invalid-assignment"
 
-    def test_parse_multiline_panic_message_with_wrapped_first_line(self):
+    def test_parse_multiline_panic_message_with_wrapped_first_line(self) -> None:
         parser = DiagnosticsParser()
         content = """fatal[panic] Panicked at somewhere: `prefix parameters must be positional-only or positional-or
 -keyword`

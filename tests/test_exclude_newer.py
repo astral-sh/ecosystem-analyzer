@@ -1,6 +1,5 @@
 import datetime as dt
-from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from mypy_primer.model import Project
@@ -11,56 +10,63 @@ from ecosystem_analyzer.installed_project import (
 )
 
 
-def _make_project(**kwargs) -> Project:
+def _make_project(
+    *,
+    min_python_version: tuple[int, int] | None = None,
+    install_cmd: str | None = None,
+    deps: list[str] | None = None,
+) -> Project:
     """Create a minimal Project for testing."""
-    defaults: dict[str, Any] = {
-        "location": "https://github.com/test/repo",
-        "mypy_cmd": None,
-        "pyright_cmd": None,
-    }
-    return Project(**(defaults | kwargs))
+    return Project(
+        location="https://github.com/test/repo",
+        mypy_cmd=None,
+        pyright_cmd=None,
+        min_python_version=min_python_version,
+        install_cmd=install_cmd,
+        deps=deps,
+    )
 
 
 class TestValidateExcludeNewer:
     """Tests for the --exclude-newer timestamp validation."""
 
-    def test_utc_z_suffix(self):
+    def test_utc_z_suffix(self) -> None:
         """The format produced by `date -u +%Y-%m-%dT%H:%M:%SZ`."""
         result = validate_exclude_newer("2026-04-09T14:30:00Z")
         assert result == dt.datetime(2026, 4, 9, 14, 30, 0, tzinfo=dt.UTC)
 
-    def test_utc_offset_zero(self):
+    def test_utc_offset_zero(self) -> None:
         result = validate_exclude_newer("2026-04-09T14:30:00+00:00")
         assert result == dt.datetime(2026, 4, 9, 14, 30, 0, tzinfo=dt.UTC)
 
-    def test_non_utc_offset_is_converted(self):
+    def test_non_utc_offset_is_converted(self) -> None:
         result = validate_exclude_newer("2026-04-09T16:30:00+02:00")
         assert result == dt.datetime(2026, 4, 9, 14, 30, 0, tzinfo=dt.UTC)
 
-    def test_with_fractional_seconds(self):
+    def test_with_fractional_seconds(self) -> None:
         result = validate_exclude_newer("2026-04-09T14:30:00.123456Z")
         assert result.year == 2026
         assert result.microsecond == 123456
 
-    def test_rejects_naive_timestamp(self):
+    def test_rejects_naive_timestamp(self) -> None:
         """Timestamps without timezone info are rejected."""
         with pytest.raises(ValueError, match="missing timezone info"):
             validate_exclude_newer("2026-04-09T14:30:00")
 
-    def test_rejects_date_only(self):
+    def test_rejects_date_only(self) -> None:
         """A bare date without time/timezone is rejected."""
         with pytest.raises(ValueError, match="missing timezone info"):
             validate_exclude_newer("2026-04-09")
 
-    def test_rejects_garbage(self):
+    def test_rejects_garbage(self) -> None:
         with pytest.raises(ValueError, match="Invalid --exclude-newer timestamp"):
             validate_exclude_newer("not-a-timestamp")
 
-    def test_rejects_empty_string(self):
+    def test_rejects_empty_string(self) -> None:
         with pytest.raises(ValueError, match="Invalid --exclude-newer timestamp"):
             validate_exclude_newer("")
 
-    def test_rejects_unix_timestamp(self):
+    def test_rejects_unix_timestamp(self) -> None:
         with pytest.raises(ValueError, match="Invalid --exclude-newer timestamp"):
             validate_exclude_newer("1712345678")
 
@@ -70,7 +76,9 @@ class TestInstalledProjectExcludeNewer:
 
     @patch.object(InstalledProject, "_install_dependencies")
     @patch.object(InstalledProject, "_clone_or_update")
-    def test_rejects_invalid_timestamp_before_cloning(self, mock_clone, mock_install):
+    def test_rejects_invalid_timestamp_before_cloning(
+        self, mock_clone: MagicMock, mock_install: MagicMock
+    ) -> None:
         """Invalid timestamps raise ValueError before any cloning or installing."""
         with pytest.raises(ValueError, match="Invalid --exclude-newer timestamp"):
             InstalledProject(_make_project(), exclude_newer="garbage")
@@ -80,7 +88,9 @@ class TestInstalledProjectExcludeNewer:
 
     @patch.object(InstalledProject, "_install_dependencies")
     @patch.object(InstalledProject, "_clone_or_update")
-    def test_rejects_naive_timestamp_before_cloning(self, mock_clone, mock_install):
+    def test_rejects_naive_timestamp_before_cloning(
+        self, mock_clone: MagicMock, mock_install: MagicMock
+    ) -> None:
         with pytest.raises(ValueError, match="missing timezone info"):
             InstalledProject(_make_project(), exclude_newer="2026-04-09T14:30:00")
 
@@ -89,7 +99,9 @@ class TestInstalledProjectExcludeNewer:
 
     @patch.object(InstalledProject, "_install_dependencies")
     @patch.object(InstalledProject, "_clone_or_update")
-    def test_accepts_valid_timestamp(self, mock_clone, mock_install):
+    def test_accepts_valid_timestamp(
+        self, mock_clone: MagicMock, mock_install: MagicMock
+    ) -> None:
         project = InstalledProject(
             _make_project(), exclude_newer="2026-04-09T14:30:00Z"
         )
@@ -99,7 +111,9 @@ class TestInstalledProjectExcludeNewer:
 
     @patch.object(InstalledProject, "_install_dependencies")
     @patch.object(InstalledProject, "_clone_or_update")
-    def test_none_exclude_newer_skips_validation(self, mock_clone, mock_install):
+    def test_none_exclude_newer_skips_validation(
+        self, mock_clone: MagicMock, mock_install: MagicMock
+    ) -> None:
         project = InstalledProject(_make_project(), exclude_newer=None)
         assert project._exclude_newer is None
         mock_clone.assert_called_once()
@@ -116,10 +130,13 @@ class TestInstallDependenciesPythonVersion:
         ],
     )
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
     def test_venv_uses_required_python_version(
-        self, _mock_clone, mock_run, min_python_version, expected
-    ):
+        self,
+        mock_run: MagicMock,
+        min_python_version: tuple[int, int] | None,
+        expected: str,
+    ) -> None:
         InstalledProject(_make_project(min_python_version=min_python_version))
 
         venv_call_args = mock_run.call_args_list[0]
@@ -129,8 +146,8 @@ class TestInstallDependenciesPythonVersion:
 
 class TestInstallDependencies:
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
-    def test_install_cmd_does_not_skip_deps(self, _mock_clone, mock_run):
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
+    def test_install_cmd_does_not_skip_deps(self, mock_run: MagicMock) -> None:
         project = InstalledProject(
             _make_project(install_cmd="{install} -e .", deps=["pytest"])
         )
@@ -157,8 +174,8 @@ class TestInstallDependenciesExcludeNewer:
     """Tests that --exclude-newer is correctly passed to uv pip install commands."""
 
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
-    def test_deps_include_exclude_newer(self, _mock_clone, mock_run):
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
+    def test_deps_include_exclude_newer(self, mock_run: MagicMock) -> None:
         """When deps are specified, --exclude-newer appears in the pip install args."""
         InstalledProject(
             _make_project(deps=["requests", "six"]),
@@ -174,8 +191,8 @@ class TestInstallDependenciesExcludeNewer:
         assert cmd[idx + 1] == "2026-04-09T14:30:00Z"
 
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
-    def test_deps_omit_exclude_newer_when_none(self, _mock_clone, mock_run):
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
+    def test_deps_omit_exclude_newer_when_none(self, mock_run: MagicMock) -> None:
         """When exclude_newer is None, --exclude-newer does not appear."""
         InstalledProject(_make_project(deps=["requests"]))
 
@@ -185,8 +202,8 @@ class TestInstallDependenciesExcludeNewer:
         assert "--exclude-newer" not in cmd
 
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
-    def test_install_cmd_includes_exclude_newer(self, _mock_clone, mock_run):
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
+    def test_install_cmd_includes_exclude_newer(self, mock_run: MagicMock) -> None:
         """Custom install_cmd templates get --exclude-newer in the {install} placeholder."""
         InstalledProject(
             _make_project(install_cmd="{install} -e ."),
@@ -199,8 +216,10 @@ class TestInstallDependenciesExcludeNewer:
         assert "--exclude-newer 2026-04-09T14:30:00Z" in cmd_str
 
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
-    @patch.object(InstalledProject, "_clone_or_update")
-    def test_install_cmd_omits_exclude_newer_when_none(self, _mock_clone, mock_run):
+    @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
+    def test_install_cmd_omits_exclude_newer_when_none(
+        self, mock_run: MagicMock
+    ) -> None:
         """Custom install_cmd without exclude_newer doesn't include the flag."""
         InstalledProject(_make_project(install_cmd="{install} -e ."))
 

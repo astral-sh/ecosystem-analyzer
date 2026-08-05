@@ -1,3 +1,5 @@
+"""Build and run ty, then aggregate diagnostics and exit evidence."""
+
 import logging
 import os
 import shlex
@@ -9,10 +11,10 @@ from pathlib import Path
 
 from git import Commit, Repo
 
-from .diagnostic import Diagnostic, DiagnosticsParser, index_panic_messages
+from .diagnostic import DiagnosticsParser, index_panic_messages
 from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
-from .run_output import ExitStatus, OutputVariant, RunOutput
+from .schema import Diagnostic, ExitStatus, OutputVariant, RunOutput
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,8 @@ def _aggregate_stderr(statuses: list[ExitStatus]) -> list[OutputVariant]:
 
 
 class Ty:
+    """Build or select a ty executable and analyze installed projects."""
+
     def __init__(
         self,
         repository: Repo | None = None,
@@ -74,7 +78,9 @@ class Ty:
         self.profile: str = profile
         self._commit_override: str | None = None
 
-    def compile_for_commit(self, commit: str | Commit):
+    def compile_for_commit(self, commit: str | Commit) -> None:
+        """Check out the requested commit and build its ty executable."""
+
         if self.repository is None:
             raise RuntimeError("Cannot compile for commit without a repository")
 
@@ -112,6 +118,8 @@ class Ty:
 
     @property
     def commit_sha(self) -> str:
+        """The active ty commit, including prebuilt-binary overrides."""
+
         if self._commit_override is not None:
             return self._commit_override
         if self.repository is None:
@@ -121,6 +129,8 @@ class Ty:
         return self.repository.head.commit.hexsha
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
+        """Analyze one installed project and collect diagnostics and exit evidence."""
+
         logger.info(f"Running ty on project '{project.name}'")
 
         # Standard flags to add to all ty check commands

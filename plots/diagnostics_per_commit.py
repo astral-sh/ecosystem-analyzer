@@ -6,8 +6,12 @@
 # ]
 # ///
 
+"""Visualize ecosystem-wide diagnostic totals across ty commit history."""
+
 
 def read_from_json_and_plot(filename: str) -> None:
+    """Render interactive and static charts from per-commit diagnostic statistics."""
+
     import json
 
     import plotly.graph_objects as go
@@ -37,9 +41,7 @@ def read_from_json_and_plot(filename: str) -> None:
         # fill="tonexty",
         # fillcolor="rgba(38, 18, 48, 0.3)",
         name="Diagnostics",
-        hovertemplate="<b>%{customdata}</b><br>"
-        + "Diagnostics: %{y}<br>"
-        + "<extra></extra>",
+        hovertemplate="<b>%{customdata}</b><br>Diagnostics: %{y}<br><extra></extra>",
         customdata=clean_messages,
     )
 

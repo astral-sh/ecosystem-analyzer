@@ -1,15 +1,37 @@
+"""Render searchable HTML reports for ecosystem diagnostics."""
+
 import json
 import logging
 from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader, PackageLoader
 
+from .schema import Diagnostic, ReportDiagnostic, RunData, RunOutput
+
 logger = logging.getLogger(__name__)
 
 
-def process_diagnostics(data, max_diagnostics_per_project=None):
+def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagnostic:
+    report_diagnostic: ReportDiagnostic = {
+        "project": output["project"],
+        "project_location": output.get("project_location", ""),
+        "path": diagnostic["path"],
+        "line": diagnostic["line"],
+        "column": diagnostic["column"],
+        "level": diagnostic["level"],
+        "lint_name": diagnostic["lint_name"],
+        "message": diagnostic["message"],
+    }
+    if github_ref := diagnostic.get("github_ref"):
+        report_diagnostic["github_ref"] = github_ref
+    return report_diagnostic
+
+
+def process_diagnostics(
+    data: RunData, max_diagnostics_per_project: int | None = None
+) -> list[ReportDiagnostic]:
     """Process the JSON data to extract all diagnostics (stable and flaky)."""
-    all_diagnostics = []
+    all_diagnostics: list[ReportDiagnostic] = []
 
     total_diagnostics = 0
     for output in data["outputs"]:
@@ -34,27 +56,15 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
 
         # Add stable diagnostics
         for diagnostic in output.get("diagnostics", []):
-            diagnostic["project"] = project
-            diagnostic["project_location"] = output.get("project_location")
-            all_diagnostics.append(diagnostic)
+            all_diagnostics.append(_report_diagnostic(output, diagnostic))
 
         # Add flaky locations as entries with flaky metadata
         for loc in output.get("flaky_diagnostics", []):
-            entry = {
-                "project": project,
-                "project_location": output.get("project_location"),
-                "path": loc["path"],
-                "line": loc["line"],
-                "column": loc["column"],
-                "is_flaky": True,
-                "flaky_runs": flaky_runs,
-                "variants": loc["variants"],
-                # Use the first variant for top-level fields (sorting/filtering)
-                "level": loc["variants"][0]["diagnostic"]["level"],
-                "lint_name": loc["variants"][0]["diagnostic"]["lint_name"],
-                "message": loc["variants"][0]["diagnostic"]["message"],
-                "github_ref": loc["variants"][0]["diagnostic"].get("github_ref"),
-            }
+            first_diagnostic = loc["variants"][0]["diagnostic"]
+            entry = _report_diagnostic(output, first_diagnostic)
+            entry["is_flaky"] = True
+            entry["flaky_runs"] = flaky_runs
+            entry["variants"] = loc["variants"]
             all_diagnostics.append(entry)
 
     logger.info(f"Total diagnostics included: {total_diagnostics}")
@@ -62,7 +72,12 @@ def process_diagnostics(data, max_diagnostics_per_project=None):
     return all_diagnostics
 
 
-def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_names=None):
+def generate_html_report(
+    diagnostics: list[ReportDiagnostic],
+    ty_commit: str,
+    output_path: str | Path,
+    flaky_project_names: set[str] | None = None,
+) -> str | Path:
     """Generate an HTML report using Jinja2 template."""
     if flaky_project_names is None:
         flaky_project_names = set()
@@ -113,8 +128,7 @@ def generate_html_report(diagnostics, ty_commit, output_path, flaky_project_name
     )
 
     # Write output file
-    with open(output_path, "w") as f:
-        f.write(html_content)
+    Path(output_path).write_text(html_content)
 
     return output_path
 
@@ -124,15 +138,19 @@ def generate(
     output_path: str | Path,
     max_diagnostics_per_project: int | None = None,
 ) -> None:
+    """Convert saved ecosystem diagnostics into a searchable HTML report."""
+
     diagnostics_path = Path(diagnostics_path)
     output_path = Path(output_path)
 
     with open(diagnostics_path) as f:
-        data = json.load(f)
+        data: RunData = json.load(f)
     diagnostics = process_diagnostics(data, max_diagnostics_per_project)
 
     ty_commits = {
-        output.get("ty_commit") for output in data["outputs"] if output.get("ty_commit")
+        ty_commit
+        for output in data["outputs"]
+        if (ty_commit := output.get("ty_commit"))
     }
     if len(ty_commits) > 1:
         raise RuntimeError(

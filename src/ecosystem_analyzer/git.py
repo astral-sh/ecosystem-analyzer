@@ -1,3 +1,5 @@
+"""Resolve ty repositories and discover commits for ecosystem analysis."""
+
 import hashlib
 import logging
 from pathlib import Path
@@ -50,6 +52,8 @@ def resolve_ty_repo(repo_path: str | Path) -> Repo:
 
 
 def get_latest_ty_commits(repo: Repo, num_commits: int) -> list[Commit]:
+    """Return the latest ty commits in chronological order."""
+
     repo.git.checkout("origin/main")
 
     commits = []

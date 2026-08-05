@@ -1,3 +1,5 @@
+"""Command-line interface for analyzing and comparing Python ecosystems."""
+
 import json
 import logging
 import sys
@@ -11,9 +13,21 @@ from .diff import DiagnosticDiff
 from .ecosystem_report import generate
 from .git import get_latest_ty_commits, resolve_ty_repo
 from .manager import Manager, get_ecosystem_projects
-from .run_output import ExitStatus, OutputVariant
+from .schema import (
+    CliContext,
+    CommitStatistics,
+    ExitStatus,
+    HistoryData,
+    OutputVariant,
+    RunData,
+    RunOutput,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _context(ctx: click.Context) -> CliContext:
+    return ctx.obj
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -27,6 +41,8 @@ def setup_logging(verbose: bool = False) -> None:
 
 
 def get_all_project_names(ecosystem_projects: dict[str, Project]) -> list[str]:
+    """Return every available ecosystem project name in sorted order."""
+
     project_names = sorted(ecosystem_projects)
     logger.info("Analyzing all %d mypy_primer projects", len(project_names))
     return project_names
@@ -52,10 +68,7 @@ def shard_projects(
     costs: dict[str, int] = {}
     for name in all_names:
         project = ecosystem_projects.get(name)
-        if project is not None:
-            cost = project.cost_for_type_checker("ty")
-        else:
-            cost = 5
+        cost = project.cost_for_type_checker("ty") if project is not None else 5
         if flaky_projects is not None and name in flaky_projects:
             cost *= flaky_runs
         costs[name] = cost
@@ -106,14 +119,13 @@ def cli(
     verbose: bool,
     flaky_runs: int,
 ) -> None:
-    """
-    Command-line interface for analyzing Python projects with ty.
-    """
+    """Command-line interface for analyzing Python projects with ty."""
     ctx.ensure_object(dict)
-    ctx.obj["repository"] = resolve_ty_repo(repository) if repository else None
-    ctx.obj["target"] = target
-    ctx.obj["verbose"] = verbose
-    ctx.obj["flaky_runs"] = flaky_runs
+    context = _context(ctx)
+    context["repository"] = resolve_ty_repo(repository) if repository else None
+    context["target"] = target
+    context["verbose"] = verbose
+    context["flaky_runs"] = flaky_runs
     setup_logging(verbose)
 
 
@@ -144,20 +156,21 @@ def cli(
     default="dev",
 )
 @click.pass_context
-def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
-    """
-    Run ty on a specific project.
-    """
-    if ctx.obj["repository"] is None:
+def run(
+    ctx: click.Context, project_name: str, commit: str, output: str, profile: str
+) -> None:
+    """Run ty on a specific project."""
+    context = _context(ctx)
+    if context["repository"] is None:
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
     manager = Manager(
-        ty_repo=ctx.obj["repository"],
-        target_dir=ctx.obj["target"],
+        ty_repo=context["repository"],
+        target_dir=context["target"],
         project_names=[project_name],
         profile=profile,
-        flaky_runs=ctx.obj["flaky_runs"],
+        flaky_runs=context["flaky_runs"],
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -198,17 +211,16 @@ def run(ctx, project_name: str, commit: str, output: str, profile: str) -> None:
 )
 @click.pass_context
 def analyze(
-    ctx,
+    ctx: click.Context,
     commit: str,
     output: str,
     profile: str,
     projects_flaky: str | None,
     exclude_newer: str | None,
 ) -> None:
-    """
-    Analyze Python ecosystem projects with ty and collect diagnostics.
-    """
-    if ctx.obj["repository"] is None:
+    """Analyze Python ecosystem projects with ty and collect diagnostics."""
+    context = _context(ctx)
+    if context["repository"] is None:
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
@@ -220,11 +232,11 @@ def analyze(
     )
 
     manager = Manager(
-        ty_repo=ctx.obj["repository"],
-        target_dir=ctx.obj["target"],
+        ty_repo=context["repository"],
+        target_dir=context["target"],
         project_names=project_names,
         profile=profile,
-        flaky_runs=ctx.obj["flaky_runs"],
+        flaky_runs=context["flaky_runs"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
         ecosystem_projects=ecosystem_projects,
@@ -303,7 +315,7 @@ def analyze(
 )
 @click.pass_context
 def diff(
-    ctx,
+    ctx: click.Context,
     old: str,
     new: str,
     output_old: str,
@@ -316,11 +328,10 @@ def diff(
     ty_binary_old: Path | None,
     ty_binary_new: Path | None,
 ) -> None:
-    """
-    Compare diagnostics between two commits.
-    """
+    """Compare diagnostics between two commits."""
+    context = _context(ctx)
     using_prebuilt = ty_binary_old is not None and ty_binary_new is not None
-    if ctx.obj["repository"] is None and not using_prebuilt:
+    if context["repository"] is None and not using_prebuilt:
         click.echo(
             "Error: --repository is required unless both --ty-binary-old and"
             " --ty-binary-new are provided",
@@ -353,16 +364,16 @@ def diff(
             num_shards,
             ecosystem_projects,
             flaky_projects=flaky_project_names,
-            flaky_runs=ctx.obj["flaky_runs"],
+            flaky_runs=context["flaky_runs"],
         )
         logger.info(f"Shard {shard}/{num_shards}: {len(project_names)} projects")
 
     manager = Manager(
-        ty_repo=ctx.obj["repository"],
-        target_dir=ctx.obj["target"],
+        ty_repo=context["repository"],
+        target_dir=context["target"],
         project_names=project_names,
         profile=profile,
-        flaky_runs=ctx.obj["flaky_runs"],
+        flaky_runs=context["flaky_runs"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
         ecosystem_projects=ecosystem_projects,
@@ -428,8 +439,7 @@ def generate_diff(
     old_name: str | None,
     new_name: str | None,
 ) -> None:
-    """
-    Generate a diff report of diagnostic data between two JSON files.
+    """Generate a diff report of diagnostic data between two JSON files.
 
     OLD_FILE: Path to the old JSON file.
     NEW_FILE: Path to the new JSON file.
@@ -468,20 +478,19 @@ def generate_diff(
 )
 @click.pass_context
 def history(
-    ctx,
+    ctx: click.Context,
     num_commits: int,
     output: str,
     profile: str,
     projects_flaky: str | None,
 ) -> None:
-    """
-    Analyze diagnostics across a range of commits.
-    """
-    if ctx.obj["repository"] is None:
+    """Analyze diagnostics across a range of commits."""
+    context = _context(ctx)
+    if context["repository"] is None:
         click.echo("Error: --repository is required for this command", err=True)
         ctx.exit(1)
 
-    repository = ctx.obj["repository"]
+    repository = context["repository"]
 
     last_commits = get_latest_ty_commits(repository, num_commits)
 
@@ -498,18 +507,19 @@ def history(
 
     manager = Manager(
         ty_repo=repository,
-        target_dir=ctx.obj["target"],
+        target_dir=context["target"],
         project_names=project_names,
         profile=profile,
-        flaky_runs=ctx.obj["flaky_runs"],
+        flaky_runs=context["flaky_runs"],
         flaky_projects=flaky_project_names,
         ecosystem_projects=ecosystem_projects,
     )
 
-    statistics = []
+    statistics: list[CommitStatistics] = []
 
     for idx, commit in enumerate(last_commits):
         message = commit.message.splitlines()[0]
+        assert isinstance(message, str)
         sha = commit.hexsha[:7]
         logger.debug(f"Analyzing commit: {message}")
 
@@ -527,7 +537,7 @@ def history(
         })
 
     with Path(output).open("w") as json_file:
-        json.dump({"statistics": statistics}, json_file)
+        json.dump(HistoryData(statistics=statistics), json_file)
 
 
 @cli.command()
@@ -564,8 +574,7 @@ def generate_timing_diff(
     old_name: str | None,
     new_name: str | None,
 ) -> None:
-    """
-    Generate a timing diff report comparing execution times between two JSON files.
+    """Generate a timing diff report comparing execution times between two JSON files.
 
     OLD_FILE: Path to the old JSON file.
     NEW_FILE: Path to the new JSON file.
@@ -623,8 +632,7 @@ def generate_diff_statistics(
     new_name: str | None,
     fail_on_new_abnormal_exits: bool,
 ) -> None:
-    """
-    Generate a Markdown statistics report of diagnostic differences between two JSON files.
+    """Generate a Markdown statistics report of diagnostic differences between two JSON files.
 
     OLD_FILE: Path to the old JSON file.
     NEW_FILE: Path to the new JSON file.
@@ -634,8 +642,7 @@ def generate_diff_statistics(
         inline_threshold=inline_threshold,
     )
 
-    with open(output, "w") as f:
-        f.write(markdown_content)
+    Path(output).write_text(markdown_content)
 
     print(f"Markdown statistics report generated at: {output}")
 
@@ -668,9 +675,7 @@ def generate_diff_statistics(
 def generate_report(
     diagnostics: str, output: str, max_diagnostics_per_project: int | None
 ) -> None:
-    """
-    Generate an HTML report from the diagnostics JSON file.
-    """
+    """Generate an HTML report from the diagnostics JSON file."""
 
     generate(diagnostics, output, max_diagnostics_per_project)
 
@@ -712,9 +717,7 @@ def parse_diagnostics(
     commit: str | None,
     return_code: int,
 ) -> None:
-    """
-    Parse ty diagnostic output from stdin and generate a JSON file.
-    """
+    """Parse ty diagnostic output from stdin and generate a JSON file."""
     # Read diagnostic output from stdin
     diagnostic_content = sys.stdin.read()
 
@@ -737,7 +740,7 @@ def parse_diagnostics(
         ]
 
     # Create output structure - only include fields that have meaningful values
-    run_output = {
+    run_output: RunOutput = {
         "project": project_name,
         "diagnostics": diagnostics,
         "exit_statuses": [exit_status],
@@ -751,7 +754,7 @@ def parse_diagnostics(
         run_output["ty_commit"] = commit
 
     # Write to JSON file in the same format as Manager.write_run_outputs
-    output_data = {"outputs": [run_output]}
+    output_data = RunData(outputs=[run_output])
 
     output_path = Path(output)
     with output_path.open("w") as json_file:
