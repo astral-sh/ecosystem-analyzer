@@ -247,7 +247,7 @@ class Ty:
 
             if (
                 return_code in (0, 1)
-                and (time_s := output.get("median_time_s")) is not None
+                and (time_s := output["median_time_s"]) is not None
             ):
                 times.append(time_s)
 

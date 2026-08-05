@@ -1026,7 +1026,7 @@
                 {% endfor %}
                 {# Flaky locations in this added file #}
                 {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
-                {% for loc in project.flaky_file_diffs[file_data.path].get("added", []) %}
+                {% for loc in project.flaky_file_diffs[file_data.path].added %}
                 {{ render_flaky_location(loc, "added", project.project) }}
                 {% endfor %}
                 {% endif %}
@@ -1046,7 +1046,7 @@
                 {% endfor %}
                 {# Flaky locations in this removed file #}
                 {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
-                {% for loc in project.flaky_file_diffs[file_data.path].get("removed", []) %}
+                {% for loc in project.flaky_file_diffs[file_data.path].removed %}
                 {{ render_flaky_location(loc, "removed", project.project) }}
                 {% endfor %}
                 {% endif %}
@@ -1109,13 +1109,13 @@
                 {# Flaky locations in this modified file #}
                 {% if project.flaky_file_diffs is defined and file_data.path in project.flaky_file_diffs %}
                 {% set ffd = project.flaky_file_diffs[file_data.path] %}
-                {% for loc in ffd.get("added", []) %}
+                {% for loc in ffd.added %}
                 {{ render_flaky_location(loc, "added", project.project) }}
                 {% endfor %}
-                {% for loc in ffd.get("removed", []) %}
+                {% for loc in ffd.removed %}
                 {{ render_flaky_location(loc, "removed", project.project) }}
                 {% endfor %}
-                {% for change in ffd.get("changed", []) %}
+                {% for change in ffd.changed %}
                 {{ render_flaky_changed(change, project.project) }}
                 {% endfor %}
                 {% endif %}
@@ -1126,9 +1126,9 @@
             {# Files that only have flaky changes (no stable diagnostic changes) #}
             {% if project.flaky_file_diffs is defined %}
             {% set stable_files = [] %}
-            {% for f in project.diffs.get("added_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
-            {% for f in project.diffs.get("removed_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
-            {% for f in project.diffs.get("modified_files", []) %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for f in project.diffs.added_files %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for f in project.diffs.removed_files %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
+            {% for f in project.diffs.modified_files %}{% if stable_files.append(f.path) %}{% endif %}{% endfor %}
             {% for flaky_path, ffd in project.flaky_file_diffs.items()|sort %}
             {% if flaky_path not in stable_files %}
             <div class="file modified">
@@ -1136,13 +1136,13 @@
                     <h4 style="margin: 0;">{{ flaky_path }}</h4>
                     <button class="copy-btn" onclick="copyPath(this, '{{ flaky_path }}')">📋</button>
                 </div>
-                {% for loc in ffd.get("added", []) %}
+                {% for loc in ffd.added %}
                 {{ render_flaky_location(loc, "added", project.project) }}
                 {% endfor %}
-                {% for loc in ffd.get("removed", []) %}
+                {% for loc in ffd.removed %}
                 {{ render_flaky_location(loc, "removed", project.project) }}
                 {% endfor %}
-                {% for change in ffd.get("changed", []) %}
+                {% for change in ffd.changed %}
                 {{ render_flaky_changed(change, project.project) }}
                 {% endfor %}
             </div>

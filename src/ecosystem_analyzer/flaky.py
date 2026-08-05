@@ -1,5 +1,7 @@
 """Logic for detecting flaky diagnostics by comparing multiple ty runs."""
 
+from collections import Counter
+
 from .schema import (
     Diagnostic,
     DiagnosticKey,
@@ -42,7 +44,7 @@ def classify_diagnostics(
     assert n >= 2, "Need at least 2 runs to detect flakiness"
 
     # Count how many runs each diagnostic key appears in
-    key_counts: dict[DiagnosticKey, int] = {}
+    key_counts: Counter[DiagnosticKey] = Counter()
     # Keep one representative Diagnostic for each key
     key_to_diag: dict[DiagnosticKey, Diagnostic] = {}
 
@@ -53,7 +55,7 @@ def classify_diagnostics(
             key = _diagnostic_key(diag)
             if key not in seen_in_run:
                 seen_in_run.add(key)
-                key_counts[key] = key_counts.get(key, 0) + 1
+                key_counts[key] += 1
                 if key not in key_to_diag:
                     key_to_diag[key] = diag
 

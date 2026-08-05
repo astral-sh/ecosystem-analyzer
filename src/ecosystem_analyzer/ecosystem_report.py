@@ -39,7 +39,7 @@ def process_diagnostics(
         flaky_runs = output.get("flaky_runs")
 
         # Count stable + flaky locations for the per-project limit
-        num_stable = len(output.get("diagnostics", []))
+        num_stable = len(output["diagnostics"])
         num_flaky_locs = len(output.get("flaky_diagnostics", []))
         num_diagnostics = num_stable + num_flaky_locs
 
@@ -55,7 +55,7 @@ def process_diagnostics(
         total_diagnostics += num_diagnostics
 
         # Add stable diagnostics
-        for diagnostic in output.get("diagnostics", []):
+        for diagnostic in output["diagnostics"]:
             all_diagnostics.append(_report_diagnostic(output, diagnostic))
 
         # Add flaky locations as entries with flaky metadata
