@@ -744,6 +744,7 @@ def parse_diagnostics(
     # Include every required field in the output structure.
     run_output: RunOutput = {
         "project": project_name,
+        "strict_settings": False,
         "diagnostics": diagnostics,
         "exit_statuses": [exit_status],
         "median_time_s": None,

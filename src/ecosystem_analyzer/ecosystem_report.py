@@ -15,6 +15,7 @@ def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagn
     report_diagnostic: ReportDiagnostic = {
         "project": output["project"],
         "project_location": output.get("project_location", ""),
+        "strict_settings": output["strict_settings"],
         "path": diagnostic["path"],
         "line": diagnostic["line"],
         "column": diagnostic["column"],
@@ -27,8 +28,6 @@ def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagn
     }
     if github_ref := diagnostic.get("github_ref"):
         report_diagnostic["github_ref"] = github_ref
-    if "strict_settings" in output:
-        report_diagnostic["strict_settings"] = output["strict_settings"]
     return report_diagnostic
 
 
@@ -88,7 +87,6 @@ def generate_html_report(
     project_strictness = {
         diagnostic["project"]: diagnostic["strict_settings"]
         for diagnostic in diagnostics
-        if "strict_settings" in diagnostic
     }
     all_projects = sorted({d["project"] for d in diagnostics})
     lints = sorted({d["lint_name"] for d in diagnostics})

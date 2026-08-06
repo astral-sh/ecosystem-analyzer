@@ -644,10 +644,8 @@
 </head>
 
 {% macro render_analysis_mode(project_name) %}
-{% if project_name in project_strictness %}
 {% set strict = project_strictness[project_name] %}
 <span class="analysis-mode analysis-mode-{{ 'strict' if strict else 'default' }}" title="Strict equality semantics and strict generic narrowing {{ 'enabled' if strict else 'disabled' }}">{{ 'strict' if strict else 'non-strict' }}</span>
-{% endif %}
 {% endmacro %}
 
 {% macro render_diagnostic(diag, change_type, project_name) %}
@@ -838,7 +836,7 @@
                     <option value="all">All Projects</option>
                     {% if statistics.merged_by_project %}
                     {% for project_data in statistics.merged_by_project %}
-                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }}{% if project_data.project_name in project_strictness %} ({{ 'strict' if project_strictness[project_data.project_name] else 'non-strict' }}){% endif %} (-{{ project_data.removed }} +{{ project_data.added }} ~{{ project_data.changed }})</option>
+                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }} ({{ 'strict' if project_strictness[project_data.project_name] else 'non-strict' }}) (-{{ project_data.removed }} +{{ project_data.added }} ~{{ project_data.changed }})</option>
                     {% endfor %}
                     {% endif %}
                 </select>

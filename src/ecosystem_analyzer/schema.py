@@ -45,7 +45,7 @@ class ProjectIdentity(TypedDict):
 
     project: str
     project_metadata: NotRequired[ProjectMetadata]
-    strict_settings: NotRequired[bool]
+    strict_settings: bool
 
 
 class ProjectInfo(ProjectIdentity):
