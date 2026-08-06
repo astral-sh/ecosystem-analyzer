@@ -15,6 +15,7 @@ def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagn
     report_diagnostic: ReportDiagnostic = {
         "project": output["project"],
         "project_location": output.get("project_location", ""),
+        "strict_settings": output["strict_settings"],
         "path": diagnostic["path"],
         "line": diagnostic["line"],
         "column": diagnostic["column"],
@@ -83,6 +84,10 @@ def generate_html_report(
     if flaky_project_names is None:
         flaky_project_names = set()
 
+    project_strictness = {
+        diagnostic["project"]: diagnostic["strict_settings"]
+        for diagnostic in diagnostics
+    }
     all_projects = sorted({d["project"] for d in diagnostics})
     lints = sorted({d["lint_name"] for d in diagnostics})
     levels = sorted({d["level"] for d in diagnostics})
@@ -126,6 +131,7 @@ def generate_html_report(
         levels=levels,
         ty_commit=ty_commit,
         flaky_project_names=sorted_flaky_project_names,
+        project_strictness=project_strictness,
     )
 
     # Write output file

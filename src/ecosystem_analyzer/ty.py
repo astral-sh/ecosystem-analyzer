@@ -1,5 +1,6 @@
 """Build and run ty, then aggregate diagnostics and exit evidence."""
 
+import hashlib
 import logging
 import os
 import shlex
@@ -17,6 +18,11 @@ from .installed_project import InstalledProject
 from .schema import Diagnostic, ExitStatus, OutputVariant, RunOutput
 
 logger = logging.getLogger(__name__)
+
+
+def _use_strict_settings(project: InstalledProject) -> bool:
+    """Deterministically select approximately half of project URLs."""
+    return hashlib.sha256(project.location.encode()).digest()[0] % 2 == 0
 
 
 def _normalize_stderr(stderr: str) -> str | None:
@@ -139,6 +145,14 @@ class Ty:
             "--python",
             str(project.venv_path),
         ]
+        strict_settings = _use_strict_settings(project)
+        if strict_settings:
+            standard_flags.extend([
+                "--config",
+                "analysis.strict-equality-semantics=true",
+                "--config",
+                "analysis.strict-generic-narrowing=true",
+            ])
 
         if project.ty_cmd:
             # Use custom ty command from project configuration
@@ -217,6 +231,7 @@ class Ty:
         return RunOutput({
             "project": project.name,
             "project_location": project.location,
+            "strict_settings": strict_settings,
             "ty_commit": self.commit_sha,
             "diagnostics": diagnostics,
             "exit_statuses": [exit_status],
@@ -282,6 +297,7 @@ class Ty:
         result = RunOutput({
             "project": project.name,
             "project_location": project.location,
+            "strict_settings": _use_strict_settings(project),
             "ty_commit": self.commit_sha,
             "diagnostics": stable,
             "flaky_runs": n,

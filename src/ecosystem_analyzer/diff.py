@@ -528,6 +528,7 @@ class DiagnosticDiff:
                 result["flaky_exit_status_changes"].append({
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
+                    "strict_settings": new_project["strict_settings"],
                     "old": flaky_exit_status_change["old"],
                     "new": flaky_exit_status_change["new"],
                     "old_runs": flaky_exit_status_change["old_runs"],
@@ -593,6 +594,7 @@ class DiagnosticDiff:
                 failed_project: FailedProjectDiff = {
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
+                    "strict_settings": new_project["strict_settings"],
                     "old_status": old_status.value,
                     "new_status": new_status.value,
                     "old_exit_statuses": self._exit_statuses(old_project),
@@ -630,6 +632,7 @@ class DiagnosticDiff:
                 removed_project: AddedOrRemovedProjectDiff = {
                     "project": project_name,
                     "project_location": project_data.get("project_location", ""),
+                    "strict_settings": project_data["strict_settings"],
                     "diagnostics": diagnostics,
                     "exit_statuses": self._exit_statuses(project_data),
                     "exit_status_runs": self._total_runs(project_data),
@@ -641,6 +644,7 @@ class DiagnosticDiff:
                     result["flaky_exit_status_changes"].append({
                         "project": project_name,
                         "project_location": project_data.get("project_location", ""),
+                        "strict_settings": project_data["strict_settings"],
                         "old": self._exit_statuses(project_data),
                         "new": [],
                         "old_runs": self._total_runs(project_data),
@@ -665,6 +669,7 @@ class DiagnosticDiff:
                 added_project: AddedOrRemovedProjectDiff = {
                     "project": project_name,
                     "project_location": project_data.get("project_location", ""),
+                    "strict_settings": project_data["strict_settings"],
                     "diagnostics": diagnostics,
                     "exit_statuses": self._exit_statuses(project_data),
                     "exit_status_runs": self._total_runs(project_data),
@@ -676,6 +681,7 @@ class DiagnosticDiff:
                     result["flaky_exit_status_changes"].append({
                         "project": project_name,
                         "project_location": project_data.get("project_location", ""),
+                        "strict_settings": project_data["strict_settings"],
                         "old": [],
                         "new": self._exit_statuses(project_data),
                         "old_runs": 0,
@@ -754,6 +760,7 @@ class DiagnosticDiff:
                 modified_project: ModifiedProjectDiff = {
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
+                    "strict_settings": new_project["strict_settings"],
                     "diffs": file_diffs,
                 }
                 self._add_project_kind(modified_project, new_project)
@@ -1845,6 +1852,10 @@ class DiagnosticDiff:
             "failure_descriptor": _failure_descriptor,
             "failure_status_labels": _FAILURE_STATUS_LABELS,
             "failure_status_titles": _FAILURE_STATUS_TITLES,
+            "project_strictness": {
+                output["project"]: output["strict_settings"]
+                for output in chain(self.old_data["outputs"], self.new_data["outputs"])
+            },
             "project_kinds": sorted({
                 kind
                 for output in chain(self.old_data["outputs"], self.new_data["outputs"])

@@ -208,6 +208,25 @@
             margin-left: 6px;
         }
 
+        .analysis-mode {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+
+        .analysis-mode-strict {
+            color: var(--flare);
+            background: rgba(99, 64, 172, 0.12);
+        }
+
+        .analysis-mode-default {
+            color: var(--rock);
+            background: rgba(120, 135, 110, 0.12);
+        }
+
         .flaky-freq {
             font-weight: 600;
             color: #e65100;
@@ -252,7 +271,7 @@
         <select id="filter-project">
             <option value="all">All {{ projects | length }} projects</option>
             {% for (project, count, is_flaky) in projects %}
-            <option value="{{ project }}">{{ project }} ({{ count }}){% if is_flaky %} (flaky){% endif %}</option>
+            <option value="{{ project }}">{{ project }} ({{ count }}) ({{ 'strict' if project_strictness[project] else 'non-strict' }}){% if is_flaky %} (flaky){% endif %}</option>
             {% endfor %}
         </select>
 
@@ -304,6 +323,8 @@
                     {% else %}
                         {{ diagnostic.project }}
                     {% endif %}
+                    {% set strict = diagnostic.strict_settings %}
+                    <span class="analysis-mode analysis-mode-{{ 'strict' if strict else 'default' }}" title="Strict equality semantics and strict generic narrowing {{ 'enabled' if strict else 'disabled' }}">{{ 'strict' if strict else 'non-strict' }}</span>
                 </td>
                 <td class="{{ diagnostic.level }}">
                     {{ diagnostic.lint_name }}

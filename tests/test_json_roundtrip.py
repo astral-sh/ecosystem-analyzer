@@ -45,6 +45,7 @@ def _make_output(
     entry: RunOutput = {
         "project": project,
         "project_location": f"https://github.com/example/{project}",
+        "strict_settings": False,
         "ty_commit": "abc123def456",
         "diagnostics": diagnostics,
         "exit_statuses": exit_statuses,

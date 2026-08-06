@@ -26,6 +26,7 @@ def _output(
     output = RunOutput({
         "project": "proj",
         "project_location": "https://github.com/example/proj",
+        "strict_settings": False,
         "ty_commit": "abc123",
         "diagnostics": diagnostics or [],
         "exit_statuses": [exit_status],
