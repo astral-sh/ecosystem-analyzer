@@ -161,6 +161,25 @@
             cursor: help;
         }
 
+        .analysis-mode {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+        }
+
+        .analysis-mode-strict {
+            color: var(--flare);
+            background: rgba(99, 64, 172, 0.12);
+        }
+
+        .analysis-mode-default {
+            color: var(--rock);
+            background: rgba(120, 135, 110, 0.12);
+        }
+
         .diag-grid {
             display: grid;
             grid-template-columns: auto 1fr;
@@ -624,6 +643,13 @@
     </style>
 </head>
 
+{% macro render_analysis_mode(project_name) %}
+{% if project_name in project_strictness %}
+{% set strict = project_strictness[project_name] %}
+<span class="analysis-mode analysis-mode-{{ 'strict' if strict else 'default' }}" title="Strict equality semantics and strict generic narrowing {{ 'enabled' if strict else 'disabled' }}">{{ 'strict' if strict else 'non-strict' }}</span>
+{% endif %}
+{% endmacro %}
+
 {% macro render_diagnostic(diag, change_type, project_name) %}
 <div class="diagnostic {{ change_type }}" data-change-type="{{ change_type }}" data-lint-name="{{ diag.lint_name }}" data-project-name="{{ project_name }}">
     <div class="diag-grid">
@@ -762,7 +788,7 @@
                             </tr>
                             {% for project_data in statistics.merged_by_project[:20] %}
                             <tr>
-                                <td>{{ project_data.project_name }}{% if project_data.is_flaky %} <span class="flaky-badge" title="Flaky: nondeterministic diagnostics across multiple runs">flaky</span>{% endif %}</td>
+                                <td>{{ project_data.project_name }}{{ render_analysis_mode(project_data.project_name) }}{% if project_data.is_flaky %} <span class="flaky-badge" title="Flaky: nondeterministic diagnostics across multiple runs">flaky</span>{% endif %}</td>
                                 <td class="removed-col">{{ project_data.removed }}</td>
                                 <td class="added-col">{{ project_data.added }}</td>
                                 <td class="changed-col">{{ project_data.changed }}</td>
@@ -771,7 +797,7 @@
                             {% if statistics.merged_by_project|length > 20 %}
                             {% for project_data in statistics.merged_by_project[20:] %}
                             <tr class="project-row-hidden" style="display: none;">
-                                <td>{{ project_data.project_name }}{% if project_data.is_flaky %} <span class="flaky-badge" title="Flaky: nondeterministic diagnostics across multiple runs">flaky</span>{% endif %}</td>
+                                <td>{{ project_data.project_name }}{{ render_analysis_mode(project_data.project_name) }}{% if project_data.is_flaky %} <span class="flaky-badge" title="Flaky: nondeterministic diagnostics across multiple runs">flaky</span>{% endif %}</td>
                                 <td class="removed-col">{{ project_data.removed }}</td>
                                 <td class="added-col">{{ project_data.added }}</td>
                                 <td class="changed-col">{{ project_data.changed }}</td>
@@ -812,7 +838,7 @@
                     <option value="all">All Projects</option>
                     {% if statistics.merged_by_project %}
                     {% for project_data in statistics.merged_by_project %}
-                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }} (-{{ project_data.removed }} +{{ project_data.added }} ~{{ project_data.changed }})</option>
+                    <option value="{{ project_data.project_name }}">{{ project_data.project_name }}{% if project_data.project_name in project_strictness %} ({{ 'strict' if project_strictness[project_data.project_name] else 'non-strict' }}){% endif %} (-{{ project_data.removed }} +{{ project_data.added }} ~{{ project_data.changed }})</option>
                     {% endfor %}
                     {% endif %}
                 </select>
@@ -869,7 +895,7 @@
                     {% set new_summarized_panic_messages = project.introduced_panic_messages + project.new_persistent_panic_messages %}
                     <tr class="failed-row-{{ failure_status }}" style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td style="padding: 12px;">
-                            <strong>{{ project.project }}</strong>
+                            <strong>{{ project.project }}</strong>{{ render_analysis_mode(project.project) }}
                             <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
                         </td>
                         <td style="padding: 12px; text-align: center; font-weight: 600;">
@@ -953,7 +979,7 @@
                     {% for project in diffs.flaky_exit_status_changes %}
                     <tr style="border-bottom: 1px solid rgba(38, 18, 48, 0.1);">
                         <td style="padding: 12px;">
-                            <strong>{{ project.project }}</strong>
+                            <strong>{{ project.project }}</strong>{{ render_analysis_mode(project.project) }}
                             <span class="flaky-badge" title="Exit status varied across repeated runs">flaky</span>
                             <br><small><a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a></small>
                         </td>
@@ -970,7 +996,7 @@
         <h2>Added Projects</h2>
         {% for project in diffs.added_projects %}
         <div class="project added"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
-            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            <h3>{{ project.project }}{{ render_analysis_mode(project.project) }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
@@ -992,7 +1018,7 @@
         <h2>Removed Projects</h2>
         {% for project in diffs.removed_projects %}
         <div class="project removed"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
-            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            <h3>{{ project.project }}{{ render_analysis_mode(project.project) }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             <div style="margin-bottom: 12px;"><strong>Observed outcomes:</strong> {{ render_exit_statuses(project.exit_statuses, project.exit_status_runs) }}</div>
             {% set file_groups = project.diagnostics|groupby('path') %}
             {% for path, diagnostics in file_groups %}
@@ -1013,7 +1039,7 @@
         {% if diffs.modified_projects %}
         {% for project in diffs.modified_projects %}
         <div class="project modified"{% if project.project_metadata is defined %} data-project-kind="{{ project.project_metadata.kind }}"{% endif %}>
-            <h3>{{ project.project }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
+            <h3>{{ project.project }}{{ render_analysis_mode(project.project) }} <small>(<a href="{{ project.project_location }}" target="_blank">{{ project.project_location }}</a>)</small></h3>
             {% if project.diffs.added_files %}
             {% for file_data in project.diffs.added_files %}
             <div class="file added">

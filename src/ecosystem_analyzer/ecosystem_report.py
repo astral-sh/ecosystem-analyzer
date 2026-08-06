@@ -27,6 +27,8 @@ def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagn
     }
     if github_ref := diagnostic.get("github_ref"):
         report_diagnostic["github_ref"] = github_ref
+    if "strict_settings" in output:
+        report_diagnostic["strict_settings"] = output["strict_settings"]
     return report_diagnostic
 
 
@@ -83,6 +85,11 @@ def generate_html_report(
     if flaky_project_names is None:
         flaky_project_names = set()
 
+    project_strictness = {
+        diagnostic["project"]: diagnostic["strict_settings"]
+        for diagnostic in diagnostics
+        if "strict_settings" in diagnostic
+    }
     all_projects = sorted({d["project"] for d in diagnostics})
     lints = sorted({d["lint_name"] for d in diagnostics})
     levels = sorted({d["level"] for d in diagnostics})
@@ -126,6 +133,7 @@ def generate_html_report(
         levels=levels,
         ty_commit=ty_commit,
         flaky_project_names=sorted_flaky_project_names,
+        project_strictness=project_strictness,
     )
 
     # Write output file

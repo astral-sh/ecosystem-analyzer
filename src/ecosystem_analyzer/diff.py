@@ -27,6 +27,7 @@ from .schema import (
     FailureStatus,
     FileDiffData,
     FlakyDiagnosticDiffData,
+    FlakyExitStatusChange,
     FlakyLocation,
     FlakyVariant,
     LargeTimingChange,
@@ -525,14 +526,16 @@ class DiagnosticDiff:
                 old_project, new_project
             )
             if flaky_exit_status_change:
-                result["flaky_exit_status_changes"].append({
+                flaky_project: FlakyExitStatusChange = {
                     "project": project_name,
                     "project_location": new_project.get("project_location", ""),
                     "old": flaky_exit_status_change["old"],
                     "new": flaky_exit_status_change["new"],
                     "old_runs": flaky_exit_status_change["old_runs"],
                     "new_runs": flaky_exit_status_change["new_runs"],
-                })
+                }
+                self._add_project_details(flaky_project, new_project)
+                result["flaky_exit_status_changes"].append(flaky_project)
 
             old_panics = self._stable_panic_messages(old_project)
             new_panics = self._stable_panic_messages(new_project)
@@ -608,7 +611,7 @@ class DiagnosticDiff:
                     "new_persistent_panic_messages": new_persistent_panics,
                     "failure_status": failure_status,
                 }
-                self._add_project_kind(failed_project, new_project)
+                self._add_project_details(failed_project, new_project)
                 result["failed_projects"].append(failed_project)
                 # Skip detailed diff analysis for failed projects
                 continue
@@ -636,16 +639,18 @@ class DiagnosticDiff:
                     "flaky_diagnostics": project_data["flaky_diagnostics"],
                     "flaky_runs": project_data["flaky_runs"],
                 }
-                self._add_project_kind(removed_project, project_data)
+                self._add_project_details(removed_project, project_data)
                 if len(self._exit_statuses(project_data)) > 1:
-                    result["flaky_exit_status_changes"].append({
+                    removed_flaky_project: FlakyExitStatusChange = {
                         "project": project_name,
                         "project_location": project_data.get("project_location", ""),
                         "old": self._exit_statuses(project_data),
                         "new": [],
                         "old_runs": self._total_runs(project_data),
                         "new_runs": 0,
-                    })
+                    }
+                    self._add_project_details(removed_flaky_project, project_data)
+                    result["flaky_exit_status_changes"].append(removed_flaky_project)
                 result["removed_projects"].append(removed_project)
 
         # Find added projects
@@ -671,16 +676,18 @@ class DiagnosticDiff:
                     "flaky_diagnostics": project_data["flaky_diagnostics"],
                     "flaky_runs": project_data["flaky_runs"],
                 }
-                self._add_project_kind(added_project, project_data)
+                self._add_project_details(added_project, project_data)
                 if len(self._exit_statuses(project_data)) > 1:
-                    result["flaky_exit_status_changes"].append({
+                    added_flaky_project: FlakyExitStatusChange = {
                         "project": project_name,
                         "project_location": project_data.get("project_location", ""),
                         "old": [],
                         "new": self._exit_statuses(project_data),
                         "old_runs": 0,
                         "new_runs": self._total_runs(project_data),
-                    })
+                    }
+                    self._add_project_details(added_flaky_project, project_data)
+                    result["flaky_exit_status_changes"].append(added_flaky_project)
                 result["added_projects"].append(added_project)
 
         # Get list of failed projects to exclude from detailed analysis
@@ -756,7 +763,7 @@ class DiagnosticDiff:
                     "project_location": new_project.get("project_location", ""),
                     "diffs": file_diffs,
                 }
-                self._add_project_kind(modified_project, new_project)
+                self._add_project_details(modified_project, new_project)
                 if has_flaky_changes:
                     modified_project["flaky_diffs"] = flaky_diffs
                     modified_project["flaky_file_diffs"] = (
@@ -804,9 +811,11 @@ class DiagnosticDiff:
         return metadata["kind"] if metadata is not None else None
 
     @classmethod
-    def _add_project_kind(cls, entry: ProjectInfo, output: RunOutput) -> None:
+    def _add_project_details(cls, entry: ProjectInfo, output: RunOutput) -> None:
         if kind := cls._project_kind(output):
             entry["project_metadata"] = {"kind": kind}
+        if "strict_settings" in output:
+            entry["strict_settings"] = output["strict_settings"]
 
     def _group_diagnostics_by_file(
         self, diagnostics: list[Diagnostic]
@@ -1845,6 +1854,11 @@ class DiagnosticDiff:
             "failure_descriptor": _failure_descriptor,
             "failure_status_labels": _FAILURE_STATUS_LABELS,
             "failure_status_titles": _FAILURE_STATUS_TITLES,
+            "project_strictness": {
+                output["project"]: output["strict_settings"]
+                for output in chain(self.old_data["outputs"], self.new_data["outputs"])
+                if "strict_settings" in output
+            },
             "project_kinds": sorted({
                 kind
                 for output in chain(self.old_data["outputs"], self.new_data["outputs"])
