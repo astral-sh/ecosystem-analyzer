@@ -33,8 +33,9 @@ def classify_diagnostics(
 ) -> tuple[list[Diagnostic], list[FlakyLocation]]:
     """Classify diagnostics from multiple runs as stable or flaky.
 
-    A diagnostic is "stable" if it appears in ALL runs (by exact key match).
-    All other diagnostics are "flaky" and grouped by (path, line).
+    A diagnostic occurrence is "stable" if it appears in ALL runs.
+    Repeated stable diagnostics are preserved, while intermittent duplicate
+    occurrences are "flaky" and grouped by (path, line).
 
     Each flaky variant records how many runs it appeared in.
 
@@ -43,27 +44,26 @@ def classify_diagnostics(
     n = len(all_runs)
     assert n >= 2, "Need at least 2 runs to detect flakiness"
 
-    # Count how many runs each diagnostic key appears in
-    key_counts: Counter[DiagnosticKey] = Counter()
+    # Include occurrence indexes so duplicate diagnostics count independently.
+    occurrence_counts: Counter[tuple[DiagnosticKey, int]] = Counter()
     # Keep one representative Diagnostic for each key
     key_to_diag: dict[DiagnosticKey, Diagnostic] = {}
 
     for run_diagnostics in all_runs:
-        # Deduplicate within a single run — a key counts once per run
-        seen_in_run: set[DiagnosticKey] = set()
+        occurrences_in_run: Counter[DiagnosticKey] = Counter()
         for diag in run_diagnostics:
             key = _diagnostic_key(diag)
-            if key not in seen_in_run:
-                seen_in_run.add(key)
-                key_counts[key] += 1
-                if key not in key_to_diag:
-                    key_to_diag[key] = diag
+            occurrence = occurrences_in_run[key]
+            occurrences_in_run[key] += 1
+            occurrence_counts[key, occurrence] += 1
+            if key not in key_to_diag:
+                key_to_diag[key] = diag
 
     # Partition into stable and flaky
     stable: list[Diagnostic] = []
     flaky_by_location: dict[SourceLocationKey, list[FlakyVariant]] = {}
 
-    for key, count in key_counts.items():
+    for (key, _occurrence), count in occurrence_counts.items():
         diag = key_to_diag[key]
         if count == n:
             stable.append(diag)

@@ -2,7 +2,10 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from ecosystem_analyzer.diff import DiagnosticDiff
+from ecosystem_analyzer.flaky import classify_diagnostics
 from ecosystem_analyzer.schema import (
     Diagnostic,
     DiagnosticLevel,
@@ -1476,6 +1479,370 @@ info: Args: /tmp/new_commit/ty check ."""
             (item["old"]["message"], item["new"]["message"])
             for item in modified_line["text_diffs"]
         } == {(old_int, new_int), (old_str, new_str)}
+
+    @pytest.mark.parametrize("flaky_runs", [0, 10], ids=["single-run", "repeated-run"])
+    @pytest.mark.parametrize(
+        ("old_messages", "new_messages", "changed", "added", "removed"),
+        [
+            pytest.param(
+                ["Expected `Series`", "Expected `Series`"],
+                ["Expected `Series`", "Expected `pandas.Series`"],
+                1,
+                0,
+                0,
+                id="duplicate-becomes-distinguishable",
+            ),
+            pytest.param(
+                ["Expected `Series`", "Expected `pandas.Series`"],
+                ["Expected `Series`", "Expected `Series`"],
+                1,
+                0,
+                0,
+                id="distinct-diagnostics-become-duplicates",
+            ),
+            pytest.param(
+                ["Expected `Series`"],
+                ["Expected `Series`", "Expected `Series`"],
+                0,
+                1,
+                0,
+                id="duplicate-added",
+            ),
+            pytest.param(
+                ["Expected `Series`", "Expected `Series`"],
+                ["Expected `Series`"],
+                0,
+                0,
+                1,
+                id="duplicate-removed",
+            ),
+            pytest.param(
+                ["Expected `Series`", "Expected `Series`"],
+                ["Expected `pandas.Series`", "Expected `pyspark.Series`"],
+                2,
+                0,
+                0,
+                id="all-duplicates-become-distinguishable",
+            ),
+            pytest.param(
+                ["Expected `Series`", "Expected `Series`"],
+                [
+                    "Expected `pandas.Series`",
+                    "Expected `pandas.Series`",
+                    "Expected `pandas.Series`",
+                ],
+                1,
+                1,
+                0,
+                id="rewritten-duplicates-include-addition",
+            ),
+            pytest.param(
+                ["Expected `Series`", "Expected `Series`", "Expected `Series`"],
+                ["Expected `pandas.Series`", "Expected `pandas.Series`"],
+                1,
+                0,
+                1,
+                id="rewritten-duplicates-include-removal",
+            ),
+        ],
+    )
+    def test_duplicate_diagnostic_occurrences_are_preserved(
+        self,
+        old_messages: list[str],
+        new_messages: list[str],
+        changed: int,
+        added: int,
+        removed: int,
+        flaky_runs: int,
+    ) -> None:
+        def make_diag(message: str) -> Diagnostic:
+            return {
+                "level": "error",
+                "lint_name": "invalid-argument-type",
+                "path": "a.py",
+                "line": 1,
+                "column": 1,
+                "message": message,
+            }
+
+        old_diagnostics = [make_diag(message) for message in old_messages]
+        new_diagnostics = [make_diag(message) for message in new_messages]
+        if flaky_runs:
+            old_diagnostics, _ = classify_diagnostics([old_diagnostics] * flaky_runs)
+            new_diagnostics, _ = classify_diagnostics([new_diagnostics] * flaky_runs)
+
+        diff = _make_diff(
+            [_make_output("project", old_diagnostics, flaky_runs=flaky_runs)],
+            [_make_output("project", new_diagnostics, flaky_runs=flaky_runs)],
+        )
+        statistics = diff._calculate_statistics()
+
+        assert statistics["total_changed"] == changed
+        assert statistics["total_added"] == added
+        assert statistics["total_removed"] == removed
+
+    @pytest.mark.parametrize(
+        "rewrite_message", [False, True], ids=["unchanged", "rewritten"]
+    )
+    @pytest.mark.parametrize(
+        ("old_occurrences", "new_occurrences"),
+        [
+            pytest.param([2, 3], [1, 2], id="both-sides-flaky-removal"),
+            pytest.param([1, 2], [2, 3], id="both-sides-flaky-addition"),
+            pytest.param([2, 2], [1, 2], id="new-side-flaky"),
+            pytest.param([1, 2], [2, 2], id="old-side-flaky"),
+        ],
+    )
+    def test_flaky_duplicate_occurrences_do_not_create_spurious_changes(
+        self,
+        old_occurrences: list[int],
+        new_occurrences: list[int],
+        rewrite_message: bool,
+    ) -> None:
+        def output(occurrences: list[int], message: str) -> RunOutput:
+            diagnostic: Diagnostic = {
+                "level": "error",
+                "lint_name": "invalid-argument-type",
+                "path": "a.py",
+                "line": 1,
+                "column": 1,
+                "message": message,
+            }
+            runs = [[diagnostic] * count for count in occurrences]
+            stable, flaky = classify_diagnostics(runs)
+            return _make_output("project", stable, flaky, flaky_runs=len(runs))
+
+        old_output = output(old_occurrences, "Expected `Series`")
+        new_output = output(
+            new_occurrences,
+            "Expected `pandas.Series`" if rewrite_message else "Expected `Series`",
+        )
+        diff = _make_diff([old_output], [new_output])
+        statistics = diff._calculate_statistics()
+
+        assert old_output["flaky_diagnostics"] or new_output["flaky_diagnostics"]
+        assert statistics["total_changed"] == int(rewrite_message)
+        assert statistics["total_added"] == 0
+        assert statistics["total_removed"] == 0
+
+    @pytest.mark.parametrize(
+        ("old_messages", "new_messages", "changed", "added", "removed"),
+        [
+            pytest.param(
+                [[], []],
+                [["new diagnostic", "new diagnostic"], ["new diagnostic"]],
+                0,
+                1,
+                0,
+                id="added",
+            ),
+            pytest.param(
+                [["old diagnostic", "old diagnostic"], ["old diagnostic"]],
+                [[], []],
+                0,
+                0,
+                1,
+                id="removed",
+            ),
+            pytest.param(
+                [["old diagnostic", "old diagnostic"], ["old diagnostic"]],
+                [["new diagnostic"], ["new diagnostic"]],
+                1,
+                0,
+                0,
+                id="changed-old-flaky",
+            ),
+            pytest.param(
+                [["old diagnostic"], ["old diagnostic"]],
+                [["new diagnostic", "new diagnostic"], ["new diagnostic"]],
+                1,
+                0,
+                0,
+                id="changed-new-flaky",
+            ),
+            pytest.param(
+                [["old diagnostic", "old diagnostic"], ["old diagnostic"]],
+                [["new diagnostic", "new diagnostic"], ["new diagnostic"]],
+                1,
+                0,
+                0,
+                id="changed-both-flaky",
+            ),
+        ],
+    )
+    def test_stable_occurrences_survive_their_own_flaky_duplicate(
+        self,
+        old_messages: list[list[str]],
+        new_messages: list[list[str]],
+        changed: int,
+        added: int,
+        removed: int,
+    ) -> None:
+        def output(messages: list[list[str]]) -> RunOutput:
+            runs: list[list[Diagnostic]] = [
+                [
+                    {
+                        "level": "error",
+                        "lint_name": "invalid-argument-type",
+                        "path": "a.py",
+                        "line": 1,
+                        "column": 1,
+                        "message": message,
+                    }
+                    for message in run
+                ]
+                for run in messages
+            ]
+            stable, flaky = classify_diagnostics(runs)
+            return _make_output("project", stable, flaky, flaky_runs=len(runs))
+
+        diff = _make_diff([output(old_messages)], [output(new_messages)])
+        statistics = diff._calculate_statistics()
+
+        assert statistics["total_changed"] == changed
+        assert statistics["total_added"] == added
+        assert statistics["total_removed"] == removed
+
+        markdown = diff.render_statistics_markdown()
+        html = _render_html(diff)
+        for messages in (*old_messages, *new_messages):
+            for message in messages:
+                assert message in markdown
+                assert message in html
+
+    @pytest.mark.parametrize(
+        "stable_lint_name",
+        [
+            pytest.param("flaky-lint", id="same-lint"),
+            pytest.param("stable-lint", id="different-lint"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ("old_message", "new_message", "changed", "added", "removed"),
+        [
+            pytest.param(None, "new stable diagnostic", 0, 1, 0, id="added"),
+            pytest.param("old stable diagnostic", None, 0, 0, 1, id="removed"),
+            pytest.param(
+                "old stable diagnostic",
+                "new stable diagnostic",
+                1,
+                0,
+                0,
+                id="changed",
+            ),
+        ],
+    )
+    def test_stable_diagnostics_survive_unrelated_flaky_duplicate(
+        self,
+        old_message: str | None,
+        new_message: str | None,
+        changed: int,
+        added: int,
+        removed: int,
+        stable_lint_name: str,
+    ) -> None:
+        duplicate: Diagnostic = {
+            "level": "error",
+            "lint_name": "flaky-lint",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "intermittently duplicated diagnostic",
+        }
+
+        def output(message: str | None) -> RunOutput:
+            other_diagnostics: list[Diagnostic] = []
+            if message is not None:
+                other_diagnostics.append({
+                    **duplicate,
+                    "lint_name": stable_lint_name,
+                    "message": message,
+                })
+
+            runs = [
+                [duplicate, duplicate, *other_diagnostics],
+                [duplicate, *other_diagnostics],
+            ]
+            stable, flaky = classify_diagnostics(runs)
+            return _make_output("project", stable, flaky, flaky_runs=len(runs))
+
+        diff = _make_diff([output(old_message)], [output(new_message)])
+        statistics = diff._calculate_statistics()
+
+        assert statistics["total_changed"] == changed
+        assert statistics["total_added"] == added
+        assert statistics["total_removed"] == removed
+
+        markdown = diff.render_statistics_markdown()
+        html = _render_html(diff)
+        for message in (old_message, new_message):
+            if message is not None:
+                assert message in markdown
+                assert message in html
+
+    @pytest.mark.parametrize(
+        "vary_lint_names",
+        [
+            pytest.param(False, id="same-lint"),
+            pytest.param(True, id="different-lints"),
+        ],
+    )
+    @pytest.mark.parametrize(
+        ("old_messages", "new_messages"),
+        [
+            pytest.param(
+                ["Expected `int`"] * 5 + ["Expected `str`"] * 5,
+                ["Expected `bytes`"] * 10,
+                id="apparently-added",
+            ),
+            pytest.param(
+                ["Expected `bytes`"] * 10,
+                ["Expected `int`"] * 5 + ["Expected `str`"] * 5,
+                id="apparently-removed",
+            ),
+        ],
+    )
+    def test_independently_sampled_flaky_variants_are_excluded_from_statistics(
+        self,
+        old_messages: list[str],
+        new_messages: list[str],
+        vary_lint_names: bool,
+    ) -> None:
+        lint_names = {
+            "Expected `int`": "invalid-argument-type",
+            "Expected `str`": "invalid-return-type",
+            "Expected `bytes`": "invalid-assignment",
+        }
+
+        def output(messages: list[str]) -> RunOutput:
+            runs: list[list[Diagnostic]] = [
+                [
+                    {
+                        "level": "error",
+                        "lint_name": (
+                            lint_names[message]
+                            if vary_lint_names
+                            else "invalid-argument-type"
+                        ),
+                        "path": "a.py",
+                        "line": 1,
+                        "column": 1,
+                        "message": message,
+                    }
+                ]
+                for message in messages
+            ]
+            stable, flaky = classify_diagnostics(runs)
+            return _make_output("project", stable, flaky, flaky_runs=len(runs))
+
+        diff = _make_diff([output(old_messages)], [output(new_messages)])
+        statistics = diff._calculate_statistics()
+
+        assert statistics["total_changed"] == 0
+        assert statistics["total_added"] == 0
+        assert statistics["total_removed"] == 0
+        assert "Expected `bytes`" not in diff.render_statistics_markdown()
+        assert "Expected `bytes`" not in _render_html(diff)
 
     def test_competing_rewritten_diagnostics_are_matched_globally(self) -> None:
         """Competing rewrites are paired by the best assignment for the whole group."""

@@ -703,25 +703,43 @@ class DiagnosticDiff:
             old_flaky = old_project["flaky_diagnostics"]
             new_flaky = new_project["flaky_diagnostics"]
 
-            # Reconcile stable vs flaky: exclude stable diagnostics at
-            # locations that are flaky on either side.  A stable diagnostic
-            # at a flaky location is unreliable — it just happened to appear
-            # in all N runs of this batch, but is nondeterministic.
-            all_flaky_locs: set[SourceLocationKey] = set()
-            for loc in old_flaky:
-                all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
-            for loc in new_flaky:
-                all_flaky_locs.add((loc["path"], loc["line"], loc["column"]))
+            # Intermittent duplicates overlap an identical stable diagnostic.
+            # Preserve guaranteed occurrences, but disregard fluctuating
+            # duplicate counts for unchanged or rewritten diagnostics.
+            # Other flaky variants may represent different sampled messages
+            # or lints and require location-level matching.
+            flaky_duplicate_diagnostics: set[str] = set()
+            sampled_flaky_locations: set[SourceLocationKey] = set()
+            for project in (old_project, new_project):
+                stable_diagnostics = {
+                    self._format_diagnostic(diagnostic)
+                    for diagnostic in project["diagnostics"]
+                }
+                for location in project["flaky_diagnostics"]:
+                    for variant in location["variants"]:
+                        diagnostic = variant["diagnostic"]
+                        formatted = self._format_diagnostic(diagnostic)
+                        if formatted in stable_diagnostics:
+                            flaky_duplicate_diagnostics.add(formatted)
+                        else:
+                            sampled_flaky_locations.add((
+                                diagnostic["path"],
+                                diagnostic["line"],
+                                diagnostic["column"],
+                            ))
 
-            old_diagnostics = [
-                d
-                for d in old_project["diagnostics"]
-                if (d["path"], d["line"], d["column"]) not in all_flaky_locs
-            ]
-            new_diagnostics = [
-                d
-                for d in new_project["diagnostics"]
-                if (d["path"], d["line"], d["column"]) not in all_flaky_locs
+            old_diagnostics, new_diagnostics = [
+                [
+                    diagnostic
+                    for diagnostic in project["diagnostics"]
+                    if (
+                        diagnostic["path"],
+                        diagnostic["line"],
+                        diagnostic["column"],
+                    )
+                    not in sampled_flaky_locations
+                ]
+                for project in (old_project, new_project)
             ]
 
             # Compare stable diagnostics
@@ -729,7 +747,9 @@ class DiagnosticDiff:
             new_diagnostics_by_file = self._group_diagnostics_by_file(new_diagnostics)
 
             file_diffs = self._compare_files(
-                old_diagnostics_by_file, new_diagnostics_by_file
+                old_diagnostics_by_file,
+                new_diagnostics_by_file,
+                flaky_duplicate_diagnostics,
             )
 
             # Reconcile flaky vs stable: exclude flaky locations that also
@@ -831,6 +851,7 @@ class DiagnosticDiff:
         self,
         old_files: dict[str, list[Diagnostic]],
         new_files: dict[str, list[Diagnostic]],
+        flaky_duplicate_diagnostics: set[str],
     ) -> FileDiffData:
         """Compare diagnostics across files."""
         result: FileDiffData = {
@@ -885,7 +906,9 @@ class DiagnosticDiff:
             new_diagnostics_by_line = self._group_diagnostics_by_line(new_diagnostics)
 
             line_diffs = self._compare_lines(
-                old_diagnostics_by_line, new_diagnostics_by_line
+                old_diagnostics_by_line,
+                new_diagnostics_by_line,
+                flaky_duplicate_diagnostics,
             )
 
             if (
@@ -922,6 +945,7 @@ class DiagnosticDiff:
         self,
         old_lines: dict[int, list[Diagnostic]],
         new_lines: dict[int, list[Diagnostic]],
+        flaky_duplicate_diagnostics: set[str],
     ) -> LineDiffData:
         """Compare diagnostics across lines."""
         result: LineDiffData = {
@@ -963,66 +987,75 @@ class DiagnosticDiff:
             old_diagnostics = old_lines[line_num]
             new_diagnostics = new_lines[line_num]
 
-            # Convert to formatted strings for comparison
-            old_formatted = {self._format_diagnostic(d) for d in old_diagnostics}
-            new_formatted = {self._format_diagnostic(d) for d in new_diagnostics}
+            old_formatted = Counter(
+                self._format_diagnostic(diagnostic) for diagnostic in old_diagnostics
+            )
+            new_formatted = Counter(
+                self._format_diagnostic(diagnostic) for diagnostic in new_diagnostics
+            )
 
-            # Find differences
             removed = old_formatted - new_formatted
             added = new_formatted - old_formatted
 
+            for diagnostic in (
+                flaky_duplicate_diagnostics
+                & old_formatted.keys()
+                & new_formatted.keys()
+            ):
+                removed.pop(diagnostic, None)
+                added.pop(diagnostic, None)
+
             if removed or added:
-                # Find line-by-line diffs for each diagnostic
                 text_diffs: list[DiagnosticTextDiff] = []
-                changed_old_formatted = set()
-                changed_new_formatted = set()
+                flaky_changed_diagnostics: set[tuple[str, str]] = set()
 
-                removed_diagnostics = [
-                    d for d in old_diagnostics if self._format_diagnostic(d) in removed
-                ]
-                added_diagnostics = [
-                    d for d in new_diagnostics if self._format_diagnostic(d) in added
-                ]
+                while removed and added:
+                    removed_diagnostics = self._diagnostics_with_counts(
+                        old_diagnostics, removed
+                    )
+                    added_diagnostics = self._diagnostics_with_counts(
+                        new_diagnostics, added
+                    )
+                    changed_diagnostics = self._match_changed_diagnostics(
+                        removed_diagnostics, added_diagnostics
+                    )
+                    if not changed_diagnostics:
+                        break
 
-                # Exact string matches are gone. A diagnostic whose text changed
-                # should be reported as one change, not as one removal plus one
-                # addition. Match likely old and new versions before recording
-                # anything left over.
-                for old_diag, new_diag in self._match_changed_diagnostics(
-                    removed_diagnostics, added_diagnostics
-                ):
-                    old_str = self._format_diagnostic(old_diag)
-                    new_str = self._format_diagnostic(new_diag)
-                    diff = self._generate_text_diff(old_str, new_str)
-                    if diff:
+                    for old_diag, new_diag in changed_diagnostics:
+                        old_str = self._format_diagnostic(old_diag)
+                        new_str = self._format_diagnostic(new_diag)
                         text_diffs.append({
                             "old": old_diag,
                             "new": new_diag,
-                            "diff": diff,
+                            "diff": self._generate_text_diff(old_str, new_str),
                         })
-                        changed_old_formatted.add(old_str)
-                        changed_new_formatted.add(new_str)
+                        if (
+                            old_str in flaky_duplicate_diagnostics
+                            or new_str in flaky_duplicate_diagnostics
+                        ):
+                            flaky_changed_diagnostics.add((old_str, new_str))
 
-                # Filter out diagnostics that are part of changes
-                removed_diagnostics = [
-                    d
-                    for d in old_diagnostics
-                    if self._format_diagnostic(d) in removed
-                    and self._format_diagnostic(d) not in changed_old_formatted
-                ]
-                added_diagnostics = [
-                    d
-                    for d in new_diagnostics
-                    if self._format_diagnostic(d) in added
-                    and self._format_diagnostic(d) not in changed_new_formatted
-                ]
-                # Sort removed and added diagnostics
+                        occurrences = min(removed[old_str], added[new_str])
+                        removed[old_str] -= occurrences
+                        added[new_str] -= occurrences
+                        if removed[old_str] == 0:
+                            del removed[old_str]
+                        if added[new_str] == 0:
+                            del added[new_str]
+
+                # Finish matching distinct rewrites before discarding surplus
+                # copies whose multiplicity fluctuated in either revision.
+                for old_str, new_str in flaky_changed_diagnostics:
+                    removed.pop(old_str, None)
+                    added.pop(new_str, None)
+
                 removed_diagnostics = sorted(
-                    removed_diagnostics,
+                    self._diagnostics_with_counts(old_diagnostics, removed),
                     key=lambda d: (d["column"], d["message"]),
                 )
                 added_diagnostics = sorted(
-                    added_diagnostics,
+                    self._diagnostics_with_counts(new_diagnostics, added),
                     key=lambda d: (d["column"], d["message"]),
                 )
 
@@ -1033,6 +1066,21 @@ class DiagnosticDiff:
                     "text_diffs": text_diffs,
                 })
 
+        return result
+
+    def _diagnostics_with_counts(
+        self,
+        diagnostics: list[Diagnostic],
+        counts: Counter[str],
+    ) -> list[Diagnostic]:
+        """Return each diagnostic at most as often as its remaining occurrence count."""
+        remaining = counts.copy()
+        result = []
+        for diagnostic in diagnostics:
+            formatted = self._format_diagnostic(diagnostic)
+            if remaining[formatted]:
+                result.append(diagnostic)
+                remaining[formatted] -= 1
         return result
 
     def _match_changed_diagnostics(
