@@ -132,8 +132,8 @@ class TestClassifyDiagnostics:
         assert flaky[0]["column"] == 1
         assert flaky[1]["column"] == 5
 
-    def test_deduplication_within_run(self) -> None:
-        """Duplicate diagnostics within a single run don't inflate counts."""
+    def test_duplicate_occurrences_are_classified_independently(self) -> None:
+        """Extra copies present in only some runs are flaky occurrences."""
         d = _diag("a.py", 1, 1, "msg")
 
         stable, flaky = classify_diagnostics([
@@ -141,8 +141,37 @@ class TestClassifyDiagnostics:
             [d],
         ])
 
-        assert len(stable) == 1
-        assert len(flaky) == 0
+        assert stable == [d]
+        assert len(flaky) == 1
+        assert [variant["count"] for variant in flaky[0]["variants"]] == [1, 1]
+        assert all(variant["diagnostic"] == d for variant in flaky[0]["variants"])
+
+    def test_duplicate_diagnostics_present_in_every_run_are_preserved(self) -> None:
+        """Stable diagnostics retain the multiplicity shared by every run."""
+        diagnostic = _diag("a.py", 1, 1, "msg")
+
+        stable, flaky = classify_diagnostics([
+            [diagnostic, diagnostic],
+            [diagnostic, diagnostic],
+            [diagnostic, diagnostic],
+        ])
+
+        assert stable == [diagnostic, diagnostic]
+        assert flaky == []
+
+    def test_duplicate_occurrences_preserve_individual_frequencies(self) -> None:
+        """Each intermittent duplicate records how many runs contained that copy."""
+        diagnostic = _diag("a.py", 1, 1, "msg")
+
+        stable, flaky = classify_diagnostics([
+            [diagnostic, diagnostic, diagnostic],
+            [diagnostic, diagnostic],
+            [diagnostic, diagnostic, diagnostic, diagnostic],
+        ])
+
+        assert stable == [diagnostic, diagnostic]
+        assert len(flaky) == 1
+        assert [variant["count"] for variant in flaky[0]["variants"]] == [2, 1]
 
     def test_two_runs_minimum(self) -> None:
         """Two runs is the minimum for flaky detection."""
