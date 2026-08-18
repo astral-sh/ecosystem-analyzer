@@ -104,3 +104,8 @@ dev = ["pytest>=8.4.1", "ty==0.0.72"]
 no-build = true
 # The project is installed locally, and mypy-primer is pinned to Git.
 no-binary-package = ["ecosystem-analyzer", "mypy-primer"]
+# Pin the isolated build environment for source-build exceptions.
+build-constraint-dependencies = [
+    "setuptools==84.0.0",
+    "uv-build==0.12.3",
+]
