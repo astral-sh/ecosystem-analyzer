@@ -99,3 +99,8 @@ exclude = ["plots"]
 
 [dependency-groups]
 dev = ["pytest>=8.4.1", "ty==0.0.72"]
+
+[tool.uv]
+no-build = true
+# The project is installed locally, and mypy-primer is pinned to Git.
+no-binary-package = ["ecosystem-analyzer", "mypy-primer"]
