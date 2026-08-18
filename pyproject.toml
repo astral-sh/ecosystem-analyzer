@@ -99,3 +99,8 @@ exclude = ["plots"]
 
 [dependency-groups]
 dev = ["pytest>=8.4.1", "ty==0.0.72"]
+
+[tool.uv]
+no-build = true
+# This dependency is intentionally pinned to a Git revision.
+no-binary-package = ["mypy-primer"]
