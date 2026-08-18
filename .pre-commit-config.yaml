@@ -49,11 +49,14 @@ repos:
       - id: check-github-workflows
         priority: 0
 
-  - repo: https://github.com/rbubley/mirrors-prettier
-    rev: v3.9.6
+  - repo: local
     hooks:
       - id: prettier
+        name: prettier
+        entry: node scripts/prettier.cjs --write --ignore-unknown --
+        language: system
         types: [yaml]
+        require_serial: true
         priority: 2
 
   - repo: https://github.com/rhysd/actionlint

@@ -20,6 +20,10 @@ Use `uv` for all local work.
 - `uv run ecosystem-analyzer --repository ~/ty run --project-name <project> --commit <ty-commit> --output project-diagnostics.json`: analyze one project against a `ty` checkout.
 - `uv run ecosystem-analyzer generate-report project-diagnostics.json --output report.html`: render an HTML report from saved diagnostics.
 
+The local Prettier hook requires Node.js and npm on `PATH`; CI uses Node.js 24.
+It runs `npm ci --ignore-scripts` against the checked-in `package-lock.json`
+before formatting files.
+
 ## Compatibility Policy
 
 This project has no public, stable API. Retaining compatibility code for old CLI behavior, output schemas, or other internal interfaces is unnecessary and undesirable; prefer updating callers and removing obsolete paths.
