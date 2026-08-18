@@ -2,7 +2,7 @@ fail_fast: false
 
 # Priority 0: Read-only hooks; trailing whitespace
 # Priority 1: end-of-file-fixer
-# Priority 2: prettier, Ruff linter
+# Priority 2: Ruff linter
 # Priority 3: zizmor, Ruff formatter
 
 repos:
@@ -48,16 +48,6 @@ repos:
         priority: 0
       - id: check-github-workflows
         priority: 0
-
-  - repo: local
-    hooks:
-      - id: prettier
-        name: prettier
-        entry: node scripts/prettier.cjs --write --ignore-unknown --
-        language: system
-        types: [yaml]
-        require_serial: true
-        priority: 2
 
   - repo: https://github.com/rhysd/actionlint
     rev: v1.7.12

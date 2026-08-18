@@ -62,7 +62,4 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: "true"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: "24"
       - run: uvx prek run --all-files

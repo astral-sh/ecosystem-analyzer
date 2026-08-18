@@ -7,7 +7,7 @@
   schedule: ["before 4am on Monday"],
   semanticCommits: "disabled",
   separateMajorMinor: false,
-  enabledManagers: ["pre-commit", "pep621", "github-actions", "npm"],
+  enabledManagers: ["pre-commit", "pep621", "github-actions"],
   "pre-commit": {
     enabled: true,
   },

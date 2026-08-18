@@ -1,7 +1,0 @@
-{
-  "name": "ecosystem-analyzer-dev",
-  "private": true,
-  "devDependencies": {
-    "prettier": "3.9.6"
-  }
-}

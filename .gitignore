@@ -17,6 +17,3 @@ wheels/
 
 # Virtual environments
 .venv
-
-# JavaScript development tools
-/node_modules/
