@@ -98,7 +98,7 @@ unsupported-dynamic-base = "warn"
 exclude = ["plots"]
 
 [dependency-groups]
-dev = ["pytest>=8.4.1", "ty==0.0.72"]
+dev = ["pytest>=8.4.1", "ty==0.0.73"]
 
 [tool.uv]
 no-build = true
