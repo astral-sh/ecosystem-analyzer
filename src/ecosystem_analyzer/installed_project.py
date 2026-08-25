@@ -8,7 +8,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from git import GitError, Repo
+from git import GitCommandError, GitError, Repo
 from mypy_primer.model import Project
 
 from .config import MINIMUM_PYTHON_VERSION
@@ -266,4 +266,59 @@ class InstalledProject:
                 capture_output=False,
             )
         if not self._project.install_cmd and not self._project.deps:
-            logger.info("No dependencies to install")
+            logger.info("No project dependencies to install")
+
+        if os.environ.get("TY_UV") in {"scripts", "1", "true"}:
+            self._install_script_dependencies()
+
+    def _install_script_dependencies(self) -> None:
+        # Prepare script environments before timing either ty revision, so the baseline
+        # does not pay installation costs that subsequent runs avoid through cache reuse.
+        # This marker search is intentionally approximate; ty still validates the metadata.
+        try:
+            scripts = self._repo.git.grep(
+                "--files-with-matches",
+                "--null",
+                "--extended-regexp",
+                "^# /// script[[:space:]]*$",
+                "--",
+                "*.py",
+                "*.pyi",
+            )
+        except GitCommandError as error:
+            if error.status == 1:
+                return
+            raise
+
+        for script in scripts.split("\0"):
+            if not script:
+                continue
+            path = self.root_directory / script
+            logger.info(f"Preparing script environment: {path}")
+            try:
+                result = subprocess.run(
+                    [
+                        os.environ.get("UV", "uv"),
+                        "sync",
+                        "--quiet",
+                        "--script",
+                        str(path),
+                        "--python",
+                        str(self.venv_path),
+                    ],
+                    cwd=path.parent,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=180,
+                )
+            except subprocess.TimeoutExpired:
+                logger.warning(f"Timed out preparing script environment: {path}")
+                continue
+
+            if result.returncode != 0:
+                # Invalid metadata and unsatisfiable dependencies are reported by ty;
+                # a preparation failure must not prevent the project from being checked.
+                logger.warning(
+                    f"Failed to prepare script environment for {path}: {result.stderr.strip()}"
+                )
