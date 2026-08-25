@@ -274,7 +274,8 @@ class InstalledProject:
     def _install_script_dependencies(self) -> None:
         # Prepare script environments before timing either ty revision, so the baseline
         # does not pay installation costs that subsequent runs avoid through cache reuse.
-        # This marker search is intentionally approximate; ty still validates the metadata.
+        # This marker search is intentionally approximate; ty still applies exclusions
+        # and validates the metadata.
         try:
             scripts = self._repo.git.grep(
                 "--files-with-matches",
@@ -282,8 +283,7 @@ class InstalledProject:
                 "--extended-regexp",
                 "^# /// script[[:space:]]*$",
                 "--",
-                "*.py",
-                "*.pyi",
+                *self.paths,
             )
         except GitCommandError as error:
             if error.status == 1:
@@ -291,7 +291,7 @@ class InstalledProject:
             raise
 
         for script in scripts.split("\0"):
-            if not script:
+            if Path(script).suffix not in {".py", ".pyi"}:
                 continue
             path = self.root_directory / script
             logger.info(f"Preparing script environment: {path}")
