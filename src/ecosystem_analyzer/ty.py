@@ -12,6 +12,7 @@ from pathlib import Path
 
 from git import Commit, Repo
 
+from .config import UV_NO_BUILD_ENV
 from .diagnostic import DiagnosticsParser, index_panic_messages
 from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
@@ -177,6 +178,7 @@ class Ty:
                 *project.paths,
             ]
         logger.debug(f"Executing: {' '.join(cmd)}")
+        env = {**os.environ, **UV_NO_BUILD_ENV}
         start_time = time.time()
         try:
             result = subprocess.run(
@@ -186,6 +188,7 @@ class Ty:
                 capture_output=True,
                 text=True,
                 timeout=30 if self.profile in {"profiling", "release"} else 180,
+                env=env,
             )
 
             execution_time = time.time() - start_time

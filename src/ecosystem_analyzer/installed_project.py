@@ -11,7 +11,7 @@ from pathlib import Path
 from git import GitCommandError, GitError, Repo
 from mypy_primer.model import Project
 
-from .config import MINIMUM_PYTHON_VERSION
+from .config import MINIMUM_PYTHON_VERSION, UV_NO_BUILD_ENV
 
 logger = logging.getLogger(__name__)
 
@@ -290,6 +290,7 @@ class InstalledProject:
                 return
             raise
 
+        env = {**os.environ, **UV_NO_BUILD_ENV}
         for script in scripts.split("\0"):
             if Path(script).suffix not in {".py", ".pyi"}:
                 continue
@@ -311,6 +312,7 @@ class InstalledProject:
                     capture_output=True,
                     text=True,
                     timeout=180,
+                    env=env,
                 )
             except subprocess.TimeoutExpired:
                 logger.warning(f"Timed out preparing script environment: {path}")
