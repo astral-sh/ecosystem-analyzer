@@ -272,8 +272,9 @@ class InstalledProject:
             self._install_script_dependencies()
 
     def _install_script_dependencies(self) -> None:
-        # Prepare script environments before timing either ty revision, so the baseline
-        # does not pay installation costs that subsequent runs avoid through cache reuse.
+        # Match ty's metadata sync before timing either revision, so the baseline
+        # does not pay resolution and installation costs that subsequent runs avoid
+        # through cache reuse.
         # This marker search is intentionally approximate; ty still applies exclusions
         # and validates the metadata.
         try:
@@ -300,7 +301,9 @@ class InstalledProject:
                 result = subprocess.run(
                     [
                         os.environ.get("UV", "uv"),
-                        "sync",
+                        "workspace",
+                        "metadata",
+                        "--sync",
                         "--quiet",
                         "--script",
                         str(path),
