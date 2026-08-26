@@ -7,7 +7,7 @@ fail_fast: false
 
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v6.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
         priority: 0
@@ -26,20 +26,20 @@ repos:
         args: [--pytest-test-first]
 
   - repo: https://github.com/abravalheri/validate-pyproject
-    rev: v0.25
+    rev: 4b2e70d08cb2ccd26d1fba73588de41c7a5d50b7 # frozen: v0.25
     hooks:
       - id: validate-pyproject
         priority: 0
 
   - repo: https://github.com/zizmorcore/zizmor-pre-commit
-    rev: v1.29.0
+    rev: 451b56af716f9f0d0c2b816503a3fd0cf8b036fa # frozen: v1.29.0
     hooks:
       - id: zizmor
         args: [--fix=safe]
         priority: 3
 
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.37.4
+    rev: 6b63472e72e1a91ed8a2f6d483790dfb644fa1d3 # frozen: 0.37.4
     hooks:
       - id: check-renovate
         language: python # means renovate will update the `additional_dependencies` for the hook
@@ -50,13 +50,13 @@ repos:
         priority: 0
 
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.12
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca # frozen: v1.7.12
     hooks:
       - id: actionlint
         priority: 0
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.16.4
+    rev: aab412d509121cb5f7533134b7e67f9fab59c682 # frozen: v0.16.4
     hooks:
       - id: ruff-check
         args: [--fix, --exit-non-zero-on-fix]
@@ -65,3 +65,10 @@ repos:
         priority: 2
       - id: ruff-format
         priority: 3
+
+  - repo: https://github.com/astral-sh/uv-pre-commit
+    rev: 856f55170f70dc7523c45a215ecdedc44709e2a6 # frozen: 0.12.6
+    hooks:
+      - id: uv-lock
+        priority: 0
+        args: [--default-index=https://pypi.org/simple]

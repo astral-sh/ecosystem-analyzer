@@ -34,7 +34,7 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: "true"
-      - run: uv run pytest -v
+      - run: uv run --locked pytest -v
 
   ty:
     runs-on: ubuntu-latest
@@ -48,7 +48,7 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: "true"
-      - run: uv run ty check
+      - run: uv run --locked ty check
 
   lint:
     runs-on: ubuntu-latest
@@ -62,4 +62,4 @@ jobs:
         with:
           version: "0.12.5"
           enable-cache: "true"
-      - run: uvx prek run --all-files
+      - run: uv run --locked --only-group=prek prek run --all-files
