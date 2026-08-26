@@ -298,25 +298,31 @@ class InstalledProject:
             path = self.root_directory / script
             logger.info(f"Preparing script environment: {path}")
             try:
-                result = subprocess.run(
-                    [
-                        os.environ.get("UV", "uv"),
-                        "workspace",
-                        "metadata",
-                        "--sync",
-                        "--quiet",
-                        "--script",
-                        str(path),
-                        "--python",
-                        str(self.venv_path),
-                    ],
-                    cwd=path.parent,
-                    check=False,
-                    capture_output=True,
-                    text=True,
-                    timeout=180,
-                    env=env,
-                )
+                # FIXME: uv does not populate its interpreter cache when creating a
+                # script environment. Sync twice to warm it before timing either
+                # revision. Remove the second sync once uv caches it during creation.
+                for _ in range(2):
+                    result = subprocess.run(
+                        [
+                            os.environ.get("UV", "uv"),
+                            "workspace",
+                            "metadata",
+                            "--sync",
+                            "--quiet",
+                            "--script",
+                            str(path),
+                            "--python",
+                            str(self.venv_path),
+                        ],
+                        cwd=path.parent,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=180,
+                        env=env,
+                    )
+                    if result.returncode != 0:
+                        break
             except subprocess.TimeoutExpired:
                 logger.warning(f"Timed out preparing script environment: {path}")
                 continue
