@@ -99,6 +99,7 @@ exclude = ["plots"]
 
 [dependency-groups]
 dev = ["pytest>=8.4.1", "ty==0.0.74"]
+prek = ["prek"]
 
 [tool.uv]
 # Work around Renovate not enforcing its configured cooldown for lockfile-maintenance PRs:
