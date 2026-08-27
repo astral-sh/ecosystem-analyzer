@@ -1873,13 +1873,17 @@ class DiagnosticDiff:
         # Set up Jinja2 environment with package loader
         try:
             # Try PackageLoader first (works for installed packages)
-            env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+            env = Environment(
+                loader=PackageLoader("ecosystem_analyzer", "templates"), autoescape=True
+            )
         except (ImportError, FileNotFoundError):
             # Fallback to FileSystemLoader for development
             template_path = Path(__file__).parent.parent.parent / "templates"
             if not template_path.exists():
                 template_path = Path("templates")
-            env = Environment(loader=FileSystemLoader(str(template_path)))
+            env = Environment(
+                loader=FileSystemLoader(str(template_path)), autoescape=True
+            )
 
         template = env.get_template("diff.html")
 
@@ -1934,13 +1938,17 @@ class DiagnosticDiff:
         # Set up Jinja2 environment with package loader
         try:
             # Try PackageLoader first (works for installed packages)
-            env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+            env = Environment(
+                loader=PackageLoader("ecosystem_analyzer", "templates"), autoescape=True
+            )
         except (ImportError, FileNotFoundError):
             # Fallback to FileSystemLoader for development
             template_path = Path(__file__).parent.parent.parent / "templates"
             if not template_path.exists():
                 template_path = Path("templates")
-            env = Environment(loader=FileSystemLoader(str(template_path)))
+            env = Environment(
+                loader=FileSystemLoader(str(template_path)), autoescape=True
+            )
 
         template = env.get_template("timing_diff.html")
 
