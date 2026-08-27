@@ -3,7 +3,7 @@ name = "ecosystem-analyzer"
 version = "0.1.0"
 description = "A tool for analyzing Python projects with ty"
 dependencies = [
-    "gitpython==3.1.57",
+    "gitpython==3.1.59",
     "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@3058720299b812c393ad926bcca96eede20fa683",
     "click==8.4.2",
     "jinja2==3.1.6",
@@ -108,7 +108,8 @@ prek = ["prek"]
 # https://github.com/astral-sh/renovate-config/blob/0146d963693a5335c975355d8383fe6933f5dc95/preset.json5#L46
 exclude-newer = "P30D"
 # Exempt the Astral tools pinned in this project.
-exclude-newer-package = { ty = false, uv-build = false }
+# Also exempt gitpython, which has a newer security release that we want to upgrade to.
+exclude-newer-package = { ty = false, uv-build = false, gitpython = false }
 no-build = true
 # The project is installed locally, and mypy-primer is pinned to Git.
 no-binary-package = ["ecosystem-analyzer", "mypy-primer"]
