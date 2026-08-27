@@ -803,7 +803,7 @@
                             {% endfor %}
                             <tr class="show-more-row">
                                 <td colspan="4" style="text-align: center; padding: 8px;">
-                                    <button class="show-more-btn" onclick="toggleProjectRows(this)">
+                                    <button class="show-more-btn">
                                         Show {{ statistics.merged_by_project|length - 20 }} more projects
                                     </button>
                                 </td>
@@ -1001,7 +1001,7 @@
             <div class="file">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ path }}">📋</button>
                 </div>
                 {% for diag in diagnostics %}
                 {{ render_diagnostic(diag, "added", project.project) }}
@@ -1023,7 +1023,7 @@
             <div class="file">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ path }}">📋</button>
                 </div>
                 {% for diag in diagnostics %}
                 {{ render_diagnostic(diag, "removed", project.project) }}
@@ -1043,7 +1043,7 @@
             <div class="file added">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ file_data.path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ file_data.path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ file_data.path }}">📋</button>
                 </div>
                 {% for diag in file_data.diagnostics %}
                 {{ render_diagnostic(diag, "added", project.project) }}
@@ -1063,7 +1063,7 @@
             <div class="file removed">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ file_data.path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ file_data.path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ file_data.path }}">📋</button>
                 </div>
                 {% for diag in file_data.diagnostics %}
                 {{ render_diagnostic(diag, "removed", project.project) }}
@@ -1083,7 +1083,7 @@
             <div class="file modified">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ file_data.path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ file_data.path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ file_data.path }}">📋</button>
                 </div>
                 {% if file_data.diffs.added_lines %}
                 {% for line_data in file_data.diffs.added_lines %}
@@ -1158,7 +1158,7 @@
             <div class="file modified">
                 <div class="file-header-with-copy">
                     <h4 style="margin: 0;">{{ flaky_path }}</h4>
-                    <button class="copy-btn" onclick="copyPath(this, '{{ flaky_path }}')">📋</button>
+                    <button class="copy-btn" data-copy-path="{{ flaky_path }}">📋</button>
                 </div>
                 {% for loc in ffd.added %}
                 {{ render_flaky_location(loc, "added", project.project) }}
@@ -1180,8 +1180,8 @@
     </div>
 
     <script>
-        function copyPath(button, path) {
-            navigator.clipboard.writeText(path).then(function() {
+        function copyPath(button) {
+            navigator.clipboard.writeText(button.dataset.copyPath).then(function() {
                 // Show success feedback
                 button.textContent = '✓';
                 button.classList.add('copied');
@@ -1217,6 +1217,13 @@
         }
 
         document.addEventListener('DOMContentLoaded', function() {
+            document.querySelectorAll('.copy-btn').forEach(button => {
+                button.addEventListener('click', () => copyPath(button));
+            });
+            document.querySelectorAll('.show-more-btn').forEach(button => {
+                button.addEventListener('click', () => toggleProjectRows(button));
+            });
+
             const filterButtons = document.querySelectorAll('.filter-btn');
             const lintFilter = document.getElementById('lint-filter');
             const projectFilter = document.getElementById('project-filter');
