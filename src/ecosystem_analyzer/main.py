@@ -494,8 +494,7 @@ def history(
 
     last_commits = get_latest_ty_commits(repository, num_commits)
 
-    for commit in last_commits:
-        message = commit.message.splitlines()[0]
+    for _, message in last_commits:
         logger.debug(f"Found commit: {message}")
 
     ecosystem_projects = get_ecosystem_projects()
@@ -517,10 +516,8 @@ def history(
 
     statistics: list[CommitStatistics] = []
 
-    for idx, commit in enumerate(last_commits):
-        message = commit.message.splitlines()[0]
-        assert isinstance(message, str)
-        sha = commit.hexsha[:7]
+    for idx, (commit, message) in enumerate(last_commits):
+        sha = commit[:7]
         logger.debug(f"Analyzing commit: {message}")
 
         run_outputs = manager.run_for_commit(commit)

@@ -8,10 +8,10 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from git import GitCommandError, GitError, Repo
 from mypy_primer.model import Project
 
 from .config import MINIMUM_PYTHON_VERSION, UV_NO_BUILD_ENV
+from .process import run
 
 logger = logging.getLogger(__name__)
 
@@ -64,8 +64,6 @@ def validate_exclude_newer(value: str) -> dt.datetime:
 class InstalledProject:
     """An ecosystem project with a cached checkout and isolated environment."""
 
-    _repo: Repo
-
     def __init__(self, project: Project, exclude_newer: str | None = None) -> None:
         self._project = project
         self._exclude_newer = exclude_newer
@@ -106,7 +104,9 @@ class InstalledProject:
     def default_branch(self) -> str:
         """The active branch of the cached project checkout."""
 
-        return self._repo.active_branch.name
+        return run(
+            "git", "symbolic-ref", "--short", "HEAD", cwd=self._cache_path
+        ).strip()
 
     @property
     def venv_path(self) -> Path:
@@ -118,9 +118,7 @@ class InstalledProject:
     def current_commit(self) -> str:
         """The commit SHA currently checked out for this project."""
 
-        commit = self._repo.head.commit.hexsha
-        assert isinstance(commit, str)
-        return commit
+        return run("git", "rev-parse", "HEAD", cwd=self._cache_path).strip()
 
     @property
     def ty_cmd(self) -> str | None:
@@ -132,27 +130,38 @@ class InstalledProject:
         try:
             if self._cache_path.exists():
                 logger.info(f"Using cached repository at {self._cache_path}")
-                self._repo = Repo(self._cache_path)
                 # Update the repository to latest
                 logger.debug("Updating cached repository")
-                self._repo.remote().fetch(depth=1)
-                self._repo.git.reset("--hard", "origin/HEAD")
+                run("git", "fetch", "--depth", "1", "origin", cwd=self._cache_path)
+                run("git", "reset", "--hard", "origin/HEAD", cwd=self._cache_path)
                 # Update submodules
-                for submodule in self._repo.submodules:
-                    submodule.update(
-                        recursive=True,
-                        clone_multi_options=["--depth", "1"],
-                    )
+                run(
+                    "git",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--recursive",
+                    "--depth",
+                    "1",
+                    cwd=self._cache_path,
+                )
             else:
                 logger.info(f"Cloning {self._project.location} into {self._cache_path}")
-                self._repo = Repo.clone_from(
-                    url=self._project.location,
-                    to_path=self._cache_path,
-                    recurse_submodules=True,
-                    depth=1,
+                run(
+                    "git",
+                    "clone",
+                    "--recurse-submodules",
+                    "--depth",
+                    "1",
+                    "--",
+                    self._project.location,
+                    str(self._cache_path),
+                    cwd=Path.cwd(),
                 )
-        except GitError as e:
+        except (OSError, subprocess.CalledProcessError) as e:
             logger.error(f"Error cloning/updating repository: {e}")
+            if isinstance(e, subprocess.CalledProcessError):
+                logger.error(e.stderr)
             return
 
         if self._exclude_newer is not None:
@@ -163,7 +172,10 @@ class InstalledProject:
         assert self._exclude_newer is not None
 
         cutoff = validate_exclude_newer(self._exclude_newer)
-        head_date = self._repo.head.commit.committed_datetime.astimezone(dt.UTC)
+        head_timestamp = run(
+            "git", "show", "--no-patch", "--format=%cI", "HEAD", cwd=self._cache_path
+        ).strip()
+        head_date = dt.datetime.fromisoformat(head_timestamp).astimezone(dt.UTC)
 
         if head_date <= cutoff:
             logger.debug(
@@ -179,23 +191,29 @@ class InstalledProject:
 
         # Deepen the shallow clone to find a commit before the cutoff
         try:
-            self._repo.git.fetch("--deepen", "20")
-        except GitError:
+            run("git", "fetch", "--deepen", "20", cwd=self._cache_path)
+        except subprocess.CalledProcessError:
             logger.warning(f"'{self.name}': failed to deepen clone, using HEAD as-is")
             return
 
         try:
-            commit_hash = self._repo.git.rev_list(
-                "HEAD", "--before", self._exclude_newer, "-1"
-            )
-        except GitError:
+            commit_hash = run(
+                "git",
+                "rev-list",
+                "HEAD",
+                "--before",
+                self._exclude_newer,
+                "-1",
+                cwd=self._cache_path,
+            ).strip()
+        except subprocess.CalledProcessError:
             logger.warning(
                 f"'{self.name}': failed to find commit before "
                 f"{self._exclude_newer}, using HEAD as-is"
             )
             return
 
-        if not commit_hash.strip():
+        if not commit_hash:
             logger.warning(
                 f"'{self.name}': no commit found before "
                 f"{self._exclude_newer}, using HEAD as-is"
@@ -206,7 +224,7 @@ class InstalledProject:
             f"'{self.name}': checking out {commit_hash[:12]} "
             f"(latest before {self._exclude_newer})"
         )
-        self._repo.git.checkout(commit_hash)
+        run("git", "checkout", commit_hash, cwd=self._cache_path)
 
     def _install_dependencies(self) -> None:
         # Create venv in temporary directory
@@ -280,16 +298,19 @@ class InstalledProject:
         # This marker search is intentionally approximate; ty still applies exclusions
         # and validates the metadata.
         try:
-            scripts = self._repo.git.grep(
+            scripts = run(
+                "git",
+                "grep",
                 "--files-with-matches",
                 "--null",
                 "--extended-regexp",
                 "^# /// script[[:space:]]*$",
                 "--",
                 *self.paths,
+                cwd=self._cache_path,
             )
-        except GitCommandError as error:
-            if error.status == 1:
+        except subprocess.CalledProcessError as error:
+            if error.returncode == 1:
                 return
             raise
 

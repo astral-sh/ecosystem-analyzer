@@ -10,12 +10,11 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from git import Commit, Repo
-
 from .config import UV_NO_BUILD_ENV
 from .diagnostic import DiagnosticsParser, index_panic_messages
 from .flaky import classify_diagnostics
 from .installed_project import InstalledProject
+from .process import run
 from .schema import Diagnostic, ExitStatus, OutputVariant, RunOutput
 
 logger = logging.getLogger(__name__)
@@ -74,18 +73,18 @@ class Ty:
 
     def __init__(
         self,
-        repository: Repo | None = None,
+        repository: Path | None = None,
         target_dir: Path | None = None,
         profile: str = "dev",
     ) -> None:
-        self.repository: Repo | None = repository
+        self.repository: Path | None = repository
         if repository is not None:
-            self.working_dir: Path = Path(repository.working_dir)
+            self.working_dir: Path = repository
             self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
         self.profile: str = profile
         self._commit_override: str | None = None
 
-    def compile_for_commit(self, commit: str | Commit) -> None:
+    def compile_for_commit(self, commit: str) -> None:
         """Check out the requested commit and build its ty executable."""
 
         if self.repository is None:
@@ -93,7 +92,7 @@ class Ty:
 
         # Checkout the commit
         logger.debug(f"Checking out ty commit '{commit}'")
-        self.repository.git.checkout(commit)
+        run("git", "checkout", commit, cwd=self.working_dir)
 
         # Compile ty
         env = os.environ.copy()
@@ -133,9 +132,7 @@ class Ty:
             raise RuntimeError(
                 "No commit SHA available: no repository and no prebuilt override set"
             )
-        sha = self.repository.head.commit.hexsha
-        assert isinstance(sha, str)
-        return sha
+        return run("git", "rev-parse", "HEAD", cwd=self.repository).strip()
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
         """Analyze one installed project and collect diagnostics and exit evidence."""

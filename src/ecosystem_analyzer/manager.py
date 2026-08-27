@@ -6,7 +6,6 @@ import time
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
-from git import Commit, Repo
 from mypy_primer.model import Project
 from mypy_primer.projects import get_projects
 
@@ -44,7 +43,7 @@ class Manager:
     def __init__(
         self,
         *,
-        ty_repo: Repo | None = None,
+        ty_repo: Path | None = None,
         target_dir: Path | None,
         project_names: list[str],
         profile: str = "dev",
@@ -129,7 +128,7 @@ class Manager:
                 f" {install_total - wait_time:.1f}s overlapped with build)"
             )
 
-    def build(self, commit: str | Commit) -> None:
+    def build(self, commit: str) -> None:
         """Build ty for a commit. Can be called while projects are still installing."""
         self._ty.compile_for_commit(commit)
 
@@ -137,7 +136,7 @@ class Manager:
         """Use a pre-built ty binary instead of building from source."""
         self._ty.use_prebuilt(binary_path, commit_sha)
 
-    def run_for_commit(self, commit: str | Commit) -> list[RunOutput]:
+    def run_for_commit(self, commit: str) -> list[RunOutput]:
         """Build ty for a commit and run it on the installed projects.
 
         The build runs first and can overlap with background project

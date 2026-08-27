@@ -2,10 +2,10 @@ from pathlib import Path
 
 import pytest
 from click.testing import CliRunner, Result
-from git import Repo
 from mypy_primer.model import Project
 
 from ecosystem_analyzer.main import cli, get_all_project_names, shard_projects
+from ecosystem_analyzer.process import run
 from ecosystem_analyzer.ty import Ty
 
 
@@ -150,7 +150,7 @@ def test_flaky_projects_cost_multiplied_by_flaky_runs() -> None:
 
 def _invoke_diff(tmp_path: Path, extra_args: list[str]) -> Result:
     """Invoke the `diff` subcommand with minimal valid required args."""
-    Repo.init(tmp_path)
+    run("git", "init", str(tmp_path), cwd=tmp_path)
     runner = CliRunner()
     return runner.invoke(
         cli,
@@ -220,12 +220,24 @@ def test_commit_sha_without_repo_or_override_raises() -> None:
 
 def test_commit_sha_falls_back_to_repo(tmp_path: Path) -> None:
     """Without an override, commit_sha reads from the repository HEAD."""
-    repo = Repo.init(tmp_path)
-    (tmp_path / "f.txt").write_text("x")
-    repo.index.add(["f.txt"])
-    repo.index.commit("init")
-    ty = Ty(repository=repo)
-    assert ty.commit_sha == repo.head.commit.hexsha
+    run("git", "init", str(tmp_path), cwd=tmp_path)
+    run(
+        "git",
+        "-c",
+        "user.name=Test",
+        "-c",
+        "user.email=test@example.com",
+        "-c",
+        "commit.gpgsign=false",
+        "commit",
+        "--allow-empty",
+        "-m",
+        "init",
+        cwd=tmp_path,
+    )
+    sha = run("git", "rev-parse", "HEAD", cwd=tmp_path).strip()
+    ty = Ty(repository=tmp_path)
+    assert ty.commit_sha == sha
 
 
 def test_diff_without_repository_requires_prebuilt_binaries() -> None:
