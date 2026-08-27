@@ -10,22 +10,11 @@ from pathlib import Path
 
 from mypy_primer.model import Project
 
-from .config import MINIMUM_PYTHON_VERSION, UV_NO_BUILD_ENV
+from .config import MINIMUM_PYTHON_VERSION, UV_NO_BUILD_ENV, get_cache_dir
+from .git import validate_worktree
 from .process import run
 
 logger = logging.getLogger(__name__)
-
-
-def _get_cache_dir() -> Path:
-    """Get the XDG cache directory for ecosystem-analyzer."""
-    cache_home = os.environ.get("XDG_CACHE_HOME")
-    if cache_home:
-        cache_dir = Path(cache_home) / "ecosystem-analyzer"
-    else:
-        cache_dir = Path.home() / ".cache" / "ecosystem-analyzer"
-
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir
 
 
 def _get_project_cache_path(project: Project) -> Path:
@@ -33,7 +22,7 @@ def _get_project_cache_path(project: Project) -> Path:
     # Use a hash of the location to create a unique directory name
     location_hash = hashlib.sha256(project.location.encode()).hexdigest()[:12]
     project_name = project.name_override or project.location.split("/")[-1]
-    cache_dir = _get_cache_dir()
+    cache_dir = get_cache_dir()
     return cache_dir / f"{project_name}_{location_hash}"
 
 
@@ -127,42 +116,38 @@ class InstalledProject:
         return self._project.ty_cmd
 
     def _clone_or_update(self) -> None:
-        try:
-            if self._cache_path.exists():
-                logger.info(f"Using cached repository at {self._cache_path}")
-                # Update the repository to latest
-                logger.debug("Updating cached repository")
-                run("git", "fetch", "--depth", "1", "origin", cwd=self._cache_path)
-                run("git", "reset", "--hard", "origin/HEAD", cwd=self._cache_path)
-                # Update submodules
-                run(
-                    "git",
-                    "submodule",
-                    "update",
-                    "--init",
-                    "--recursive",
-                    "--depth",
-                    "1",
-                    cwd=self._cache_path,
-                )
-            else:
-                logger.info(f"Cloning {self._project.location} into {self._cache_path}")
-                run(
-                    "git",
-                    "clone",
-                    "--recurse-submodules",
-                    "--depth",
-                    "1",
-                    "--",
-                    self._project.location,
-                    str(self._cache_path),
-                    cwd=Path.cwd(),
-                )
-        except (OSError, subprocess.CalledProcessError) as e:
-            logger.error(f"Error cloning/updating repository: {e}")
-            if isinstance(e, subprocess.CalledProcessError):
-                logger.error(e.stderr)
-            return
+        if self._cache_path.exists():
+            validate_worktree(self._cache_path)
+            logger.info(f"Using cached repository at {self._cache_path}")
+            # Update the repository to latest
+            logger.debug("Updating cached repository")
+            run("git", "fetch", "--depth", "1", "origin", cwd=self._cache_path)
+            run("git", "reset", "--hard", "origin/HEAD", cwd=self._cache_path)
+            # Update submodules
+            run(
+                "git",
+                "submodule",
+                "update",
+                "--checkout",
+                "--init",
+                "--recursive",
+                "--depth",
+                "1",
+                cwd=self._cache_path,
+            )
+        else:
+            logger.info(f"Cloning {self._project.location} into {self._cache_path}")
+            run(
+                "git",
+                "clone",
+                "--recurse-submodules",
+                "--depth",
+                "1",
+                "--",
+                self._project.location,
+                str(self._cache_path),
+                cwd=Path.cwd(),
+            )
 
         if self._exclude_newer is not None:
             self._pin_to_timestamp()
@@ -173,7 +158,14 @@ class InstalledProject:
 
         cutoff = validate_exclude_newer(self._exclude_newer)
         head_timestamp = run(
-            "git", "show", "--no-patch", "--format=%cI", "HEAD", cwd=self._cache_path
+            "git",
+            "show",
+            "--no-show-signature",
+            "--no-patch",
+            "--format=%cI",
+            "HEAD",
+            "--",
+            cwd=self._cache_path,
         ).strip()
         head_date = dt.datetime.fromisoformat(head_timestamp).astimezone(dt.UTC)
 
