@@ -1924,6 +1924,116 @@ info: Args: /tmp/new_commit/ty check ."""
         assert [item["message"] for item in modified_line["removed"]] == ["babba"]
         assert modified_line["added"] == []
 
+    @pytest.mark.parametrize(
+        "context_location",
+        [
+            pytest.param(None, id="removed-project"),
+            pytest.param(("b.py", 1), id="removed-file"),
+            pytest.param(("a.py", 2), id="removed-line"),
+            pytest.param(("a.py", 1), id="modified-line"),
+        ],
+    )
+    @pytest.mark.parametrize("other_removal", [False, True])
+    def test_removed_unknown_rules_hidden_from_markdown(
+        self, context_location: tuple[str, int] | None, other_removal: bool
+    ) -> None:
+        """Hide removed unknown rules from Markdown while retaining them in HTML.
+
+        Cover removals at project, file, line, and individual diagnostic level,
+        both alone and alongside another rule's removal. Suppressed removals
+        must not affect totals, leave empty sections, or cause the raw diff to
+        be collapsed when the remaining changes fit inline.
+        """
+        unknown_rule: Diagnostic = {
+            "level": "warning",
+            "lint_name": "unknown-rule",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "Unknown lint rule: newly-added-rule",
+        }
+        removed: list[Diagnostic] = [unknown_rule]
+        if other_removal:
+            removed.append({
+                **unknown_rule,
+                "lint_name": "invalid-assignment",
+                "message": "Removed assignment diagnostic",
+            })
+        context: list[Diagnostic] = []
+        if context_location is not None:
+            context.append({
+                **unknown_rule,
+                "path": context_location[0],
+                "line": context_location[1],
+                "lint_name": "unresolved-reference",
+                "message": "Unchanged reference diagnostic",
+            })
+        diff = _make_diff(
+            [_make_output("proj", [*removed, *context])],
+            [_make_output("proj", context)] if context_location is not None else [],
+        )
+
+        markdown = diff.render_statistics_markdown(inline_threshold=2)
+
+        assert "unknown-rule" not in markdown
+        assert unknown_rule["message"] not in markdown
+        if other_removal:
+            assert "| `invalid-assignment` | 0 | 1 | 0 |" in markdown
+            assert "| **Total** | **0** | **1** | **0** |" in markdown
+            assert (
+                "- a.py:1:1 warning[invalid-assignment] Removed assignment diagnostic"
+                in markdown
+            )
+            assert "**Raw diff:**" in markdown
+        else:
+            assert "No diagnostic changes detected ✅" in markdown
+            assert "| Lint rule |" not in markdown
+            assert "Raw diff" not in markdown
+            assert "proj" not in markdown
+
+        assert diff._calculate_statistics()["total_removed"] == len(removed)
+        assert unknown_rule["message"] in _render_html(diff)
+
+    def test_added_and_changed_unknown_rules_remain_in_markdown(self) -> None:
+        """Keep added and rewritten unknown-rule diagnostics visible in Markdown.
+
+        Removing another diagnostic for the same rule must not hide its summary
+        row or either side of a message change, or inflate the raw diff's count.
+        """
+        old: Diagnostic = {
+            "level": "warning",
+            "lint_name": "unknown-rule",
+            "path": "a.py",
+            "line": 1,
+            "column": 1,
+            "message": "Old unknown rule message",
+        }
+        changed: Diagnostic = {**old, "message": "Changed unknown rule message"}
+        removed: Diagnostic = {
+            **old,
+            "line": 2,
+            "message": "Removed unknown rule message",
+        }
+        added: Diagnostic = {
+            **old,
+            "line": 3,
+            "message": "Added unknown rule message",
+        }
+        diff = _make_diff(
+            [_make_output("proj", [old, removed])],
+            [_make_output("proj", [changed, added])],
+        )
+
+        markdown = diff.render_statistics_markdown(inline_threshold=2)
+
+        assert "| `unknown-rule` | 1 | 0 | 1 |" in markdown
+        assert "| **Total** | **1** | **0** | **1** |" in markdown
+        assert removed["message"] not in markdown
+        assert f"- a.py:1:1 warning[unknown-rule] {old['message']}" in markdown
+        assert f"+ a.py:1:1 warning[unknown-rule] {changed['message']}" in markdown
+        assert f"+ a.py:3:1 warning[unknown-rule] {added['message']}" in markdown
+        assert "<summary>Raw diff (2 changes)</summary>" in markdown
+
     def test_statistics_markdown_includes_large_timing_changes(self) -> None:
         old_data = {
             "outputs": [

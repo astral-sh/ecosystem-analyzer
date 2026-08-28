@@ -1280,12 +1280,15 @@ class DiagnosticDiff:
         diff = difflib.ndiff(old_text.splitlines(), new_text.splitlines())
         return list(diff)
 
-    def _calculate_statistics(self) -> DiffStatistics:
+    def _calculate_statistics(
+        self, *, include_removed_unknown_rules: bool = True
+    ) -> DiffStatistics:
         """Calculate statistics about added, removed, and changed diagnostics.
 
         Flaky diagnostic diffs are excluded from the totals and breakdowns.
         Stable diagnostics from projects that happen to also have flaky data
-        are still counted.
+        are still counted. Markdown summaries also exclude removed unknown-rule
+        diagnostics; HTML reports retain them.
         """
         added_by_lint: Counter[str] = Counter()
         removed_by_lint: Counter[str] = Counter()
@@ -1293,6 +1296,15 @@ class DiagnosticDiff:
         added_by_project: Counter[str] = Counter()
         removed_by_project: Counter[str] = Counter()
         changed_by_project: Counter[str] = Counter()
+
+        def count_removal(project_name: str, diag: Diagnostic) -> None:
+            if (
+                not include_removed_unknown_rules
+                and diag["lint_name"] == "unknown-rule"
+            ):
+                return
+            removed_by_lint[diag["lint_name"]] += 1
+            removed_by_project[project_name] += 1
 
         # Count diagnostics from added projects
         for project in self.diffs["added_projects"]:
@@ -1305,8 +1317,7 @@ class DiagnosticDiff:
         for project in self.diffs["removed_projects"]:
             project_name = project["project"]
             for diag in project["diagnostics"]:
-                removed_by_lint[diag["lint_name"]] += 1
-                removed_by_project[project_name] += 1
+                count_removal(project_name, diag)
 
         # Count diagnostics from modified projects
         for project in self.diffs["modified_projects"]:
@@ -1320,8 +1331,7 @@ class DiagnosticDiff:
             # Removed files in modified projects
             for file_data in project["diffs"]["removed_files"]:
                 for diag in file_data["diagnostics"]:
-                    removed_by_lint[diag["lint_name"]] += 1
-                    removed_by_project[project_name] += 1
+                    count_removal(project_name, diag)
 
             # Modified files in modified projects
             for file_data in project["diffs"]["modified_files"]:
@@ -1334,8 +1344,7 @@ class DiagnosticDiff:
                 # Removed lines
                 for line_data in file_data["diffs"]["removed_lines"]:
                     for diag in line_data["diagnostics"]:
-                        removed_by_lint[diag["lint_name"]] += 1
-                        removed_by_project[project_name] += 1
+                        count_removal(project_name, diag)
 
                 # Modified lines
                 for line_data in file_data["diffs"]["modified_lines"]:
@@ -1350,8 +1359,7 @@ class DiagnosticDiff:
                         added_by_project[project_name] += 1
 
                     for diag in line_data["removed"]:
-                        removed_by_lint[diag["lint_name"]] += 1
-                        removed_by_project[project_name] += 1
+                        count_removal(project_name, diag)
 
             # Flaky location diffs are excluded from statistics — they
             # are still shown in the HTML report for manual inspection.
@@ -1520,6 +1528,16 @@ class DiagnosticDiff:
                 header = project_name
             sections.setdefault(header, []).append((lines, counts_as_change))
 
+        def add_removal(
+            project_name: str, project_location: str, diag: Diagnostic
+        ) -> None:
+            if diag["lint_name"] != "unknown-rule":
+                add_entry(
+                    project_name,
+                    project_location,
+                    [f"- {self._format_short_diagnostic(diag)}"],
+                )
+
         for project in self.diffs["failed_projects"]:
             status = project["failure_status"]
             introduced_panics = project["introduced_panic_messages"]
@@ -1581,11 +1599,7 @@ class DiagnosticDiff:
             project_name = project["project"]
             project_location = project["project_location"]
             for diag in project["diagnostics"]:
-                add_entry(
-                    project_name,
-                    project_location,
-                    [f"- {self._format_short_diagnostic(diag)}"],
-                )
+                add_removal(project_name, project_location, diag)
         for project in self.diffs["added_projects"]:
             project_name = project["project"]
             project_location = project["project_location"]
@@ -1602,11 +1616,7 @@ class DiagnosticDiff:
 
             for file_data in diffs["removed_files"]:
                 for diag in file_data["diagnostics"]:
-                    add_entry(
-                        project_name,
-                        project_location,
-                        [f"- {self._format_short_diagnostic(diag)}"],
-                    )
+                    add_removal(project_name, project_location, diag)
 
             for file_data in diffs["added_files"]:
                 for diag in file_data["diagnostics"]:
@@ -1619,11 +1629,7 @@ class DiagnosticDiff:
             for file_data in diffs["modified_files"]:
                 for line_data in file_data["diffs"]["removed_lines"]:
                     for diag in line_data["diagnostics"]:
-                        add_entry(
-                            project_name,
-                            project_location,
-                            [f"- {self._format_short_diagnostic(diag)}"],
-                        )
+                        add_removal(project_name, project_location, diag)
 
                 for line_data in file_data["diffs"]["added_lines"]:
                     for diag in line_data["diagnostics"]:
@@ -1644,11 +1650,7 @@ class DiagnosticDiff:
                             ],
                         )
                     for diag in line_data["removed"]:
-                        add_entry(
-                            project_name,
-                            project_location,
-                            [f"- {self._format_short_diagnostic(diag)}"],
-                        )
+                        add_removal(project_name, project_location, diag)
                     for diag in line_data["added"]:
                         add_entry(
                             project_name,
@@ -1671,7 +1673,7 @@ class DiagnosticDiff:
     ) -> str:
         """Render the pull-request summary of diagnostic and failure changes."""
 
-        statistics = self._calculate_statistics()
+        statistics = self._calculate_statistics(include_removed_unknown_rules=False)
         failed_projects = self.diffs["failed_projects"]
 
         markdown_content = self.generate_comment_title() + "\n\n"
