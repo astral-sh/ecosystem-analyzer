@@ -133,7 +133,9 @@ class Ty:
             raise RuntimeError(
                 "No commit SHA available: no repository and no prebuilt override set"
             )
-        return self.repository.head.commit.hexsha
+        sha = self.repository.head.commit.hexsha
+        assert isinstance(sha, str)
+        return sha
 
     def run_on_project(self, project: InstalledProject) -> RunOutput:
         """Analyze one installed project and collect diagnostics and exit evidence."""

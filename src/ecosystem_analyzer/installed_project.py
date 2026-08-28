@@ -118,7 +118,9 @@ class InstalledProject:
     def current_commit(self) -> str:
         """The commit SHA currently checked out for this project."""
 
-        return self._repo.head.commit.hexsha
+        commit = self._repo.head.commit.hexsha
+        assert isinstance(commit, str)
+        return commit
 
     @property
     def ty_cmd(self) -> str | None:

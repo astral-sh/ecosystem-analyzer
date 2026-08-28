@@ -151,7 +151,7 @@ def generate(
     output_path = Path(output_path)
 
     with open(diagnostics_path) as f:
-        data: RunData = json.load(f)
+        data: RunData = json.load(f)  # ty: ignore[unsound-assignment]
     diagnostics = process_diagnostics(data, max_diagnostics_per_project)
 
     ty_commits = {

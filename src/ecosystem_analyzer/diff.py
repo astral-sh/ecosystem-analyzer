@@ -170,7 +170,7 @@ class DiagnosticDiff:
         with open(file_path) as f:
             data = json.load(f)
 
-        return data
+        return data  # ty: ignore[unsound-return-statement]
 
     def _get_commit(self, data: RunData) -> str:
         ty_commits = {
@@ -839,7 +839,7 @@ class DiagnosticDiff:
         self, diagnostics: list[Diagnostic]
     ) -> dict[str, list[Diagnostic]]:
         """Group diagnostics by file path."""
-        result = {}
+        result: dict[str, list[Diagnostic]] = {}
         for diag in diagnostics:
             path = diag["path"]
             if path not in result:
@@ -927,7 +927,7 @@ class DiagnosticDiff:
         self, diagnostics: list[Diagnostic]
     ) -> dict[int, list[Diagnostic]]:
         """Group diagnostics by line number."""
-        result = {}
+        result: dict[int, list[Diagnostic]] = {}
         for diag in diagnostics:
             line = diag["line"]
             if line not in result:

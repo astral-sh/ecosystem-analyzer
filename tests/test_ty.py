@@ -47,7 +47,7 @@ def _project() -> InstalledProject:
     project = MagicMock(spec=InstalledProject)
     project.name = "proj"
     project.location = "https://github.com/example/proj"
-    return project
+    return project  # ty: ignore[unsound-return-statement]
 
 
 def test_multiple_runs_classify_intermittent_abnormal_exit_as_flaky() -> None:

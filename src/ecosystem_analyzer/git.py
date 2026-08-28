@@ -56,7 +56,7 @@ def get_latest_ty_commits(repo: Repo, num_commits: int) -> list[Commit]:
 
     repo.git.checkout("origin/main")
 
-    commits = []
+    commits: list[Commit] = []
     for commit in repo.iter_commits():
         assert isinstance(commit.message, str)
 
