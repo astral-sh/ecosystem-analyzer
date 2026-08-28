@@ -3,7 +3,6 @@
 from pathlib import Path
 from typing import Literal, NotRequired
 
-from git import Repo
 from typing_extensions import TypedDict
 
 type DiagnosticLevel = Literal["error", "warning", "fatal"]
@@ -105,7 +104,7 @@ class RunData(TypedDict, closed=True):
 class CliContext(TypedDict, closed=True):
     """Shared Click context passed from the root command to its subcommands."""
 
-    repository: Repo | None
+    repository: Path | None
     target: Path | None
     verbose: bool
     flaky_runs: int
