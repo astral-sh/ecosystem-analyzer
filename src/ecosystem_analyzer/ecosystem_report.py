@@ -11,6 +11,11 @@ from .schema import Diagnostic, ReportDiagnostic, RunData, RunOutput
 logger = logging.getLogger(__name__)
 
 
+def _is_http_url(value: object) -> bool:
+    """Allow only explicit HTTP(S) links in reports rendered from diagnostic JSON."""
+    return isinstance(value, str) and value.lower().startswith(("https://", "http://"))
+
+
 def _report_diagnostic(output: RunOutput, diagnostic: Diagnostic) -> ReportDiagnostic:
     report_diagnostic: ReportDiagnostic = {
         "project": output["project"],
@@ -114,14 +119,17 @@ def generate_html_report(
     # Set up Jinja2 environment with package loader
     try:
         # Try PackageLoader first (works for installed packages)
-        env = Environment(loader=PackageLoader("ecosystem_analyzer", "templates"))
+        env = Environment(
+            loader=PackageLoader("ecosystem_analyzer", "templates"), autoescape=True
+        )
     except (ImportError, FileNotFoundError):
         # Fallback to FileSystemLoader for development
         template_path = Path(__file__).parent.parent.parent / "templates"
         if not template_path.exists():
             template_path = Path("templates")
-        env = Environment(loader=FileSystemLoader(str(template_path)))
+        env = Environment(loader=FileSystemLoader(str(template_path)), autoescape=True)
 
+    env.tests["http_url"] = _is_http_url
     template = env.get_template("ecosystem_report.html")
 
     html_content = template.render(

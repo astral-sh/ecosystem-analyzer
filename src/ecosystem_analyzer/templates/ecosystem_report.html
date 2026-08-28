@@ -253,7 +253,7 @@
             ty_commit[0:7] }}</a>
         {% if flaky_project_names|length > 0 %}
         <span style="margin-left: 16px;">·</span>
-        <span style="margin-left: 16px; color: #e65100; font-weight: 600;" title="{{ flaky_project_names | join('&#10;') }}">{{ flaky_project_names|length }} flaky project{{ 's' if flaky_project_names|length != 1 }}</span>
+        <span style="margin-left: 16px; color: #e65100; font-weight: 600;" title="{{ flaky_project_names | join('\n') }}">{{ flaky_project_names|length }} flaky project{{ 's' if flaky_project_names|length != 1 }}</span>
         {% endif %}
     </div>
     {% endif %}
@@ -318,7 +318,7 @@
             <tr class="diagnostic-row{% if diagnostic.is_flaky %} is-flaky{% endif %}" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
                 data-level="{{ diagnostic.level }}">
                 <td>
-                    {% if diagnostic.project_location %}
+                    {% if diagnostic.project_location is http_url %}
                         <a href="{{ diagnostic.project_location }}">{{ diagnostic.project }}</a>
                     {% else %}
                         {{ diagnostic.project }}
@@ -333,7 +333,7 @@
                     {% endif %}
                 </td>
                 <td>
-                    {% if diagnostic.github_ref %}
+                    {% if diagnostic.github_ref and diagnostic.github_ref is http_url %}
                         <a href="{{ diagnostic.github_ref }}" target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a>
                     {% else %}
                         {{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}
