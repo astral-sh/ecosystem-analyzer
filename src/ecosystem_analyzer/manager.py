@@ -21,11 +21,7 @@ def get_ecosystem_projects() -> dict[str, Project]:
 
     projects: dict[str, Project] = {}
     for project in get_projects():
-        project_name = (
-            project.name_override
-            if project.name_override
-            else project.location.split("/")[-1]
-        )
+        project_name = project.name_override or project.location.split("/")[-1]
 
         projects[project_name] = project
 

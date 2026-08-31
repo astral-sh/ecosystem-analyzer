@@ -204,10 +204,11 @@ class DiagnosticDiff:
         Includes locations from both stable diagnostics and flaky variants.
         """
         locs: set[SourceLocationKey] = set()
-        for d in project["diagnostics"]:
-            locs.add((d["path"], d["line"], d["column"]))
-        for loc in project["flaky_diagnostics"]:
-            locs.add((loc["path"], loc["line"], loc["column"]))
+        locs.update((d["path"], d["line"], d["column"]) for d in project["diagnostics"])
+        locs.update(
+            (loc["path"], loc["line"], loc["column"])
+            for loc in project["flaky_diagnostics"]
+        )
         return locs
 
     def _exclude_known_overlaps(
