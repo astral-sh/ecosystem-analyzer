@@ -379,6 +379,17 @@ def diff(
         ecosystem_projects=ecosystem_projects,
     )
 
+    if ty_binary_old is not None and ty_binary_new is not None:
+        run_outputs_old, run_outputs_new = manager.run_prebuilt_diff(
+            old_binary=ty_binary_old,
+            old_commit=old,
+            new_binary=ty_binary_new,
+            new_commit=new,
+        )
+        manager.write_run_outputs(run_outputs_old, output_old)
+        manager.write_run_outputs(run_outputs_new, output_new)
+        return
+
     # Build (or use pre-built) old ty — building overlaps with background
     # project installation
     if ty_binary_old is not None:

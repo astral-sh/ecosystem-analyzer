@@ -3,6 +3,7 @@
 import json
 import logging
 import time
+from collections.abc import Iterator
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -74,55 +75,54 @@ class Manager:
         if not self._project_names:
             raise RuntimeError("No valid projects found to analyze.")
 
-        # Start project installation in the background so it can overlap
-        # with the first ty build.
-        self._install_start_time = time.monotonic()
-        self._install_executor = ThreadPoolExecutor(max_workers=1)
-        self._install_future: Future[None] | None = self._install_executor.submit(
-            self._install_projects
+        # Start installation before building ty, and expose each project as it
+        # becomes ready so prebuilt comparisons can overlap the remaining work.
+        max_workers = min(len(self._project_names), 8)
+        self._install_executor = ThreadPoolExecutor(max_workers=max_workers)
+        self._install_futures: dict[Future[InstalledProject], str] = {
+            self._install_executor.submit(self._install_project, name): name
+            for name in self._project_names
+        }
+
+    def _install_project(self, name: str) -> InstalledProject:
+        logger.info(f"Processing project: {name}")
+        return InstalledProject(
+            self._ecosystem_projects[name], exclude_newer=self._exclude_newer
         )
 
-    def _install_projects(self) -> None:
-        def install_single_project(project_name: str) -> InstalledProject:
-            logger.info(f"Processing project: {project_name}")
-            project = self._ecosystem_projects[project_name]
-            return InstalledProject(project, exclude_newer=self._exclude_newer)
-
-        max_workers = min(len(self._project_names), 8)
-
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Submit all installation tasks
-            future_to_project = {
-                executor.submit(install_single_project, project_name): project_name
-                for project_name in self._project_names
-            }
-
-            # Collect results as they complete
-            for future in as_completed(future_to_project):
-                project_name = future_to_project[future]
+    def _iter_projects(self) -> Iterator[InstalledProject]:
+        """Yield cached projects, then installations as they complete."""
+        yield from self._installed_projects
+        if not self._install_futures:
+            return
+        pending = as_completed(self._install_futures)
+        wait_time = 0.0
+        try:
+            while self._install_futures:
+                wait_start = time.monotonic()
+                future = next(pending)
+                wait_time += time.monotonic() - wait_start
+                name = self._install_futures[future]
                 try:
-                    installed_project = future.result()
-                    self._installed_projects.append(installed_project)
-                    logger.debug(f"Successfully installed project: {project_name}")
-                except Exception as e:
-                    logger.error(f"Failed to install project {project_name}: {e}")
+                    project = future.result()
+                except Exception:
+                    logger.exception(f"Failed to install project {name}")
                     raise
+                del self._install_futures[future]
+                self._installed_projects.append(project)
+                yield project
+        finally:
+            logger.info(f"Waited {wait_time:.1f}s for project installation")
 
     def _ensure_installed(self) -> None:
         """Block until project installation is complete."""
-        if self._install_future is not None:
-            wait_start = time.monotonic()
-            self._install_future.result()
-            self._install_future = None
-            self._install_executor.shutdown(wait=False)
-
-            install_total = time.monotonic() - self._install_start_time
-            wait_time = time.monotonic() - wait_start
-            logger.info(
-                f"Project installation took {install_total:.1f}s"
-                f" (waited {wait_time:.1f}s,"
-                f" {install_total - wait_time:.1f}s overlapped with build)"
-            )
+        if not self._install_futures:
+            return
+        try:
+            for _ in self._iter_projects():
+                pass
+        finally:
+            self._install_executor.shutdown(wait=True, cancel_futures=True)
 
     def build(self, commit: str) -> None:
         """Build ty for a commit. Can be called while projects are still installing."""
@@ -148,25 +148,43 @@ class Manager:
         return self._run_projects()
 
     def _run_projects(self) -> list[RunOutput]:
-        run_outputs = []
-        for project in self._installed_projects:
-            n = (
-                self._flaky_runs
-                if (
-                    self._flaky_runs > 1
-                    and (
-                        not self._flaky_projects or project.name in self._flaky_projects
-                    )
-                )
-                else 1
-            )
-            if n > 1:
-                output = self._ty.run_on_project_multiple(project, n)
-            else:
-                output = self._ty.run_on_project(project)
-            run_outputs.append(output)
+        return [
+            self._run_project(self._ty, project) for project in self._installed_projects
+        ]
 
-        return run_outputs
+    def _run_project(self, ty: Ty, project: InstalledProject) -> RunOutput:
+        if self._flaky_runs > 1 and (
+            not self._flaky_projects or project.name in self._flaky_projects
+        ):
+            return ty.run_on_project_multiple(project, self._flaky_runs)
+        return ty.run_on_project(project)
+
+    def run_prebuilt_diff(
+        self,
+        *,
+        old_binary: Path,
+        old_commit: str,
+        new_binary: Path,
+        new_commit: str,
+    ) -> tuple[list[RunOutput], list[RunOutput]]:
+        """Compare both binaries on each project as its installation finishes.
+
+        The two revisions run consecutively on the same prepared project. Other
+        installations may still be running, but checker processes never overlap.
+        """
+        old_ty = Ty(profile=self._ty.profile)
+        old_ty.use_prebuilt(old_binary, old_commit)
+        new_ty = Ty(profile=self._ty.profile)
+        new_ty.use_prebuilt(new_binary, new_commit)
+        old_outputs = []
+        new_outputs = []
+        try:
+            for project in self._iter_projects():
+                old_outputs.append(self._run_project(old_ty, project))
+                new_outputs.append(self._run_project(new_ty, project))
+        finally:
+            self._install_executor.shutdown(wait=True, cancel_futures=True)
+        return old_outputs, new_outputs
 
     def write_run_outputs(
         self, run_outputs: list[RunOutput], output_path: str | Path
