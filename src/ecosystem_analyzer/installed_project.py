@@ -133,6 +133,8 @@ class InstalledProject:
                 "--recursive",
                 "--depth",
                 "1",
+                "--jobs",
+                "4",
                 cwd=self._cache_path,
             )
         else:
@@ -141,6 +143,9 @@ class InstalledProject:
                 "git",
                 "clone",
                 "--recurse-submodules",
+                "--shallow-submodules",
+                "--jobs",
+                "4",
                 "--depth",
                 "1",
                 "--",
