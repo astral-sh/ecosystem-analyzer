@@ -409,7 +409,7 @@ def test_failed_submodule_clone_aborts_project_preparation(
 def test_project_clone_and_update_recursive_submodules(
     repo: Path, tmp_path: Path
 ) -> None:
-    """Populate and refresh submodules nested two levels deep.
+    """Shallow-clone and refresh submodules nested two levels deep.
 
     For a parent -> child -> leaf layout, cloning must include the leaf's file.
     After each parent records its child's new commit, refreshing the cache must
@@ -417,22 +417,30 @@ def test_project_clone_and_update_recursive_submodules(
     """
     leaf = tmp_path / "leaf"
     _git(tmp_path, "init", "--initial-branch=main", str(leaf))
+    _commit(leaf, "Older leaf history")
     (leaf / "module.py").write_text("first = 1\n")
     _git(leaf, "add", "module.py")
     _commit(leaf, "Initial leaf")
 
     child = tmp_path / "child"
     _git(tmp_path, "init", "--initial-branch=main", str(child))
+    _commit(child, "Older child history")
     _git(child, "submodule", "add", leaf.as_uri(), "nested leaf")
     _commit(child, "Initial child")
     _git(repo, "submodule", "add", child.as_uri(), "nested child")
     _commit(repo, "Initial parent")
 
+    # The recorded commits need not be the tips of the submodule branches.
+    _commit(leaf, "Unreferenced leaf commit")
+    _commit(child, "Unreferenced child commit")
     project = _install(repo)
     cached_module = (
         project.root_directory / "nested child" / "nested leaf" / "module.py"
     )
     assert cached_module.read_text() == "first = 1\n"
+    for submodule in (cached_module.parent, cached_module.parent.parent):
+        assert _git(submodule, "rev-parse", "--is-shallow-repository") == "true"
+        assert _git(submodule, "rev-list", "--count", "HEAD") == "1"
 
     (leaf / "module.py").write_text("second = 2\n")
     _git(leaf, "add", "module.py")
