@@ -1,5 +1,10 @@
 import datetime as dt
+import os
+import shutil
+import sys
+from pathlib import Path
 from unittest.mock import MagicMock, patch
+from zipfile import ZipFile
 
 import pytest
 from mypy_primer.model import Project
@@ -145,6 +150,57 @@ class TestInstallDependenciesPythonVersion:
 
 
 class TestInstallDependencies:
+    @pytest.mark.skipif(shutil.which("uv") is None, reason="uv is required")
+    @pytest.mark.parametrize("config_name", ["pyproject.toml", "uv.toml"])
+    @pytest.mark.parametrize("custom_install", [False, True])
+    def test_install_ignores_uv_config(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        config_name: str,
+        custom_install: bool,
+    ) -> None:
+        config = 'required-version = "==0.0.0"\n'
+        if config_name == "pyproject.toml":
+            config = "[tool.uv]\n" + config
+        config_path = tmp_path / config_name
+        config_path.write_text(config)
+
+        # A local wheel also verifies that installer environment settings survive.
+        wheel_path = tmp_path / "config_probe-1.0-py3-none-any.whl"
+        with ZipFile(wheel_path, "w") as wheel:
+            wheel.writestr(
+                "config_probe-1.0.dist-info/METADATA",
+                "Metadata-Version: 2.1\nName: config-probe\nVersion: 1.0\n",
+            )
+            wheel.writestr(
+                "config_probe-1.0.dist-info/WHEEL",
+                "Wheel-Version: 1.0\nRoot-Is-Purelib: true\nTag: py3-none-any\n",
+            )
+            wheel.writestr("config_probe-1.0.dist-info/RECORD", "")
+
+        monkeypatch.setenv("UV_NO_CONFIG", "0")
+        monkeypatch.setenv("UV_NO_INDEX", "1")
+        monkeypatch.setenv("UV_OFFLINE", "1")
+        monkeypatch.setenv("UV_FIND_LINKS", str(tmp_path))
+        monkeypatch.delenv("TY_UV", raising=False)
+        project = _make_project(
+            min_python_version=sys.version_info[:2],
+            install_cmd="{install} config-probe" if custom_install else None,
+            deps=None if custom_install else ["config-probe"],
+        )
+        with (
+            patch.object(InstalledProject, "_clone_or_update"),
+            patch(
+                "ecosystem_analyzer.installed_project._get_project_cache_path",
+                return_value=tmp_path,
+            ),
+        ):
+            installed = InstalledProject(project)
+        assert list(installed.venv_path.rglob("config_probe-1.0.dist-info/METADATA"))
+        assert config_path.read_text() == config
+        assert os.environ["UV_NO_CONFIG"] == "0"
+
     @patch("ecosystem_analyzer.installed_project.subprocess.run")
     @patch.object(InstalledProject, "_clone_or_update", new=lambda _: None)
     def test_install_cmd_does_not_skip_deps(self, mock_run: MagicMock) -> None:

@@ -242,6 +242,10 @@ class InstalledProject:
         # Get the venv python path for installations
         venv_python = Path(self._temp_dir.name) / ".venv" / "bin" / "python"
 
+        # Use the harness's installer settings. Project or user uv configuration
+        # can require a different uv version or change dependency resolution.
+        install_env = {**os.environ, "UV_NO_CONFIG": "1"}
+
         if self._project.install_cmd:
             logger.info(f"Running custom install command: {self._project.install_cmd}")
 
@@ -258,6 +262,7 @@ class InstalledProject:
                 check=True,
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
+                env=install_env,
             )
         if self._project.deps:
             logger.info(f"Installing dependencies: {', '.join(self._project.deps)}")
@@ -281,6 +286,7 @@ class InstalledProject:
                 check=True,
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
+                env=install_env,
             )
         if not self._project.install_cmd and not self._project.deps:
             logger.info("No project dependencies to install")
