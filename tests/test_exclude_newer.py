@@ -166,6 +166,10 @@ class TestInstallDependencies:
         config_path = tmp_path / config_name
         config_path.write_text(config)
 
+        user_config = tmp_path / "user-config" / "uv" / "uv.toml"
+        user_config.parent.mkdir(parents=True)
+        user_config.write_text('required-version = "==0.0.0"\n')
+
         # A local wheel also verifies that installer environment settings survive.
         wheel_path = tmp_path / "config_probe-1.0-py3-none-any.whl"
         with ZipFile(wheel_path, "w") as wheel:
@@ -183,6 +187,7 @@ class TestInstallDependencies:
         monkeypatch.setenv("UV_NO_INDEX", "1")
         monkeypatch.setenv("UV_OFFLINE", "1")
         monkeypatch.setenv("UV_FIND_LINKS", str(tmp_path))
+        monkeypatch.setenv("XDG_CONFIG_HOME", str(user_config.parent.parent))
         monkeypatch.delenv("TY_UV", raising=False)
         project = _make_project(
             min_python_version=sys.version_info[:2],
