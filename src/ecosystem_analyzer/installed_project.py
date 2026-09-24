@@ -224,6 +224,10 @@ class InstalledProject:
         run("git", "checkout", commit_hash, cwd=self._cache_path)
 
     def _install_dependencies(self) -> None:
+        # Use the harness's installer settings. Project or user uv configuration
+        # can require a different uv version or change dependency resolution.
+        install_env = {**os.environ, "UV_NO_CONFIG": "1"}
+
         # Create venv in temporary directory
         python_version = max(
             self._project.min_python_version or MINIMUM_PYTHON_VERSION,
@@ -237,7 +241,7 @@ class InstalledProject:
             ".".join(str(part) for part in python_version),
         ]
         logger.debug(f"Executing: {' '.join(venv_cmd)}")
-        subprocess.run(venv_cmd, check=True, cwd=self._temp_dir.name)
+        subprocess.run(venv_cmd, check=True, cwd=self._temp_dir.name, env=install_env)
 
         # Get the venv python path for installations
         venv_python = Path(self._temp_dir.name) / ".venv" / "bin" / "python"
@@ -258,6 +262,7 @@ class InstalledProject:
                 check=True,
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
+                env=install_env,
             )
         if self._project.deps:
             logger.info(f"Installing dependencies: {', '.join(self._project.deps)}")
@@ -281,6 +286,7 @@ class InstalledProject:
                 check=True,
                 cwd=self._cache_path,  # Run in cached project directory
                 capture_output=False,
+                env=install_env,
             )
         if not self._project.install_cmd and not self._project.deps:
             logger.info("No project dependencies to install")
