@@ -3,7 +3,7 @@ name = "ecosystem-analyzer"
 version = "0.1.0"
 description = "A tool for analyzing Python projects with ty"
 dependencies = [
-    "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@3058720299b812c393ad926bcca96eede20fa683",
+    "mypy-primer @ git+https://github.com/hauntsaninja/mypy_primer@e1f6fe93da5de0cbaf0ab00341d05968a0331fae",
     "click==8.5.0",
     "jinja2==3.1.6",
     "typing-extensions>=4.16.0",
