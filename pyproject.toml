@@ -85,6 +85,7 @@ split-on-trailing-comma = false
 preview = true
 
 [tool.ty.analysis]
+return-type-inference = "always"
 strict-literal-narrowing = true
 strict-generic-narrowing = true
 
