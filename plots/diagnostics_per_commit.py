@@ -4,6 +4,10 @@
 #     "numpy",
 #     "plotly",
 # ]
+#
+# [tool.uv]
+# require-build-hashes = true
+# preview-features = ["build-dependency-hashes"]
 # ///
 
 """Visualize ecosystem-wide diagnostic totals across ty commit history."""
