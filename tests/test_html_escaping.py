@@ -8,7 +8,13 @@ import pytest
 
 from ecosystem_analyzer import diff as diff_module, ecosystem_report
 from ecosystem_analyzer.diff import DiagnosticDiff
-from ecosystem_analyzer.schema import Diagnostic, FlakyLocation, RunData, RunOutput
+from ecosystem_analyzer.schema import (
+    Diagnostic,
+    FlakyLocation,
+    ReportDiagnostic,
+    RunData,
+    RunOutput,
+)
 
 BRANCH = "audit<svg/onload=document.title='REPORT_XSS'>"
 PATH = "src/');document.title='PATH_XSS';//<&\".py"
@@ -19,13 +25,26 @@ class ParsedReport(HTMLParser):
         super().__init__()
         self.tags: list[tuple[str, dict[str, str | None]]] = []
         self.text: list[str] = []
+        self._data_script = False
+        self._json: list[str] = []
         self.feed(html)
+        self.diagnostics: list[ReportDiagnostic] = (
+            json.loads("".join(self._json)) if self._json else []
+        )
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         self.tags.append((tag, dict(attrs)))
+        if tag == "script":
+            self._data_script = dict(attrs).get("id") == "diagnostics-data"
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script":
+            self._data_script = False
 
     def handle_data(self, data: str) -> None:
         self.text.append(data)
+        if self._data_script:
+            self._json.append(data)
 
 
 def diagnostic(path: str = PATH, message: str = "new") -> Diagnostic:
@@ -228,19 +247,18 @@ def test_ecosystem_report_escapes_data(
 
     report = make_ecosystem_report(tmp_path, [project_output])
     assert not any(tag == "svg" for tag, _ in report.tags)
-    assert sum(tag == "script" for tag, _ in report.tags) == 1
+    assert sum(tag == "script" for tag, _ in report.tags) == 2
     assert not any(name.startswith("on") for _, attrs in report.tags for name in attrs)
-    text = "".join(report.text)
-    for value in [path, project, lint, message]:
-        assert value in text
-    row = next(attrs for _, attrs in report.tags if "data-project" in attrs)
-    assert row["data-project"] == project
-    assert row["data-lint"] == lint
+    row = report.diagnostics[0]
+    assert row["project"] == project
+    assert row["lint_name"] == lint
+    assert row["message"] == message
+    assert row["path"] == path
+    assert row["github_ref"] == diag["github_ref"]
     assert any(attrs.get("value") == project for _, attrs in report.tags)
     assert any(attrs.get("value") == lint for _, attrs in report.tags)
-    assert any(attrs.get("href") == diag["github_ref"] for _, attrs in report.tags)
     if flaky:
-        assert f"other-{lint}" in text
+        assert row["variants"][1]["diagnostic"]["lint_name"] == f"other-{lint}"
 
 
 @pytest.mark.parametrize(
@@ -266,7 +284,9 @@ def test_ecosystem_report_omits_unsafe_links(tmp_path: Path, url: str) -> None:
     links = [attrs["href"] for tag, attrs in report.tags if tag == "a"]
     assert links == ["https://github.com/astral-sh/ruff/commit/abc123def456"]
     assert "project" in "".join(report.text)
-    assert PATH in "".join(report.text)
+    assert report.diagnostics[0]["path"] == PATH
+    assert report.diagnostics[0]["project_location"] == ""
+    assert "github_ref" not in report.diagnostics[0]
 
 
 @pytest.mark.parametrize(
@@ -283,8 +303,8 @@ def test_ecosystem_report_preserves_http_links(tmp_path: Path, url: str) -> None
     project_output = output("project", [diag])
     project_output["project_location"] = url
     report = make_ecosystem_report(tmp_path, [project_output])
-    links = [attrs.get("href") for tag, attrs in report.tags if tag == "a"]
-    assert links.count(url) == 2
+    assert report.diagnostics[0]["project_location"] == url
+    assert report.diagnostics[0]["github_ref"] == url
 
 
 def test_ecosystem_report_preserves_flaky_tooltip_newlines(tmp_path: Path) -> None:
@@ -305,3 +325,21 @@ def test_ecosystem_report_preserves_flaky_tooltip_newlines(tmp_path: Path) -> No
     ]
     report = make_ecosystem_report(tmp_path, projects)
     assert any(attrs.get("title") == "a&b\nc<d" for _, attrs in report.tags)
+
+
+def test_ecosystem_report_includes_large_projects(tmp_path: Path) -> None:
+    diagnostics = [
+        diagnostic(path=f"file-{i}.py", message=f"message {i}") for i in range(1001)
+    ]
+    report = make_ecosystem_report(
+        tmp_path, [output("large", diagnostics), output("small", [diagnostic()])]
+    )
+    assert len(report.diagnostics) == 1002
+    assert report.diagnostics[1000]["path"] == "file-1000.py"
+    assert report.diagnostics[1001]["project"] == "small"
+    assert not any(attrs.get("class") == "diagnostic-row" for _, attrs in report.tags)
+
+
+def test_empty_ecosystem_report(tmp_path: Path) -> None:
+    report = make_ecosystem_report(tmp_path, [output("project", [])])
+    assert report.diagnostics == []
