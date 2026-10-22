@@ -663,18 +663,10 @@ def generate_diff_statistics(
     type=click.Path(),
     default="ecosystem-report.html",
 )
-@click.option(
-    "--max-diagnostics-per-project",
-    help="Maximum number of diagnostics per project to include (unlimited by default)",
-    type=int,
-    default=None,
-)
-def generate_report(
-    diagnostics: str, output: str, max_diagnostics_per_project: int | None
-) -> None:
+def generate_report(diagnostics: str, output: str) -> None:
     """Generate an HTML report from the diagnostics JSON file."""
 
-    generate(diagnostics, output, max_diagnostics_per_project)
+    generate(diagnostics, output)
 
 
 @cli.command()
