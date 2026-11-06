@@ -58,7 +58,7 @@ prek = [
 requires-dist = [
     { name = "click", specifier = "==8.5.0" },
     { name = "jinja2", specifier = "==3.1.6" },
-    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?rev=e1f6fe93da5de0cbaf0ab00341d05968a0331fae" },
+    { name = "mypy-primer", git = "https://github.com/hauntsaninja/mypy_primer?rev=4bec1e883f8f9900d8ccfd682a0b2ed7f34b7acd" },
     { name = "typing-extensions", specifier = ">=4.16.0" },
 ]
 
@@ -191,7 +191,7 @@ wheels = [
 [[package]]
 name = "mypy-primer"
 version = "0.1.0"
-source = { git = "https://github.com/hauntsaninja/mypy_primer?rev=e1f6fe93da5de0cbaf0ab00341d05968a0331fae#e1f6fe93da5de0cbaf0ab00341d05968a0331fae" }
+source = { git = "https://github.com/hauntsaninja/mypy_primer?rev=4bec1e883f8f9900d8ccfd682a0b2ed7f34b7acd#4bec1e883f8f9900d8ccfd682a0b2ed7f34b7acd" }
 dependencies = [
     { name = "tomlkit" },
 ]
