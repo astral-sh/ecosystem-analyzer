@@ -56,7 +56,7 @@
             font-weight: 500;
         }
 
-        select, input[type="text"] {
+        select, input[type="text"], input[type="number"], button {
             font-family: 'Fira Code', monospace;
             padding: 8px 12px;
             margin-right: 15px;
@@ -76,6 +76,17 @@
         select:hover, input[type="text"]:hover {
             border-color: var(--flare);
         }
+
+        .pagination {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin: 16px 0;
+        }
+
+        .pagination input { width: 6em; }
+        button { cursor: pointer; }
+        button:disabled { cursor: default; opacity: 0.5; }
 
         table {
             width: 100%;
@@ -300,9 +311,19 @@
         <input type="text" id="search-text" placeholder="Exclude pattern (regex) ..." style="width: 300px; padding: 5px; margin-right: 10px;">
 
         <span style="font-size: 12px; color: #666;">
-            <span id="visible-count">{{ diagnostics | length }}</span> of {{ diagnostics | length }} diagnostics visible
+            <span id="visible-count">{{ diagnostics | length }}</span> of {{ diagnostics | length }} diagnostics match
         </span>
     </div>
+
+    <div class="pagination">
+        <button id="previous-page" type="button">Previous</button>
+        <label for="page-number">Page</label>
+        <input id="page-number" type="number" min="1" value="1">
+        <span>of <span id="page-count">1</span></span>
+        <button id="next-page" type="button">Next</button>
+        <span id="page-range" role="status"></span>
+    </div>
+    <noscript>Enable JavaScript to browse the diagnostics.</noscript>
 
     <table id="diagnostics-table">
         <thead>
@@ -313,195 +334,149 @@
                 <th data-sort="message" class="col-message">Message</th>
             </tr>
         </thead>
-        <tbody>
-            {% for diagnostic in diagnostics %}
-            <tr class="diagnostic-row{% if diagnostic.is_flaky %} is-flaky{% endif %}" data-project="{{ diagnostic.project }}" data-lint="{{ diagnostic.lint_name }}"
-                data-level="{{ diagnostic.level }}">
-                <td>
-                    {% if diagnostic.project_location is http_url %}
-                        <a href="{{ diagnostic.project_location }}">{{ diagnostic.project }}</a>
-                    {% else %}
-                        {{ diagnostic.project }}
-                    {% endif %}
-                    {% set strict = diagnostic.strict_settings %}
-                    <span class="analysis-mode analysis-mode-{{ 'strict' if strict else 'default' }}" title="Strict equality semantics and strict generic narrowing {{ 'enabled' if strict else 'disabled' }}">{{ 'strict' if strict else 'non-strict' }}</span>
-                </td>
-                <td class="{{ diagnostic.level }}">
-                    {{ diagnostic.lint_name }}
-                    {% if diagnostic.is_flaky %}
-                    <span class="flaky-badge" title="Flaky: nondeterministic across {{ diagnostic.flaky_runs }} runs">flaky</span>
-                    {% endif %}
-                </td>
-                <td>
-                    {% if diagnostic.github_ref and diagnostic.github_ref is http_url %}
-                        <a href="{{ diagnostic.github_ref }}" target="_blank">{{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}</a>
-                    {% else %}
-                        {{diagnostic.path}}:{{diagnostic.line}}:{{diagnostic.column}}
-                    {% endif %}
-                </td>
-                <td>
-                    {% if diagnostic.is_flaky %}
-                        {% for v in diagnostic.variants %}
-                        <div class="flaky-variant">
-                            <span class="flaky-freq">({{ v.count }}/{{ diagnostic.flaky_runs }})</span>
-                            {% if v.diagnostic.lint_name != diagnostic.lint_name %}
-                            <span class="{{ 'error' if v.diagnostic.level == 'error' else 'warning' }}">[{{ v.diagnostic.level }}]</span> {{ v.diagnostic.lint_name }} -
-                            {% endif %}
-                            {{ v.diagnostic.message | e }}
-                        </div>
-                        {% endfor %}
-                    {% else %}
-                        {{ diagnostic.message | e }}
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
+        <tbody></tbody>
     </table>
 
+    <script id="diagnostics-data" type="application/json">{{ diagnostics | tojson }}</script>
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            // Sort functionality
-            const sortSelect = document.getElementById('sort-select');
-            sortSelect.addEventListener('change', sortTable);
+        const diagnostics = JSON.parse(document.getElementById('diagnostics-data').textContent);
+        const entries = diagnostics.map(diagnostic => ({
+            diagnostic,
+            message: diagnostic.is_flaky
+                ? diagnostic.variants.map(v => `${v.diagnostic.lint_name} ${v.diagnostic.message}`).join('\n')
+                : diagnostic.message,
+            sortKey: '',
+        }));
+        const pageSize = 100;
+        let page = 1;
+        let filtered = [];
+        const tbody = document.querySelector('#diagnostics-table tbody');
+        const sortSelect = document.getElementById('sort-select');
+        const filterProject = document.getElementById('filter-project');
+        const filterLint = document.getElementById('filter-lint');
+        const filterLevel = document.getElementById('filter-level');
+        const searchText = document.getElementById('search-text');
+        const searchMode = document.getElementById('search-mode');
+        const pageNumber = document.getElementById('page-number');
+        const previousPage = document.getElementById('previous-page');
+        const nextPage = document.getElementById('next-page');
 
-            // Add click handlers to table headers
-            document.querySelectorAll('th[data-sort]').forEach(header => {
-                header.addEventListener('click', function() {
-                    const sortBy = this.getAttribute('data-sort');
-                    sortSelect.value = sortBy;
-                    sortTable();
-                });
+        function element(tag, text, className = '') {
+            const node = document.createElement(tag);
+            node.textContent = text;
+            node.className = className;
+            return node;
+        }
+
+        function link(text, url) {
+            const node = element(url ? 'a' : 'span', text);
+            if (url) node.href = url;
+            return node;
+        }
+
+        function renderPage() {
+            const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+            page = Math.min(Math.max(1, page), pages);
+            const start = (page - 1) * pageSize;
+            const fragment = document.createDocumentFragment();
+            for (const {diagnostic: d} of filtered.slice(start, start + pageSize)) {
+                const row = element('tr', '', `diagnostic-row${d.is_flaky ? ' is-flaky' : ''}`);
+                const project = element('td', '');
+                project.append(link(d.project, d.project_location));
+                const mode = element('span', d.strict_settings ? 'strict' : 'non-strict',
+                    `analysis-mode analysis-mode-${d.strict_settings ? 'strict' : 'default'}`);
+                mode.title = `Strict equality semantics and strict generic narrowing ${d.strict_settings ? 'enabled' : 'disabled'}`;
+                project.append(mode);
+                const lint = element('td', d.lint_name, d.level);
+                if (d.is_flaky) {
+                    const badge = element('span', 'flaky', 'flaky-badge');
+                    badge.title = `Flaky: nondeterministic across ${d.flaky_runs} runs`;
+                    lint.append(badge);
+                }
+                const path = element('td', '');
+                path.append(link(`${d.path}:${d.line}:${d.column}`, d.github_ref));
+                const message = element('td', d.is_flaky ? '' : d.message);
+                for (const v of d.variants) {
+                    const variant = element('div', '', 'flaky-variant');
+                    variant.append(element('span', `(${v.count}/${d.flaky_runs})`, 'flaky-freq'), ' ');
+                    if (v.diagnostic.lint_name !== d.lint_name) {
+                        variant.append(element('span', `[${v.diagnostic.level}]`, v.diagnostic.level),
+                            ` ${v.diagnostic.lint_name} - `);
+                    }
+                    variant.append(v.diagnostic.message);
+                    message.append(variant);
+                }
+                row.append(project, lint, path, message);
+                fragment.append(row);
+            }
+            tbody.replaceChildren(fragment);
+            pageNumber.value = page;
+            pageNumber.max = pages;
+            document.getElementById('page-count').textContent = pages;
+            document.getElementById('page-range').textContent = filtered.length
+                ? `${start + 1}–${Math.min(start + pageSize, filtered.length)} of ${filtered.length}`
+                : 'No matching diagnostics';
+            previousPage.disabled = page === 1;
+            nextPage.disabled = page === pages;
+        }
+
+        function filterTable() {
+            const term = searchText.value.trim();
+            let matches = () => true;
+            if (term) {
+                try {
+                    const regex = new RegExp(term, 'i');
+                    matches = message => regex.test(message);
+                } catch {
+                    matches = message => message.toLowerCase().includes(term.toLowerCase());
+                }
+            }
+            filtered = entries.filter(({diagnostic: d, message}) =>
+                (filterProject.value === 'all' || d.project === filterProject.value) &&
+                (filterLint.value === 'all' || d.lint_name === filterLint.value) &&
+                (filterLevel.value === 'all' || d.level === filterLevel.value) &&
+                (!term || matches(message) === (searchMode.value === 'include'))
+            );
+            page = 1;
+            document.getElementById('visible-count').textContent = filtered.length;
+            renderPage();
+        }
+
+        function sortTable() {
+            const key = sortSelect.value;
+            for (const entry of entries) {
+                entry.sortKey = (key === 'message' ? entry.message : entry.diagnostic[key]).toLowerCase();
+            }
+            entries.sort((a, b) => a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0);
+            filterTable();
+        }
+
+        sortSelect.addEventListener('change', sortTable);
+        document.querySelectorAll('th[data-sort]').forEach(header => {
+            header.addEventListener('click', () => {
+                sortSelect.value = header.dataset.sort;
+                sortTable();
             });
-
-            // Filter functionality
-            const filterProject = document.getElementById('filter-project');
-            const filterLint = document.getElementById('filter-lint');
-            const filterLevel = document.getElementById('filter-level');
-            const searchText = document.getElementById('search-text');
-            const searchMode = document.getElementById('search-mode');
-
-            // Debounce for search input
-            let searchTimeout;
-            const debouncedFilterTable = () => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(filterTable, 300); // 300ms delay
-            };
-
-            filterProject.addEventListener('change', filterTable);
-            filterLint.addEventListener('change', filterTable);
-            filterLevel.addEventListener('change', filterTable);
-            searchText.addEventListener('input', debouncedFilterTable);
-            searchMode.addEventListener('change', updateSearchMode);
-
-            // Initial sort
-            sortTable();
-
-            function sortTable() {
-                const sortBy = sortSelect.value;
-                const table = document.getElementById('diagnostics-table');
-                const tbody = table.querySelector('tbody');
-                const rows = Array.from(tbody.querySelectorAll('tr'));
-
-                rows.sort((a, b) => {
-                    let aValue, bValue;
-
-                    aValue = a.querySelector(`td:nth-child(${getColumnIndex(sortBy)})`).textContent.toLowerCase();
-                    bValue = b.querySelector(`td:nth-child(${getColumnIndex(sortBy)})`).textContent.toLowerCase();
-
-                    if (aValue < bValue) return -1;
-                    if (aValue > bValue) return 1;
-                    return 0;
-                });
-
-                // Clear tbody and append sorted rows
-                while (tbody.firstChild) {
-                    tbody.removeChild(tbody.firstChild);
-                }
-
-                rows.forEach(row => tbody.appendChild(row));
-
-                // Apply filters
-                filterTable();
-            }
-
-            function getColumnIndex(columnName) {
-                // Get column index based on column name
-                switch (columnName) {
-                    case 'project': return 1;
-                    case 'lint_name': return 2;
-                    case 'path': return 3;
-                    case 'message': return 4;
-                    default: return 1;
-                }
-            }
-
-            function filterTable() {
-                const projectFilter = filterProject.value;
-                const levelFilter = filterLevel.value;
-                const searchTerm = searchText.value.toLowerCase().trim();
-                const isIncludeMode = searchMode.value === 'include';
-
-                const rows = document.querySelectorAll('.diagnostic-row');
-                let visibleCount = 0;
-
-                rows.forEach(row => {
-                    const rowProject = row.getAttribute('data-project');
-                    const rowLint = row.getAttribute('data-lint');
-                    const rowLevel = row.getAttribute('data-level');
-                    const rowMessage = row.querySelector('td:nth-child(4)').textContent.toLowerCase();
-
-                    const projectMatch = projectFilter === 'all' || rowProject === projectFilter;
-                    const lintMatch = filterLint.value === 'all' || rowLint === filterLint.value;
-                    const levelMatch = levelFilter === 'all' || rowLevel === levelFilter;
-
-                    // Search logic with regex
-                    let searchMatch = true;
-                    if (searchTerm) {
-                        try {
-                            const regex = new RegExp(searchTerm, 'i'); // case-insensitive
-                            if (isIncludeMode) {
-                                // Include mode: show only messages matching the regex
-                                searchMatch = regex.test(rowMessage);
-                            } else {
-                                // Exclude mode (default): hide messages matching the regex
-                                searchMatch = !regex.test(rowMessage);
-                            }
-                        } catch (e) {
-                            // Invalid regex - fall back to literal string matching
-                            if (isIncludeMode) {
-                                searchMatch = rowMessage.includes(searchTerm);
-                            } else {
-                                searchMatch = !rowMessage.includes(searchTerm);
-                            }
-                        }
-                    }
-
-                    if (projectMatch && lintMatch && levelMatch && searchMatch) {
-                        row.style.display = '';
-                        visibleCount++;
-                    } else {
-                        row.style.display = 'none';
-                    }
-                });
-
-                // Update visible count
-                document.getElementById('visible-count').textContent = visibleCount;
-            }
-
-            function updateSearchMode() {
-                const isIncludeMode = searchMode.value === 'include';
-
-                if (isIncludeMode) {
-                    searchText.placeholder = 'Include pattern (regex) ...';
-                } else {
-                    searchText.placeholder = 'Exclude pattern (regex) ...';
-                }
-                // Use debounced version for mode changes too
-                debouncedFilterTable();
-            }
-
         });
+        for (const control of [filterProject, filterLint, filterLevel]) {
+            control.addEventListener('change', filterTable);
+        }
+        let searchTimeout;
+        searchText.addEventListener('input', () => {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(filterTable, 300);
+        });
+        searchMode.addEventListener('change', () => {
+            searchText.placeholder = `${searchMode.value === 'include' ? 'Include' : 'Exclude'} pattern (regex) ...`;
+            filterTable();
+        });
+        previousPage.addEventListener('click', () => { page--; renderPage(); });
+        nextPage.addEventListener('click', () => { page++; renderPage(); });
+        pageNumber.addEventListener('change', () => {
+            page = Number.parseInt(pageNumber.value, 10) || 1;
+            renderPage();
+        });
+        sortTable();
     </script>
 </body>
 
