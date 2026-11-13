@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 def _context(ctx: click.Context) -> CliContext:
-    return ctx.obj  # ty: ignore[unsound-return-statement]
+    return ctx.obj  # ty: ignore[unsound-return]
 
 
 def setup_logging(verbose: bool = False) -> None:

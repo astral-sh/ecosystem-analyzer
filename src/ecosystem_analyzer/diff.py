@@ -170,7 +170,7 @@ class DiagnosticDiff:
         with open(file_path) as f:
             data = json.load(f)
 
-        return data  # ty: ignore[unsound-return-statement]
+        return data  # ty: ignore[unsound-return]
 
     def _get_commit(self, data: RunData) -> str:
         ty_commits = {
