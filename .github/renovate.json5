@@ -1,48 +1,73 @@
 {
-  $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  dependencyDashboard: true,
-  suppressNotifications: ["prEditedNotification"],
-  extends: ["github>astral-sh/renovate-config"],
-  labels: ["internal"],
-  schedule: ["before 4am on Monday"],
-  semanticCommits: "disabled",
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  dependencyDashboard: {
+    enabled: true,
+  },
+  suppressNotifications: [
+    'prEditedNotification',
+  ],
+  extends: [
+    'github>astral-sh/renovate-config',
+  ],
+  labels: [
+    'internal',
+  ],
+  schedule: [
+    'before 4am on Monday',
+  ],
+  semanticCommits: 'disabled',
   separateMajorMinor: false,
-  enabledManagers: ["pre-commit", "pep621", "github-actions", "custom.regex"],
-  "pre-commit": {
+  enabledManagers: [
+    'pre-commit',
+    'pep621',
+    'github-actions',
+    'custom.regex',
+  ],
+  'pre-commit': {
     enabled: true,
   },
   lockFileMaintenance: {
     enabled: true,
   },
   packageRules: [
-    // Pin GitHub Actions to immutable SHAs.
     {
-      matchDepTypes: ["action"],
+      matchDepTypes: [
+        'action',
+      ],
       pinDigests: true,
     },
-    // Annotate GitHub Actions SHAs with a SemVer version.
     {
-      extends: ["helpers:pinGitHubActionDigests"],
-      extractVersion: "^(?<version>v?\\d+\\.\\d+\\.\\d+)$",
-      versioning: "regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+)\\.(?<patch>\\d+))?$",
+      extends: [
+        'helpers:pinGitHubActionDigests',
+      ],
+      extractVersion: '^(?<version>v?\\d+\\.\\d+\\.\\d+)$',
+      versioning: 'regex:^v?(?<major>\\d+)(\\.(?<minor>\\d+)\\.(?<patch>\\d+))?$',
     },
     {
-      groupName: "prek dependencies",
-      matchManagers: ["pre-commit"],
-      // The shared preset groups uv-pre-commit with uv workflow pins.
-      // Exclude it here so the prek group doesn't override that grouping.
-      matchPackageNames: ["!astral-sh/uv-pre-commit"],
-      description: "Weekly update of prek dependencies",
+      groupName: 'prek dependencies',
+      matchManagers: [
+        'pre-commit',
+      ],
+      matchPackageNames: [
+        '!astral-sh/uv-pre-commit',
+      ],
+      description: 'Weekly update of prek dependencies',
     },
     {
-      groupName: "ty",
-      matchManagers: ["pep621"],
-      matchPackageNames: ["ty"],
-      description: "Daily ty update",
-      schedule: ["at any time"],
+      groupName: 'ty',
+      matchManagers: [
+        'pep621',
+      ],
+      matchPackageNames: [
+        'ty',
+      ],
+      description: 'Daily ty update',
+      schedule: [
+        'at any time',
+      ],
     },
   ],
   vulnerabilityAlerts: {
-    commitMessageSuffix: "",
+    commitMessageSuffix: '',
   },
 }
