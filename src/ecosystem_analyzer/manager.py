@@ -47,9 +47,16 @@ class Manager:
         flaky_projects: set[str] | None = None,
         exclude_newer: str | None = None,
         ecosystem_projects: dict[str, Project] | None = None,
+        sync_script_dependencies: bool = False,
     ) -> None:
         self._installed_projects = []
-        self._ty = Ty(ty_repo, target_dir, profile=profile)
+        self._ty = Ty(
+            ty_repo,
+            target_dir,
+            profile=profile,
+            sync_script_dependencies=sync_script_dependencies,
+        )
+        self._sync_script_dependencies = sync_script_dependencies
         self._flaky_runs = flaky_runs
         self._flaky_projects = flaky_projects or set()
         self._exclude_newer = exclude_newer
@@ -86,7 +93,11 @@ class Manager:
         def install_single_project(project_name: str) -> InstalledProject:
             logger.info(f"Processing project: {project_name}")
             project = self._ecosystem_projects[project_name]
-            return InstalledProject(project, exclude_newer=self._exclude_newer)
+            return InstalledProject(
+                project,
+                exclude_newer=self._exclude_newer,
+                sync_script_dependencies=self._sync_script_dependencies,
+            )
 
         max_workers = min(len(self._project_names), 8)
 

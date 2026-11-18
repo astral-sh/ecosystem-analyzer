@@ -54,7 +54,13 @@ def validate_exclude_newer(value: str) -> dt.datetime:
 class InstalledProject:
     """An ecosystem project with a cached checkout and isolated environment."""
 
-    def __init__(self, project: Project, exclude_newer: str | None = None) -> None:
+    def __init__(
+        self,
+        project: Project,
+        exclude_newer: str | None = None,
+        *,
+        sync_script_dependencies: bool = False,
+    ) -> None:
         self._project = project
         self._exclude_newer = exclude_newer
         self._cache_path = _get_project_cache_path(project)
@@ -65,6 +71,8 @@ class InstalledProject:
 
         self._clone_or_update()
         self._install_dependencies()
+        if sync_script_dependencies:
+            self._install_script_dependencies()
 
     @property
     def root_directory(self) -> Path:
@@ -287,9 +295,6 @@ class InstalledProject:
             )
         if not self._project.install_cmd and not self._project.deps:
             logger.info("No project dependencies to install")
-
-        if os.environ.get("TY_UV") in {"scripts", "1", "true"}:
-            self._install_script_dependencies()
 
     def _install_script_dependencies(self) -> None:
         # Match ty's metadata sync before timing either revision, so the baseline

@@ -111,6 +111,11 @@ def shard_projects(
     type=int,
     default=1,
 )
+@click.option(
+    "--sync-script-dependencies",
+    is_flag=True,
+    help="Preinstall PEP 723 script dependencies with uv before timing and enable script synchronization in ty.",
+)
 @click.pass_context
 def cli(
     ctx: click.Context,
@@ -118,6 +123,7 @@ def cli(
     target: Path | None,
     verbose: bool,
     flaky_runs: int,
+    sync_script_dependencies: bool,
 ) -> None:
     """Command-line interface for analyzing Python projects with ty."""
     ctx.ensure_object(dict)
@@ -126,6 +132,7 @@ def cli(
     context["target"] = target
     context["verbose"] = verbose
     context["flaky_runs"] = flaky_runs
+    context["sync_script_dependencies"] = sync_script_dependencies
     setup_logging(verbose)
 
 
@@ -171,6 +178,7 @@ def run(
         project_names=[project_name],
         profile=profile,
         flaky_runs=context["flaky_runs"],
+        sync_script_dependencies=context["sync_script_dependencies"],
     )
     run_outputs = manager.run_for_commit(commit)
     manager.write_run_outputs(run_outputs, output)
@@ -237,6 +245,7 @@ def analyze(
         project_names=project_names,
         profile=profile,
         flaky_runs=context["flaky_runs"],
+        sync_script_dependencies=context["sync_script_dependencies"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
         ecosystem_projects=ecosystem_projects,
@@ -374,6 +383,7 @@ def diff(
         project_names=project_names,
         profile=profile,
         flaky_runs=context["flaky_runs"],
+        sync_script_dependencies=context["sync_script_dependencies"],
         flaky_projects=flaky_project_names,
         exclude_newer=exclude_newer,
         ecosystem_projects=ecosystem_projects,
@@ -510,6 +520,7 @@ def history(
         project_names=project_names,
         profile=profile,
         flaky_runs=context["flaky_runs"],
+        sync_script_dependencies=context["sync_script_dependencies"],
         flaky_projects=flaky_project_names,
         ecosystem_projects=ecosystem_projects,
     )

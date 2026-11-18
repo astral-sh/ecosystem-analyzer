@@ -76,12 +76,15 @@ class Ty:
         repository: Path | None = None,
         target_dir: Path | None = None,
         profile: str = "dev",
+        *,
+        sync_script_dependencies: bool = False,
     ) -> None:
         self.repository: Path | None = repository
         if repository is not None:
             self.working_dir: Path = repository
             self.cargo_target_dir: Path = target_dir or self.working_dir / "target"
         self.profile: str = profile
+        self._sync_script_dependencies = sync_script_dependencies
         self._commit_override: str | None = None
 
     def compile_for_commit(self, commit: str) -> None:
@@ -145,6 +148,9 @@ class Ty:
             "--python",
             str(project.venv_path),
         ]
+        if self._sync_script_dependencies:
+            standard_flags.extend(["--config", 'project-manager.script="uv"'])
+
         strict_settings = _use_strict_settings(project)
         if strict_settings:
             standard_flags.extend([
