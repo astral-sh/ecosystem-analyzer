@@ -108,6 +108,7 @@ class CliContext(TypedDict, closed=True):
     target: Path | None
     verbose: bool
     flaky_runs: int
+    sync_script_dependencies: bool
 
 
 class CommitStatistics(TypedDict, closed=True):

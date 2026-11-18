@@ -223,7 +223,6 @@ class TestInstallDependencies:
         monkeypatch.delenv("UV_CONFIG_FILE", raising=False)
         monkeypatch.setenv("UV_OFFLINE", "1")
         monkeypatch.setenv("XDG_CONFIG_HOME", str(user_config.parent.parent))
-        monkeypatch.delenv("TY_UV", raising=False)
         dependencies = ["project-probe", "user-probe"]
         project = _make_project(
             min_python_version=sys.version_info[:2],
